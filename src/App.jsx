@@ -3,7 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -11,6 +11,8 @@ import LoginScreen from '@/components/auth/LoginScreen';
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import TripsList from './pages/TripsList';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import i18n from '@/i18n/index.js';
 
@@ -42,6 +44,29 @@ const AuthenticatedApp = () => {
     // no hay ninguna copia ni llamada duplicada que pueda ir por detrás.
   const { user: authUser, isLoadingAuth, isLoadingPublicSettings, authError, checkAppState } = useAuth();
     const { t } = useTranslation();
+    const location = useLocation();
+
+    // #3: el email de "restablecer contraseña" (base44.auth.resetPasswordRequest,
+    // ver LoginScreen.jsx) enlaza a una página propia para poner la contraseña
+    // nueva -- pero ForgotPassword.jsx/ResetPassword.jsx (en src/pages/) nunca
+    // llegaban a montarse: ni estaban registradas en pages.config.js, ni
+    // habrían sido alcanzables aunque lo estuvieran, porque <Routes> de más
+    // abajo solo se monta DESPUÉS de resolver el estado de auth, y un usuario
+    // sin sesión (el caso normal al tocar un link de "olvidé mi contraseña")
+    // cae siempre en la rama authError.type==='auth_required' de aquí abajo,
+    // que muestra LoginScreen sin mirar la URL. Se comprueba la ruta aquí, lo
+    // primero de todo, para que estas dos páginas públicas se monten pase lo
+    // que pase con el login -- se aceptan ambas grafías (kebab-case y el
+    // PascalCase que usa el resto de páginas) porque no hay forma de
+    // verificar aquí cuál usa realmente la plantilla de email de base44 sin
+    // disparar un envío real.
+    const path = location.pathname.toLowerCase();
+    if (path === '/forgot-password' || path === '/forgotpassword') {
+      return <ForgotPassword />;
+    }
+    if (path === '/reset-password' || path === '/resetpassword') {
+      return <ResetPassword />;
+    }
   // Migración silenciosa: mantener UserProfile.email en minúsculas y al día.
   useEffect(() => {
     if (!authUser?.id || !authUser?.email) return;
@@ -68,7 +93,15 @@ const AuthenticatedApp = () => {
     );
   }
 
-  if (authError) {
+  if (authError && authError.type === 'offline' && authUser) {
+    // #14: hay usuario en caché (ver handleOfflineOrError en AuthContext.jsx)
+    // pese al fallo de red -- se deja caer al <Routes> de abajo en vez de
+    // bloquear, para que las pantallas rendericen con lo que haya en el
+    // cache de react-query (persistido en localStorage, ver query-client.js).
+    // OfflineIndicator (dentro de Layout, montado por <Routes>) es quien
+    // avisa al usuario de que está sin conexión -- no hace falta duplicar
+    // ese aviso aquí.
+  } else if (authError) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
