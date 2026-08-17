@@ -9,7 +9,11 @@ import AuthLayout from "@/components/AuthLayout";
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
-  const resetToken = searchParams.get("token");
+  // Fix #3: no hay forma de confirmar aquí qué nombre de parámetro usa
+  // realmente la plantilla de email de base44 (auth.resetPasswordRequest
+  // la genera del lado del servidor) sin disparar un envío real -- se
+  // aceptan los dos nombres más plausibles en vez de apostar por uno solo.
+  const resetToken = searchParams.get("token") || searchParams.get("resetToken") || searchParams.get("reset_token");
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -26,7 +30,10 @@ export default function ResetPassword() {
     setLoading(true);
     try {
       await base44.auth.resetPassword({ resetToken, newPassword });
-      window.location.href = "/login";
+      // "/login" no es una página propia -- cualquier ruta sin sesión activa
+      // muestra LoginScreen igualmente (ver App.jsx), así que sirve, pero se
+      // usa "/" por ser la que sí existe siempre como página real.
+      window.location.href = "/";
     } catch (err) {
       setError(err.message || "Failed to reset password");
     } finally {
