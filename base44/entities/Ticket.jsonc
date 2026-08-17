@@ -8,7 +8,7 @@
     },
     "user_id": {
       "type": "string",
-      "description": "ID del usuario due\u00f1o"
+      "description": "ID del usuario dueño"
     },
     "name": {
       "type": "string",
@@ -70,7 +70,7 @@
     },
     "airline": {
       "type": "string",
-      "description": "Aerol\u00ednea (vuelos)"
+      "description": "Aerolínea (vuelos)"
     },
     "city": {
       "type": "string",
@@ -86,7 +86,7 @@
     },
     "itinerary_day_id": {
       "type": "string",
-      "description": "D\u00eda de itinerario asociado"
+      "description": "Día de itinerario asociado"
     },
     "visibility": {
       "type": "string",
@@ -153,6 +153,19 @@
         { "$and": [ { "data.visibility": "selected_users" }, { "data.shared_with": { "$in": ["{{user.email}}"] } } ] }
       ]
     },
-    "delete": { "created_by": "{{user.email}}" }
+    // Fix: "eliminar documento no funciona" — el rls de delete solo dejaba
+    // borrar a quien lo CREÓ, mientras que update ya dejaba editar (y por
+    // tanto, a efectos prácticos, "vaciar") el mismo documento a cualquier
+    // miembro con visibilidad shared/selected_users. Ese desajuste hacía que
+    // cualquier compañero de viaje que veía y podía editar un documento
+    // compartido recibiera un rechazo silencioso del backend al intentar
+    // borrarlo. Se alinea delete con las mismas reglas que update.
+    "delete": {
+      "$or": [
+        { "created_by": "{{user.email}}" },
+        { "$and": [ { "data.visibility": "shared" }, { "data.trip_members": { "$in": ["{{user.email}}"] } } ] },
+        { "$and": [ { "data.visibility": "selected_users" }, { "data.shared_with": { "$in": ["{{user.email}}"] } } ] }
+      ]
+    }
   }
 }
