@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { checkUpload, convertHeicIfNeeded } from '@/lib/uploadLimits';
 import { normalizeEmail } from '@/lib/utils';
 import { uploadDocFile, resolveDocViewUrl } from '@/lib/privateFiles';
+import { canUseGoogleToday, markGoogleUsed } from '@/lib/googleMaps';
 
 // ── Exported config (used by DocumentCard, Calendar) ─────────────────────────
 export const CATEGORY_CONFIG = {
@@ -78,6 +79,7 @@ async function searchLocationNominatim(query, signal) {
 }
 
 async function searchLocationGooglePlaces(query, signal, apiKey) {
+      if (!canUseGoogleToday('autocomplete')) throw new Error('daily-cap-reached');
     const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
           method: 'POST',
           headers: {
@@ -88,6 +90,7 @@ async function searchLocationGooglePlaces(query, signal, apiKey) {
           signal,
     });
     if (!res.ok) return [];
+      markGoogleUsed('autocomplete');
     const data = await res.json();
     return (data.suggestions || [])
       .map(s => s.placePrediction)
@@ -103,6 +106,7 @@ async function searchLocationGooglePlaces(query, signal, apiKey) {
 }
 
 async function fetchGooglePlaceDetails(placeId, apiKey, signal) {
+      if (!canUseGoogleToday('placeDetails')) return null;
     const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
           headers: {
                   'X-Goog-Api-Key': apiKey,
@@ -111,6 +115,7 @@ async function fetchGooglePlaceDetails(placeId, apiKey, signal) {
           signal,
     });
     if (!res.ok) return null;
+      markGoogleUsed('placeDetails');
     const p = await res.json();
     return {
           name: p.displayName?.text,
