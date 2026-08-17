@@ -16,6 +16,7 @@ import { calculateBalances, getDebts } from '@/lib/expenseBalances';
 import { normalizeEmail, isZeroDecimalCurrency } from '@/lib/utils';
 import { searchUserProfiles } from '@/lib/userProfiles';
 import ExpenseForm from '@/components/expenses/ExpenseForm';
+import PDFViewer from '@/components/PDFViewer';
 import OTabBar from '@/components/trip/OTabBar';
 import Avatar from '@/components/trip/Avatar';
 import { format } from 'date-fns';
@@ -723,6 +724,11 @@ function StatsTab({ expenses, baseCurrency, currentUserEmail, cities = [], trip 
 function ExpenseDetailSheet({ expense, baseCurrency, userMap, profilesByEmail, onClose, onEdit, onDelete }) {
   const { t } = useTranslation();
   const [confirmDelete, setConfirmDelete] = useState(false);
+    // Fix: los recibos se abrían con <a target="_blank"> a la URL cruda del
+  // archivo (en nativo, eso deja al usuario mirando una URL pelada en vez de
+  // la app) — reusa el mismo visor que ya usan Documentos/Ruta (PDFViewer,
+  // que también sabe mostrar imágenes con zoom, descarga y cierre).
+  const [viewReceipt, setViewReceipt] = useState(null);
   if (!expense) return null;
   const tc = CAT_CONFIG[expense.category] || CAT_CONFIG.other;
   const isSame = expense.currency === baseCurrency || !expense.currency;
@@ -784,9 +790,9 @@ function ExpenseDetailSheet({ expense, baseCurrency, userMap, profilesByEmail, o
                 <p className="text-xs text-muted-foreground mb-2">{t('expenses.receipts')}</p>
                 <div className="flex gap-2">
                   {expense.receipt_photos.map((url, i) => (
-                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                    <button key={i} type="button" onClick={() => setViewReceipt(url)}>
                       <img src={url} alt="Recibo" className="w-16 h-16 rounded-lg object-cover border border-border" />
-                    </a>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -826,6 +832,7 @@ function ExpenseDetailSheet({ expense, baseCurrency, userMap, profilesByEmail, o
           </div>
         </div>
       )}
+      {viewReceipt && <PDFViewer fileUrl={viewReceipt} onClose={() => setViewReceipt(null)} />}
     </>
   );
 }
