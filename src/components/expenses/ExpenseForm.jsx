@@ -280,11 +280,16 @@ export default function ExpenseForm({
       {/* Descripción + recibos */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+          {/* Fix: sin min-w-0 un input dentro de una fila flex no encoge por
+              debajo de su ancho de contenido — en pantallas estrechas esto
+              empujaba/superponía los botones de subir foto y cámara sobre el
+              propio input en vez de dejarles su hueco (min-w-0 es la forma
+              estándar en flexbox de permitir que un flex-1 sí encoja). */}
           <input
             placeholder={t('expenses.form.descPlaceholder')}
             value={form.description}
             onChange={e => set('description', e.target.value)}
-            className="flex-1 text-sm text-foreground placeholder-muted-foreground bg-transparent outline-none"
+            className="flex-1 min-w-0 text-sm text-foreground placeholder-muted-foreground bg-transparent outline-none"
           />
           <div className="flex gap-1.5 flex-shrink-0">
             <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingReceipt}
