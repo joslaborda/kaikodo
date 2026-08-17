@@ -94,64 +94,6 @@ async function searchPlaces(query, city, country, signal) {
   }));
 }
 
-async function nearbyPlaces(lat, lng, filterCats = null) {
-  const RADIUS = 1000;
-  const AMENITY_MAP = {
-    food:      ['restaurant', 'cafe', 'fast_food', 'bar', 'food_court', 'ice_cream'],
-    cultural:  ['museum', 'theatre', 'cinema', 'arts_centre', 'library'],
-    interest:  ['attraction', 'place_of_worship'],
-    shop:      ['hotel', 'hostel', 'guest_house', 'supermarket', 'marketplace'],
-    nightlife: ['bar', 'pub', 'nightclub', 'biergarten'],
-  };
-  const TOURISM_MAP = {
-    cultural:  ['museum', 'gallery', 'artwork', 'monument', 'memorial'],
-    interest:  ['attraction', 'viewpoint', 'theme_park', 'zoo', 'aquarium'],
-    shop:      ['hotel', 'hostel', 'guest_house', 'apartment'],
-  };
-  const amenities = filterCats?.length
-    ? filterCats.flatMap(k => AMENITY_MAP[k] || [])
-    : ['restaurant', 'cafe', 'bar', 'museum', 'hotel', 'fast_food', 'pub', 'theatre'];
-  const tourisms = filterCats?.length
-    ? filterCats.flatMap(k => TOURISM_MAP[k] || [])
-    : ['museum', 'hotel', 'attraction', 'viewpoint', 'gallery'];
-
-  const amenityList = [...new Set(amenities)].join('|');
-  const tourismList = [...new Set(tourisms)].join('|');
-  const amenityFilter = amenityList ? `node["amenity"~"${amenityList}"](around:${RADIUS},${lat},${lng});` : '';
-  const tourismFilter = tourismList ? `node["tourism"~"${tourismList}"](around:${RADIUS},${lat},${lng});` : '';
-  const query = `[out:json][timeout:10];(${amenityFilter}${tourismFilter});out body 30;`;
-
-  const ctrl = new AbortController();
-  setTimeout(() => ctrl.abort(), 12000);
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST', body: query, signal: ctrl.signal,
-  });
-  if (!res.ok) throw new Error('overpass error');
-  const data = await res.json();
-
-  const seen = new Set();
-  const results = [];
-  (data.elements || []).forEach(el => {
-    const name = el.tags?.name || el.tags?.['name:es'] || el.tags?.['name:en'];
-    if (!name || seen.has(el.id)) return;
-    seen.add(el.id);
-    const amenity = el.tags?.amenity || el.tags?.tourism || '';
-    const dist = Math.round(Math.sqrt(
-      Math.pow((el.lat - lat) * 111000, 2) +
-      Math.pow((el.lon - lng) * 111000 * Math.cos(lat * Math.PI / 180), 2)
-    ));
-    results.push({
-      id: el.id?.toString(), name,
-      address: [el.tags?.['addr:street'], el.tags?.['addr:city']].filter(Boolean).join(', ') || '',
-      lat: el.lat, lng: el.lon, dist,
-      type: osmToType(amenity, amenity),
-    });
-  });
-  results.sort((a, b) => a.dist - b.dist);
-  if (results.length === 0) throw new Error('no results nearby');
-  return results.slice(0, 20);
-}
-
 async function reverseGeocode(lat, lng) {
   try {
     const res = await fetch(
@@ -843,9 +785,7 @@ export default function Restaurants() {
   const [recentSearches, setRecentSearches] = useState(() => getRecentSearches());
   const [osmResults, setOsmResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [nearbyResults, setNearbyResults] = useState([]);
   const [nearbyFilter, setNearbyFilter] = useState([]);  // empty = all
-  const [loadingNearby, setLoadingNearby] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [pinPrefill, setPinPrefill] = useState(null); // {lat,lng} — al tocar el mapa de Mis spots
   const [mySpotsView, setMySpotsView] = useState('lista'); // 'lista' | 'mapa'
@@ -1013,32 +953,7 @@ export default function Restaurants() {
     return () => clearTimeout(searchTimer.current);
   }, [searchQuery, selectedCity, city, country]);
 
-  const handleNearby = async (cats = nearbyFilter) => {
-    if (!navigator.geolocation) {
-      setNearbyResults([{ id:'err', name:t('spots.errors.geoUnavailable'), address:t('spots.errors.geoNotSupported'), type:'custom' }]);
-      return;
-    }
-    setLoadingNearby(true); setNearbyResults([]);
-    navigator.geolocation.getCurrentPosition(
-      async pos => {
-        try {
-          const res = await nearbyPlaces(pos.coords.latitude, pos.coords.longitude, cats.length ? cats : null);
-          setNearbyResults(res);
-        } catch(e) {
-          setNearbyResults([{ id:'err', name:t('spots.errors.noNearby'), address: e.message || t('spots.errors.tryByName'), type:'custom' }]);
-        } finally { setLoadingNearby(false); }
-      },
-      (err) => {
-        setLoadingNearby(false);
-        const msg = err.code === 1 ? t('spots.errors.permission')
-          : err.code === 2 ? t('spots.errors.locUnavailable')
-          : t('spots.errors.timeout');
-        setNearbyResults([{ id:'err', name:t('spots.errors.cantGetLocation'), address: msg, type:'custom' }]);
-      },
-      { timeout: 10000, enableHighAccuracy: false, maximumAge: 60000 }
-    );
-  };
-
+  
   const baseData = extra => ({
     trip_id: tripId || undefined, city_id: effectiveCityId||undefined, city_name: effectiveCityName, country: normalizeCountry(country),
     visibility: 'trip_members', visited: false,
@@ -1070,7 +985,7 @@ export default function Restaurants() {
         saved_by: [user?.email].filter(Boolean),
       });
       setLastSavedId(created?.id);
-      setOsmResults([]); setNearbyResults([]); setSearchQuery(''); setNearbyFilter([]);
+            setOsmResults([]); setSearchQuery(''); setNearbyFilter([]);
       showToastFor({ title: place.name }, city);
       if (created?.id) setAssignDateSpot(created);
       notifyMembers('spot_added', '', place.name, { spotId: created?.id, spotDate: created?.assigned_date });
@@ -1288,28 +1203,22 @@ export default function Restaurants() {
         {tab === 'buscar' && (
           <div className="space-y-4">
 
-            {/* Search + Cerca */}
+            {/* Search */}
             <div className="flex items-center gap-2">
               <div className={`flex-1 flex items-center gap-2 bg-card border rounded-2xl px-3 py-2.5 transition-colors ${searchQuery ? 'border-primary' : 'border-border'}`}>
                 <Search className={`w-4 h-4 flex-shrink-0 ${searchQuery ? 'text-primary' : 'text-muted-foreground'}`} />
                 <input
                   value={searchQuery}
-                  onChange={e => { setSearchQuery(e.target.value); setNearbyResults([]); }}
+                                onChange={e => setSearchQuery(e.target.value)}
                   placeholder={t('spots.search')}
                   className="flex-1 text-sm outline-none bg-transparent text-foreground min-w-0"
                 />
                 {searchQuery && (
-                  <button aria-label={t('spots.clearSearch')} onClick={() => { setSearchQuery(''); setOsmResults([]); setNearbyResults([]); }} className="text-muted-foreground flex-shrink-0">
+                                <button aria-label={t('spots.clearSearch')} onClick={() => { setSearchQuery(''); setOsmResults([]); }} className="text-muted-foreground flex-shrink-0">
                     <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
-              <button
-                onClick={() => handleNearby(nearbyFilter)}
-                className="flex items-center gap-1.5 bg-accent text-primary px-3 py-2.5 rounded-full text-sm font-semibold flex-shrink-0 border border-orange-200"
-              >
-                <Navigation className="w-3.5 h-3.5" />{t('spots.near')}
-              </button>
             </div>
 
             {/* Chips de ciudad — solo si hay más de una */}
@@ -1466,36 +1375,6 @@ export default function Restaurants() {
                     </button>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Resultados Cerca */}
-            {loadingNearby && <p className="text-sm text-muted-foreground text-center py-4">{t('spots.gettingLocation')}</p>}
-            {nearbyResults.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t('spots.nearbyCount', { count: nearbyResults.length })}</p>
-                <div className="bg-card border border-border rounded-2xl overflow-hidden">
-                  {nearbyResults.map((p, i) => {
-                    const isDuplicate = spots.some(s => s.title?.toLowerCase().trim() === p.name?.toLowerCase().trim());
-                    return (
-                      <div key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${i < nearbyResults.length - 1 ? 'border-b border-border' : ''}`}>
-                        <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
-                          {(() => { const I = {food:Utensils,sight:Landmark,activity:Ticket,shopping:ShoppingBag,nightlife:Moon,bar:Moon}[p.type] || Compass; return <I size={14} className="text-muted-foreground" />; })()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
-                          <p className="text-xs text-muted-foreground">{p.address || ''}{p.dist ? ` · ${p.dist < 1000 ? p.dist + 'm' : (p.dist/1000).toFixed(1) + 'km'}` : ''}</p>
-                        </div>
-                        {isDuplicate
-                          ? <span className="text-xs text-muted-foreground flex-shrink-0">{t('spots.savedBadge')}</span>
-                          : <button onClick={() => saveOsmPlace(p)} disabled={savingId === p.id} className="flex-shrink-0 text-primary hover:text-primary/70 transition-colors">
-                              <Plus className="w-5 h-5" />
-                            </button>
-                        }
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
             )}
 
