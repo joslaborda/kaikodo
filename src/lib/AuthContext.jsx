@@ -8,6 +8,41 @@ import { isNative, openNativeLogin, listenForLoginCallback } from '@/lib/nativeA
 
 const AuthContext = createContext();
 
+// Fix (ago 2026) -- "si abro la app sin conexión debería seguir viendo mis
+// viajes/documentos, como si estuvieran guardados en el propio dispositivo":
+// react-query YA persiste sus datos en localStorage (ver query-client.js,
+// persistQueryClient/gcTime 24h) -- ese cache seguía ahí sin usar. El
+// problema real es que checkAppState()/checkUserAuth() de aquí abajo, ante
+// CUALQUIER fallo sin status HTTP (típico de estar offline: el fetch ni
+// siquiera llega a tener respuesta) marcaban authError como 'unknown' o
+// 'network_error', y App.jsx bloqueaba TODA la app con una pantalla de
+// error para esos dos tipos -- <Routes> (y por tanto Layout/OfflineIndicator
+// y cualquier pantalla que leyera del cache de react-query) nunca llegaba a
+// montarse. Guardamos aquí una copia mínima del último usuario autenticado
+// con éxito; si el siguiente arranque falla por algo que huele a "sin
+// conexión" (sin status HTTP), usamos esa copia para dejar pasar a
+// <Routes> igualmente en vez de bloquear -- las pantallas ya saben pintar
+// con lo que haya en el cache de react-query.
+const LAST_KNOWN_USER_KEY = 'kodo_last_known_user';
+function saveLastKnownUser(user) {
+  try { window.localStorage.setItem(LAST_KNOWN_USER_KEY, JSON.stringify(user)); } catch {}
+}
+function getLastKnownUser() {
+  try {
+    const raw = window.localStorage.getItem(LAST_KNOWN_USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function clearLastKnownUser() {
+  try { window.localStorage.removeItem(LAST_KNOWN_USER_KEY); } catch {}
+}
+// Solo tratamos un fallo como "posible offline" si no trae status HTTP --
+// un 401/403/500 real SÍ tiene status, y esos deben seguir mostrando su
+// error normal en vez de enmascararse con datos viejos.
+function looksOffline(error) {
+  return !error?.status && !error?.response?.status;
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -15,6 +50,22 @@ export const AuthProvider = ({ children }) => {
   const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
+
+  // Ver comentario junto a LAST_KNOWN_USER_KEY más arriba. type/message son
+  // el authError "real" que se habría puesto antes de este fix -- se usa
+  // igualmente si no hay ningún usuario en caché al que hacer fallback.
+  const handleOfflineOrError = (error, type, message) => {
+    if (looksOffline(error)) {
+      const cached = getLastKnownUser();
+      if (cached) {
+        setUser(cached);
+        setIsAuthenticated(true);
+        setAuthError({ type: 'offline', message: 'Sin conexión — mostrando datos guardados' });
+        return;
+      }
+    }
+    setAuthError({ type, message });
+  };
 
   useEffect(() => {
     checkAppState();
@@ -112,20 +163,14 @@ export const AuthProvider = ({ children }) => {
             });
           }
         } else {
-          setAuthError({
-            type: 'unknown',
-            message: appError.message || 'Failed to load app'
-          });
+          handleOfflineOrError(appError, 'unknown', appError.message || 'Failed to load app');
         }
         setIsLoadingPublicSettings(false);
         setIsLoadingAuth(false);
       }
     } catch (error) {
       console.error('Unexpected error:', error);
-      setAuthError({
-        type: 'unknown',
-        message: error.message || 'An unexpected error occurred'
-      });
+      handleOfflineOrError(error, 'unknown', error.message || 'An unexpected error occurred');
       setIsLoadingPublicSettings(false);
       setIsLoadingAuth(false);
     }
@@ -139,6 +184,7 @@ export const AuthProvider = ({ children }) => {
       setUser(currentUser);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
+      saveLastKnownUser(currentUser);
       // No-op fuera de la app nativa (Capacitor) — ver pushNotifications.js.
       // Asocia este dispositivo al usuario en OneSignal para que
       // createNotification (backend) pueda enviarle push dirigidos por
@@ -173,10 +219,7 @@ export const AuthProvider = ({ children }) => {
         // authError: null), así que App.jsx renderizaba como si el usuario
         // simplemente no hubiera iniciado sesión, en vez de avisar de un
         // problema de red y ofrecer reintentar.
-        setAuthError({
-          type: 'network_error',
-          message: error.message || 'Network error'
-        });
+        handleOfflineOrError(error, 'network_error', error.message || 'Network error');
       }
     }
   };
@@ -199,6 +242,11 @@ export const AuthProvider = ({ children }) => {
     // carrera al guardado diferido y dejar la caché anterior intacta en
     // disco pese a haber "cerrado sesión".
     clearPersistedQueryCache();
+    // Mismo motivo que clearPersistedQueryCache: sin esto, el siguiente
+    // arranque sin conexión en este dispositivo podría hacer fallback al
+    // usuario anterior (ver handleOfflineOrError arriba) pese a haber
+    // cerrado sesión explícitamente.
+    clearLastKnownUser();
 
     if (isNative()) {
       // En nativo, base44.auth.logout() siempre navega (window.location.href =
