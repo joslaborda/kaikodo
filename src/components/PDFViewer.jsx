@@ -123,8 +123,11 @@ export default function PDFViewer({ fileUrl, onClose }) {
        quedaban casi invisibles encima. */
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#141414' }}>
 
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-5 py-3 shrink-0" style={{ background: 'rgba(0,0,0,.5)' }}>
+      {/* Top bar — el padding-top suma el "safe area" del notch/isla
+          dinámica (iOS) o la barra de estado (Android) a los 12px propios
+          (py-3): sin esto la X de cerrar quedaba pegada arriba del todo de
+          la pantalla, debajo/solapada con el notch, y costaba tocarla. */}
+      <div className="flex items-center justify-between px-5 pb-3 shrink-0" style={{ background: 'rgba(0,0,0,.5)', paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}>
         <div className="w-8" />
         <p className="text-sm font-medium truncate max-w-xs" style={{ color: 'rgba(255,255,255,.75)' }}>{fileName}</p>
         <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center"
