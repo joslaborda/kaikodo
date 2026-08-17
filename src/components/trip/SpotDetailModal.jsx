@@ -131,15 +131,22 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
     // explícitamente la otra en el desplegable.
     const nextCityId = 'assignedCityId' in overrides ? overrides.assignedCityId : assignedCityId;
     const timeChanged = (time || '') !== (spot.assigned_time || '');
-    setSaving(true);
-    try {
-      const cityIdUpdate = nextCityId && nextCityId !== spot?.city_id ? { city_id: nextCityId } : {};
-      await base44.entities.Spot.update(spot.id, {
-        notes: notes.trim() || null,
-        assigned_time: time || null,
-        assigned_date: nextDate || null,
-        ...cityIdUpdate,
-      });
+        const dateChanged = (nextDate || '') !== (spot.assigned_date || '');
+        setSaving(true);
+        try {
+                const cityIdUpdate = nextCityId && nextCityId !== spot?.city_id ? { city_id: nextCityId } : {};
+                // Fix: si el spot ya tenia una posicion fijada por un arrastre
+                // anterior (day_order), cambiar la hora o la fecha aqui no lo movia
+                // en el timeline de Ruta/Hoy -- se quedaba en la posicion del ultimo
+                // drag en vez de reordenarse solo. Se limpia el pin cuando hora o
+                // fecha cambian de verdad, para que caiga en su hueco cronologico.
+                await base44.entities.Spot.update(spot.id, {
+                          notes: notes.trim() || null,
+                          assigned_time: time || null,
+                          assigned_date: nextDate || null,
+                          ...(timeChanged || dateChanged ? { day_order: null } : {}),
+                          ...cityIdUpdate,
+                });
       if (queryClient && tripId) {
         queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
       }
