@@ -53,25 +53,60 @@ const SHOW_FIELDS = {
   other:    ['name','city','date','time','notes','note_time'],
 };
 
-// Buscador de ubicación (aeropuerto/estación) para vuelos y trenes — mismo
-// endpoint de geocoding (Nominatim) que ya usa el buscador de spots en
-// Restaurants.jsx, adaptado aquí sin depender de ese archivo. El resultado
-// elegido guarda lat/lng reales, que es justo lo que le faltaba a un
-// documento para poder aparecer en el mini-mapa del día (TodayRouteMap).
+// Buscador de ubicacion (aeropuerto/estacion) para vuelos y trenes. Usa
+// Google Places API (New, Text Search) cuando hay una API key configurada
+// (VITE_GOOGLE_MAPS_API_KEY, ver src/lib/googleMaps.js) -- mejores
+// resultados, fotos/nombres reales de aeropuertos y estaciones en vez del
+// indice mas flojo de OpenStreetMap. Sin key configurada (todavia no
+// activada por Jose en Base44 -> Secretos) cae automaticamente en el
+// buscador anterior (Nominatim/OSM) para no romper nada mientras tanto: el
+// mismo codigo se activa solo en cuanto la key exista, sin otro deploy.
+async function searchLocationNominatim(query, signal) {
+    const params = new URLSearchParams({ q: query, format: 'json', limit: 6, addressdetails: 1, namedetails: 1 });
+    const res = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
+          headers: { 'Accept-Language': 'es,en', 'User-Agent': 'KodoTravelApp/1.0' },
+          signal,
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map(item => ({
+          id: item.place_id?.toString(),
+          name: item.namedetails?.name || item.display_name?.split(',')[0] || query,
+          address: item.display_name,
+          lat: parseFloat(item.lat), lng: parseFloat(item.lon),
+    }));
+}
+
+async function searchLocationGooglePlaces(query, signal, apiKey) {
+    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+          method: 'POST',
+          headers: {
+                  'Content-Type': 'application/json',
+                  'X-Goog-Api-Key': apiKey,
+                  'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location',
+          },
+          body: JSON.stringify({ textQuery: query, languageCode: 'es' }),
+          signal,
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.places || []).slice(0, 6).map(p => ({
+          id: p.id,
+          name: p.displayName?.text || query,
+          address: p.formattedAddress,
+          lat: p.location?.latitude, lng: p.location?.longitude,
+    }));
+}
+
 async function searchLocation(query, signal) {
-  const params = new URLSearchParams({ q: query, format: 'json', limit: 6, addressdetails: 1, namedetails: 1 });
-  const res = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
-    headers: { 'Accept-Language': 'es,en', 'User-Agent': 'KodoTravelApp/1.0' },
-    signal,
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.map(item => ({
-    id: item.place_id?.toString(),
-    name: item.namedetails?.name || item.display_name?.split(',')[0] || query,
-    address: item.display_name,
-    lat: parseFloat(item.lat), lng: parseFloat(item.lon),
-  }));
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return searchLocationNominatim(query, signal);
+    try {
+          return await searchLocationGooglePlaces(query, signal, apiKey);
+    } catch (err) {
+          if (err.name === 'AbortError') throw err;
+          return searchLocationNominatim(query, signal);
+    }
 }
 
 const FIELD_LABELS = {
