@@ -69,6 +69,25 @@ export default function LoginScreen({ onSuccess }) {
     resetMessages();
     setMode(nextMode);
   };
+  // Fix: el SDK de base44 (loginViaEmailPassword) llama internamente a
+  // auth.logout() en CUALQUIER 401 — incluida una contraseña incorrecta,
+  // el caso más común de un login que falla — y logout() hace un
+  // window.location.href de página completa a un endpoint de logout de
+  // base44. Eso saca al usuario de la SPA con una recarga brusca en vez de
+  // dejar que el catch de abajo muestre "contraseña incorrecta" como un
+  // error normal en pantalla; visto desde fuera, "el login da error" o "no
+  // arranca bien". Como auth.logout es una propiedad de instancia (no de
+  // prototipo), la anulamos sin efecto solo mientras dura el intento de
+  // login/verificación, y la restauramos justo después pase lo que pase.
+  const withoutAutoLogoutOn401 = async (fn) => {
+    const originalLogout = base44.auth.logout;
+    base44.auth.logout = async () => {};
+    try {
+      return await fn();
+    } finally {
+      base44.auth.logout = originalLogout;
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -77,7 +96,7 @@ export default function LoginScreen({ onSuccess }) {
     if (!trimmedEmail || !password) { setError(t('auth.errors.missingFields')); return; }
     setLoading(true);
     try {
-      await base44.auth.loginViaEmailPassword(trimmedEmail, password);
+      await withoutAutoLogoutOn401(() => base44.auth.loginViaEmailPassword(trimmedEmail, password));
       onSuccess?.();
     } catch (err) {
       setError(extractErrorMessage(err, t('auth.errors.loginFailed')));
@@ -117,10 +136,14 @@ export default function LoginScreen({ onSuccess }) {
     setLoading(true);
     try {
       await base44.auth.verifyOtp({ email: trimmedEmail, otpCode: trimmedCode });
-      // Verificar el OTP confirma la cuenta pero, igual que register(), no
+            // Verificar el OTP confirma la cuenta pero, igual que register(), no
       // guarda sesión por sí solo — hace falta un login explícito justo
-      // después, con la misma contraseña que se acaba de establecer.
-      await base44.auth.loginViaEmailPassword(trimmedEmail, password);
+      // después, con la misma contraseña que se acaba de establecer. Mismo
+      // fix que en handleLogin: sin esto, un 401 aquí (p. ej. contraseña
+      // rechazada por el motivo que sea justo tras verificar) sacaría al
+      // usuario de la app ya verificado pero sin sesión — exactamente el
+      // patrón de cuentas que aparecen como "nunca inició sesión".
+      await withoutAutoLogoutOn401(() => base44.auth.loginViaEmailPassword(trimmedEmail, password));
       onSuccess?.();
     } catch (err) {
       setError(extractErrorMessage(err, t('auth.errors.otpFailed')));
