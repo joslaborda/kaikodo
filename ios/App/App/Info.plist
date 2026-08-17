@@ -17,6 +17,18 @@
 	<string>en</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 		<string>Kaikōdo no utiliza tu ubicación. Este permiso es requerido por una dependencia (OneSignal) aunque la funcionalidad no está activa en la app.</string>
+	<!-- Fix: sin estas dos claves, iOS mata la app en el acto (crash duro,
+	     sin excepción capturable en JS) en cuanto un <input type="file"
+	     capture> intenta abrir la cámara o la librería de fotos dentro del
+	     WKWebView (p. ej. al añadir un recibo en Gastos). Android no exige
+	     esto antes de usarlas (pide permiso en tiempo de ejecución), por eso
+	     el mismo flujo funcionaba bien ahí y no en iOS. -->
+	<key>NSCameraUsageDescription</key>
+		<string>Kaikōdo usa la cámara para que puedas fotografiar recibos y adjuntarlos a tus gastos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+		<string>Kaikōdo accede a tus fotos para que puedas adjuntar imágenes de recibos, documentos y fotos del viaje.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>Kaikōdo guarda fotos en tu galería cuando descargas una imagen desde la app.</string>
 	<key>CFBundleDisplayName</key>
         <string>Kaikōdo</string>
 	<key>CFBundleExecutable</key>
