@@ -65,6 +65,8 @@ import Explore from './pages/Explore';
 import TemplateDetail from './pages/TemplateDetail';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import __Layout from './Layout.jsx';
 
 
@@ -87,6 +89,8 @@ export const PAGES = {
     "TemplateDetail": TemplateDetail,
     "Terms": Terms,
     "Privacy": Privacy,
+    "ForgotPassword": ForgotPassword,
+    "ResetPassword": ResetPassword,
 }
 
 export const pagesConfig = {
