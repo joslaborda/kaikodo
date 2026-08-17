@@ -145,13 +145,32 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
   // puede terminar antes que uno a las 11:00. Si el drop deja esa inversión,
   // se rechaza entero (no se guarda nada, no cambia nada en pantalla) y se
   // avisa con un toast en vez de reordenar silenciosamente algo sin sentido.
-  const findTimeClash = (orderedItems) => {
-    const timed = orderedItems.filter(i => i.time);
-    for (let k = 0; k < timed.length - 1; k++) {
-      if (timed[k].time > timed[k + 1].time) return [timed[k], timed[k + 1]];
-    }
-    return null;
-  };
+  // Fix: antes esto escaneaba TODA la lista buscando cualquier inversion
+    // cronologica entre items con hora, en vez de mirar solo el item que se
+    // acababa de arrastrar. El propio diseno del timeline permite que un
+    // item fijado (day_order) se quede fuera de orden por hora a proposito
+    // (ver el comentario de mas arriba, "pasa a mandar sobre la hora"), asi
+    // que en cuanto existia una inversion antigua en cualquier parte del dia
+    // (p. ej. por haber cambiado la hora de un spot despues de fijarlo en
+    // otra posicion), CUALQUIER arrastre en ese dia quedaba bloqueado con
+    // "los horarios chocan" aunque los dos items que se estaban moviendo no
+    // tuvieran nada que ver entre si. Ahora solo se comprueba si el item
+    // movido queda cronologicamente antes del que tiene justo delante (con
+    // hora) o despues del que tiene justo detras (con hora) -- el unico
+    // choque que de verdad provoca este arrastre en concreto.
+    const findTimeClash = (orderedItems, movedId) => {
+          const idx = orderedItems.findIndex(i => (i.id || '') === movedId);
+          if (idx === -1) return null;
+          const moved = orderedItems[idx];
+          if (!moved.time) return null;
+          let prev = null;
+          for (let k = idx - 1; k >= 0; k--) { if (orderedItems[k].time) { prev = orderedItems[k]; break; } }
+          let next = null;
+          for (let k = idx + 1; k < orderedItems.length; k++) { if (orderedItems[k].time) { next = orderedItems[k]; break; } }
+          if (prev && prev.time > moved.time) return [prev, moved];
+          if (next && next.time < moved.time) return [moved, next];
+          return null;
+    };
 
   const reorderTimeline = async (fromId, toId) => {
     if (!fromId || !toId || fromId === toId) return;
@@ -163,7 +182,7 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
     const [moved] = reordered.splice(from, 1);
     reordered.splice(to, 0, moved);
 
-    const clash = findTimeClash(reordered);
+        const clash = findTimeClash(reordered, moved.id);
     if (clash) {
       const [a, b] = clash;
       toast({
