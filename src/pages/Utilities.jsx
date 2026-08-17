@@ -379,9 +379,12 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
   const addInputRef = useRef(null);
 
   const { data: items = [] } = useQuery({
-    queryKey: ['packingItems', tripId],
-    queryFn: () => base44.entities.PackingItem.filter({ trip_id: tripId }),
-    enabled: !!tripId, staleTime: 30000,
+          // Fix: la maleta debe ser individual (cada viajero ve/gestiona solo la
+      // suya) — antes se filtraba solo por trip_id, así que todo el mundo veía
+      // y podía marcar/borrar los items de los demás miembros del viaje.
+      queryKey: ['packingItems', tripId, userId],
+      queryFn: () => base44.entities.PackingItem.filter({ trip_id: tripId, user_id: userId }),
+      enabled: !!tripId && !!userId, staleTime: 30000,
   });
 
   // Si `tripMembers` (trip?.members del padre) no había cargado, antes se
