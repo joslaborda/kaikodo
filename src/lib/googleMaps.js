@@ -68,3 +68,41 @@ export function kodoMarkerIcon(google, { color = '#c2410c', scale = 1.6 } = {}) 
           anchor: new google.maps.Point(12, 22),
     };
 }
+
+// -- Tope diario de seguridad, por dispositivo --------------------------------
+// Places API (New) no tiene limite "por dia" configurable en la consola de
+// Google, solo por minuto (ver docs.cloud.google.com/apis/docs/capping-api-usage).
+// Asi que esto es lo unico que da un stop real sin depender de la consola ni
+// de estar pendiente de correos: un contador local por dispositivo que, al
+// llegar al tope del dia, hace que el codigo llamante caiga automaticamente a
+// Nominatim/Leaflet (gratis), sin intervencion. No es un limite global entre
+// todos los dispositivos -- es la barrera contra el escenario real que
+// importa, que es un bug o bucle metiendo cana desde un solo dispositivo. Con
+// el volumen normal de un viaje/grupo esto no se nota nunca.
+const GOOGLE_DAILY_CAPS = { autocomplete: 200, placeDetails: 200, mapLoad: 200 };
+
+function googleCapKey(sku) {
+        const day = new Date().toISOString().slice(0, 10);
+        return `kodo_google_cap_${sku}_${day}`;
+}
+
+export function canUseGoogleToday(sku) {
+        try {
+                    const cap = GOOGLE_DAILY_CAPS[sku];
+                    if (!cap) return true;
+                    const count = parseInt(localStorage.getItem(googleCapKey(sku)) || '0', 10);
+                    return count < cap;
+        } catch {
+                    return true;
+        }
+}
+
+export function markGoogleUsed(sku) {
+        try {
+                    const key = googleCapKey(sku);
+                    const count = parseInt(localStorage.getItem(key) || '0', 10);
+                    localStorage.setItem(key, String(count + 1));
+        } catch {
+                    // localStorage no disponible (privado/incognito) -- no bloqueamos
+        }
+}
