@@ -74,10 +74,16 @@ export default function TodayTab({ trip, cities, tripId, profiles, onInvite, cur
     ? differenceInDays(parseISO(trip.end_date), parseISO(trip.start_date)) + 1
     : null;
 
-  const handleUpdateItemTime = async (item, time) => {
-    if (item._kind === 'doc') {
-      const oldTime = item.time || '';
-      await base44.entities.Ticket.update(item.id, { time });
+const handleUpdateItemTime = async (item, time) => {
+      // Fix: si el item ya tenia una posicion fijada por un arrastre
+      // anterior (day_order), editar solo la hora desde aqui (pencil de la
+      // fila en Hoy/Manana) no lo reubicaba en el timeline -- se quedaba
+      // donde lo dejo el ultimo drag en vez de moverse a su hueco
+      // cronologico nuevo. Se limpia el pin cuando la hora cambia de verdad.
+      const timeIsChanging = (time || '') !== (item.time || '');
+      if (item._kind === 'doc') {
+              const oldTime = item.time || '';
+              await base44.entities.Ticket.update(item.id, { time, ...(timeIsChanging ? { day_order: null } : {}) });
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
       // Edición rápida de hora desde la fila del día (Hoy/Mañana) — mismo
       // hueco que Documents.jsx y Cities.jsx: antes no avisaba a nadie.
@@ -98,7 +104,7 @@ export default function TodayTab({ trip, cities, tripId, profiles, onInvite, cur
         }
       }
     } else if (item._kind === 'spot') {
-      await base44.entities.Spot.update(item.id, { assigned_time: time });
+      await base44.entities.Spot.update(item.id, { assigned_time: time, ...(timeIsChanging ? { day_order: null } : {}) });
       queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
     }
   };
