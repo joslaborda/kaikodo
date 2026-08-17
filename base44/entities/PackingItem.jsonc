@@ -8,11 +8,11 @@
     },
     "user_id": {
       "type": "string",
-      "description": "ID del usuario due\u00f1o"
+      "description": "ID del usuario dueño"
     },
     "name": {
       "type": "string",
-      "description": "Nombre del art\u00edculo"
+      "description": "Nombre del artículo"
     },
     "category": {
       "type": "string",
@@ -25,7 +25,7 @@
         "otros",
         "souvenir"
       ],
-      "description": "Categor\u00eda del art\u00edculo"
+      "description": "Categoría del artículo"
     },
     "packed": {
       "type": "boolean",
@@ -38,12 +38,12 @@
     "essential": {
       "type": "boolean",
       "default": false,
-      "description": "Marca el art\u00edculo como esencial (se resalta y se cuenta aparte)"
+      "description": "Marca el artículo como esencial (se resalta y se cuenta aparte)"
     },
     "trip_members": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Copia de Trip.members en el momento de crear/sincronizar \u2014 usada por rls porque base44 no permite comprobar la pertenencia al viaje contra otra entidad. Se mantiene al d\u00eda v\u00eda syncTripMembers() cada vez que cambia la membres\u00eda del viaje."
+      "description": "Copia de Trip.members en el momento de crear/sincronizar — usada por rls porque base44 no permite comprobar la pertenencia al viaje contra otra entidad. Se mantiene al día vía syncTripMembers() cada vez que cambia la membresía del viaje."
     }
   },
   "required": [
@@ -53,9 +53,23 @@
     "category"
   ],
   "rls": {
-    "create": { "data.trip_members": { "$in": ["{{user.email}}"] } },
-    "read": { "data.trip_members": { "$in": ["{{user.email}}"] } },
-    "update": { "data.trip_members": { "$in": ["{{user.email}}"] } },
-    "delete": { "data.trip_members": { "$in": ["{{user.email}}"] } }
+    // Fix: la maleta es individual — cada usuario solo debe poder leer,
+    // crear, actualizar o borrar SUS PROPIOS items (data.user_id ==
+    // {{user.id}}), no los de todos los miembros del viaje. Antes el rls
+    // solo comprobaba pertenencia al viaje (data.trip_members), así que
+    // cualquier miembro podía leer/marcar/borrar los items de los demás.
+    // create exige además pertenencia al viaje para que solo un miembro
+    // real del trip pueda crear items en él (paridad con el resto de
+    // entidades de viaje) y user_id == {{user.id}} para evitar que alguien
+    // cree un item "a nombre" de otro usuario.
+    "create": {
+      "$and": [
+        { "data.trip_members": { "$in": ["{{user.email}}"] } },
+        { "data.user_id": "{{user.id}}" }
+      ]
+    },
+    "read": { "data.user_id": "{{user.id}}" },
+    "update": { "data.user_id": "{{user.id}}" },
+    "delete": { "data.user_id": "{{user.id}}" }
   }
 }
