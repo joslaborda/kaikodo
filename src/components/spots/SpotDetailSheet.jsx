@@ -93,6 +93,7 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
   const handleSave = async () => {
     setSaving(true);
     const timeChanged = assignedTime !== (spot?.assigned_time || '');
+    const dateChanged = assignedDate !== (spot?.assigned_date || '');
     // Se usa el cityId que el usuario eligió EXPLÍCITAMENTE en el <select>
     // (assignedCityId, ver el onChange de arriba), no un resolveCityIdForDate
     // recalculado solo a partir de la fecha: en un día de tránsito entre dos
@@ -107,6 +108,7 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
         notes,
         assigned_date: assignedDate || null,
         assigned_time: assignedTime || null,
+        ...(timeChanged || dateChanged ? { day_order: null } : {}),
         ...cityIdUpdate,
       });
       queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
