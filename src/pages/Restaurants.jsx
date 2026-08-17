@@ -19,6 +19,7 @@ import SpotsMapView from '@/components/spots/SpotsMapView';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
+import { canUseGoogleToday, markGoogleUsed } from '@/lib/googleMaps';
 // El LeafletMap de aquí abajo es una copia local independiente del
 // componente compartido (src/components/spots/LeafletMap.jsx) — no lo
 // importa, así que arreglar el tile compartido nunca cambió nada en este
@@ -76,23 +77,95 @@ function suggestInsertIndex(newSpot, daySpotsSorted) {
   return daySpotsSorted.findIndex(s => s.id === nearest.id) + 1;
 }
 
-async function searchPlaces(query, city, country, signal) {
-  const q = [query, city, country].filter(Boolean).join(', ');
-  const params = new URLSearchParams({ q, format:'json', limit:8, addressdetails:1, namedetails:1 });
-  const res = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
-    headers: { 'Accept-Language':'es,en', 'User-Agent':'KodoTravelApp/1.0' },
-    signal: signal || (() => { const c = new AbortController(); setTimeout(() => c.abort(), 8000); return c.signal; })(),
-  });
-  if (!res.ok) throw new Error('search failed');
-  const data = await res.json();
-  return data.map(item => ({
-    id: item.place_id?.toString(),
-    name: item.namedetails?.name || item.display_name?.split(',')[0] || query,
-    address: [item.address?.road, item.address?.city || item.address?.town].filter(Boolean).join(', '),
-    lat: parseFloat(item.lat), lng: parseFloat(item.lon),
-    type: osmToType(item.type, item.class),
-  }));
+async function searchPlacesNominatim(query, city, country, signal) {
+    const q = [query, city, country].filter(Boolean).join(', ');
+    const params = new URLSearchParams({ q, format:'json', limit:8, addressdetails:1, namedetails:1 });
+    const res = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
+          headers: { 'Accept-Language':'es,en', 'User-Agent':'KodoTravelApp/1.0' },
+          signal: signal || (() => { const c = new AbortController(); setTimeout(() => c.abort(), 8000); return c.signal; })(),
+    });
+    if (!res.ok) throw new Error('search failed');
+    const data = await res.json();
+    return data.map(item => ({
+          id: item.place_id?.toString(),
+          name: item.namedetails?.name || item.display_name?.split(',')[0] || query,
+          address: [item.address?.road, item.address?.city || item.address?.town].filter(Boolean).join(', '),
+          lat: parseFloat(item.lat), lng: parseFloat(item.lon),
+          type: osmToType(item.type, item.class),
+    }));
 }
+
+const GOOGLE_TYPE_MAP = {
+    restaurant:'food', cafe:'food', bar:'food', bakery:'food', meal_takeaway:'food',
+    meal_delivery:'food', night_club:'food',
+    museum:'sight', art_gallery:'sight', tourist_attraction:'sight', church:'sight',
+    hindu_temple:'sight', mosque:'sight', synagogue:'sight', park:'sight',
+    monument:'sight', historical_landmark:'sight', place_of_worship:'sight',
+    shopping_mall:'shopping', clothing_store:'shopping', department_store:'shopping',
+    supermarket:'shopping', book_store:'shopping', market:'shopping',
+    movie_theater:'activity', bowling_alley:'activity', amusement_park:'activity',
+    stadium:'activity', zoo:'activity', spa:'activity',
+    lodging:'hotel', hotel:'hotel', motel:'hotel', resort_hotel:'hotel', hostel:'hotel',
+    airport:'airport', international_airport:'airport',
+    train_station:'train', subway_station:'train', light_rail_station:'train', transit_station:'train',
+    bus_station:'bus', bus_stop:'bus',
+};
+function googleTypeToKodoType(types) {
+    for (const t of (types || [])) { if (GOOGLE_TYPE_MAP[t]) return GOOGLE_TYPE_MAP[t]; }
+    return 'sight';
+}
+async function searchPlacesGoogle(query, city, country, signal, apiKey) {
+    if (!canUseGoogleToday('autocomplete')) throw new Error('daily-cap-reached');
+    const input = [query, city, country].filter(Boolean).join(', ');
+    const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey },
+          body: JSON.stringify({ input, languageCode: 'es' }),
+          signal,
+    });
+    if (!res.ok) return [];
+    markGoogleUsed('autocomplete');
+    const data = await res.json();
+    return (data.suggestions || []).map(s => s.placePrediction).filter(Boolean).slice(0, 8).map(p => ({
+          id: p.placeId,
+          name: p.structuredFormat?.mainText?.text || p.text?.text || query,
+          address: p.structuredFormat?.secondaryText?.text || '',
+          lat: null, lng: null,
+          type: googleTypeToKodoType(p.types),
+          _placeId: p.placeId,
+    }));
+}
+async function fetchPlaceDetailsGoogle(placeId, apiKey, signal) {
+    if (!canUseGoogleToday('placeDetails')) return null;
+    const res = await fetch('https://places.googleapis.com/v1/places/' + placeId, {
+          headers: {
+                  'X-Goog-Api-Key': apiKey,
+                  'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types',
+          },
+          signal,
+    });
+    if (!res.ok) return null;
+    markGoogleUsed('placeDetails');
+    const p = await res.json();
+    return {
+          name: p.displayName?.text,
+          address: p.formattedAddress,
+          lat: p.location?.latitude, lng: p.location?.longitude,
+          type: googleTypeToKodoType(p.primaryType ? [p.primaryType, ...(p.types||[])] : p.types),
+    };
+}
+
+async function searchPlaces(query, city, country, signal) {
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return searchPlacesNominatim(query, city, country, signal);
+    try {
+          return await searchPlacesGoogle(query, city, country, signal, apiKey);
+    } catch (err) {
+          if (err?.name === 'AbortError') throw err;
+          return searchPlacesNominatim(query, city, country, signal);
+    }
+}
+
 
 async function reverseGeocode(lat, lng) {
   try {
@@ -422,17 +495,20 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
               {addressResults.length > 0 && (
                 <div className="absolute z-10 left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
                   {addressResults.map(r => (
-                    <button key={r.id} type="button" onClick={() => {
-                      suppressNextSearchRef.current = true;
-                      setAddress(r.name + (r.address ? ', ' + r.address : ''));
-                      setPinLat(r.lat); setPinLng(r.lng);
-                      setShowMap(true);
-                      setAddressResults([]);
-                      // Elegir un resultado ya trae el nombre del sitio — si el
-                      // usuario todavía no ha escrito uno propio, autocompletarlo
-                      // en vez de dejarle escribir "Hotel Marriott Lima" dos veces.
-                      setTitle(prev => prev.trim() ? prev : r.name);
-                    }}
+<button key={r.id} type="button" onClick={async () => {
+    suppressNextSearchRef.current = true;
+    let rLat = r.lat, rLng = r.lng, rName = r.name, rAddress = r.address;
+    if (rLat == null && r._placeId) {
+          const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+          const details = apiKey ? await fetchPlaceDetailsGoogle(r._placeId, apiKey) : null;
+          if (details) { rLat = details.lat; rLng = details.lng; rAddress = details.address || rAddress; rName = details.name || rName; }
+    }
+    setAddress(rName + (rAddress ? ', ' + rAddress : ''));
+    setPinLat(rLat); setPinLng(rLng);
+    setShowMap(true);
+    setAddressResults([]);
+    setTitle(prev => prev.trim() ? prev : rName);
+}}
                       className="w-full flex flex-col items-start px-3 py-2.5 text-left hover:bg-secondary/30 transition-colors border-b border-border last:border-0">
                       <span className="text-sm font-medium text-foreground truncate w-full">{r.name}</span>
                       {r.address && <span className="text-xs text-muted-foreground truncate w-full">{r.address}</span>}
@@ -974,15 +1050,21 @@ export default function Restaurants() {
     if (dup) { showToastFor({ title: t('spots.create.alreadyInListQuoted', { title: place.name }) }, city); return; }
     setSavingId(place.id);
     try {
-      const created = await createMutation.mutateAsync({
-        trip_id: tripId || undefined, city_id: effectiveCityId||undefined,
-        city_name: effectiveCityName, country: normalizeCountry(country),
-        title: place.name, type: place.type || 'sight',
-        address: place.address || '', lat: place.lat, lng: place.lng,
-        osm_id: place.id || null, source: 'osm',
-        visibility: 'trip_members', visited: false,
-        created_by: null, created_by_user_id: null,
-        saved_by: [user?.email].filter(Boolean),
+        let resolved = place;
+        if (place.lat == null && place._placeId) {
+              const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+          const details = apiKey ? await fetchPlaceDetailsGoogle(place._placeId, apiKey) : null;
+          if (details) resolved = { ...place, lat: details.lat, lng: details.lng, address: details.address || place.address, type: details.type || place.type, name: details.name || place.name };
+      }
+        const created = await createMutation.mutateAsync({
+                trip_id: tripId || undefined, city_id: effectiveCityId||undefined,
+          city_name: effectiveCityName, country: normalizeCountry(country),
+          title: resolved.name, type: resolved.type || 'sight',
+          address: resolved.address || '', lat: resolved.lat, lng: resolved.lng,
+          osm_id: resolved.id || null, source: 'osm',
+          visibility: 'trip_members', visited: false,
+          created_by: null, created_by_user_id: null,
+          saved_by: [user?.email].filter(Boolean),
       });
       setLastSavedId(created?.id);
             setOsmResults([]); setSearchQuery(''); setNearbyFilter([]);
