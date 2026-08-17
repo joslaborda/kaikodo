@@ -1291,7 +1291,7 @@ export default function Restaurants() {
             )}
 
             {/* Estado vacío */}
-            {!searchQuery && osmResults.length === 0 && nearbyResults.length === 0 && !searching && !loadingNearby && (
+            {!searchQuery && osmResults.length === 0 && !searching && (
               <div className="text-center py-12">
                 <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-3">
                   <Compass className="w-6 h-6 text-muted-foreground/50" />
