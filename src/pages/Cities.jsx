@@ -313,7 +313,18 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
 
   const handleSpotSave = async (spot, newNotes, newTime) => {
     try {
-      await base44.entities.Spot.update(spot.id, { notes: newNotes, assigned_time: newTime || null });
+            // Fix: editar solo la hora no reorganizaba el spot en el timeline si
+            // ya tenia una posicion fijada por un arrastre anterior (day_order) --
+            // se quedaba donde estaba el drag viejo en vez de moverse a su sitio
+            // cronologico nuevo. Al cambiar la hora explicitamente se asume que
+            // el usuario quiere que caiga en su hueco por hora, asi que se limpia
+            // el pin de posicion (day_order) para que vuelva a ordenarse solo.
+            const timeIsChanging = (newTime || '') !== (spot.assigned_time || '');
+            await base44.entities.Spot.update(spot.id, {
+                      notes: newNotes,
+                      assigned_time: newTime || null,
+                      ...(timeIsChanging ? { day_order: null } : {}),
+            });
       queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
       setEditingSpot(null);
     } catch (e) {
@@ -338,7 +349,12 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
     const oldDoc = editingDoc;
     try {
       const enriched = enrichTicketDataWithAutoLinks(data, itineraryDays || [], data.city_id);
-      await base44.entities.Ticket.update(oldDoc.id, enriched);
+              // Fix: mismo problema que en handleSpotSave -- si el documento ya
+              // tenia una posicion fijada por un arrastre anterior, cambiar solo la
+              // hora no lo reubicaba en el timeline. Se limpia el pin cuando la
+              // hora cambia de verdad para que vuelva a ordenarse por hora.
+              const docTimeIsChanging = (data.time || '') !== (oldDoc?.time || '');
+              await base44.entities.Ticket.update(oldDoc.id, { ...enriched, ...(docTimeIsChanging ? { day_order: null } : {}) });
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
       queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
       queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
