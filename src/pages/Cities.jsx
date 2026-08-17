@@ -484,13 +484,24 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
   // puede terminar antes que uno a las 11:00. Si el drop deja esa inversión,
   // se rechaza entero (no se guarda nada, no cambia nada en pantalla) y se
   // avisa con un toast en vez de reordenar silenciosamente algo sin sentido.
-  const findTimeClash = (orderedItems) => {
-    const timed = orderedItems.filter(i => i._time);
-    for (let k = 0; k < timed.length - 1; k++) {
-      if (timed[k]._time > timed[k + 1]._time) return [timed[k], timed[k + 1]];
-    }
-    return null;
-  };
+  // Fix: mismo problema que en DayCard.jsx -- escaneaba toda la lista en
+    // vez de mirar solo el item arrastrado, asi que una inversion antigua en
+    // cualquier parte del dia bloqueaba cualquier arrastre nuevo aunque no
+    // tuviera nada que ver. Ahora solo compara el item movido contra el
+    // item con hora justo antes/despues de su nueva posicion.
+    const findTimeClash = (orderedItems, movedId) => {
+          const idx = orderedItems.findIndex(i => i.id === movedId);
+          if (idx === -1) return null;
+          const moved = orderedItems[idx];
+          if (!moved._time) return null;
+          let prev = null;
+          for (let k = idx - 1; k >= 0; k--) { if (orderedItems[k]._time) { prev = orderedItems[k]; break; } }
+          let next = null;
+          for (let k = idx + 1; k < orderedItems.length; k++) { if (orderedItems[k]._time) { next = orderedItems[k]; break; } }
+          if (prev && prev._time > moved._time) return [prev, moved];
+          if (next && next._time < moved._time) return [moved, next];
+          return null;
+    };
 
   const reorderTimeline = async (fromId, toId) => {
     if (!fromId || !toId || fromId === toId) return;
@@ -501,7 +512,7 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
     const [moved] = reordered.splice(from, 1);
     reordered.splice(to, 0, moved);
 
-    const clash = findTimeClash(reordered);
+    const clash = findTimeClash(reordered, moved.id);
     if (clash) {
       const [a, b] = clash;
       toast({
