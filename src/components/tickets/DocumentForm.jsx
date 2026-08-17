@@ -78,26 +78,46 @@ async function searchLocationNominatim(query, signal) {
 }
 
 async function searchLocationGooglePlaces(query, signal, apiKey) {
-    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
           method: 'POST',
           headers: {
                   'Content-Type': 'application/json',
                   'X-Goog-Api-Key': apiKey,
-                  'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location',
           },
-          body: JSON.stringify({ textQuery: query, languageCode: 'es' }),
+          body: JSON.stringify({ input: query, languageCode: 'es' }),
           signal,
     });
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.places || []).slice(0, 6).map(p => ({
-          id: p.id,
-          name: p.displayName?.text || query,
-          address: p.formattedAddress,
-          lat: p.location?.latitude, lng: p.location?.longitude,
-    }));
+    return (data.suggestions || [])
+      .map(s => s.placePrediction)
+      .filter(Boolean)
+      .slice(0, 6)
+      .map(p => ({
+              id: p.placeId,
+              name: p.structuredFormat?.mainText?.text || p.text?.text || query,
+              address: p.structuredFormat?.secondaryText?.text || '',
+              lat: null, lng: null,
+              _placeId: p.placeId,
+      }));
 }
 
+async function fetchGooglePlaceDetails(placeId, apiKey, signal) {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+          headers: {
+                  'X-Goog-Api-Key': apiKey,
+                  'X-Goog-FieldMask': 'id,displayName,formattedAddress,location',
+          },
+          signal,
+    });
+    if (!res.ok) return null;
+    const p = await res.json();
+    return {
+          name: p.displayName?.text,
+          address: p.formattedAddress,
+          lat: p.location?.latitude, lng: p.location?.longitude,
+    };
+}
 async function searchLocation(query, signal) {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
     if (!apiKey) return searchLocationNominatim(query, signal);
@@ -167,6 +187,7 @@ export default function DocumentForm({
   const [locationQuery, setLocationQuery] = useState(initialData?.location_name || '');
   const [locationResults, setLocationResults] = useState([]);
   const [locationSearching, setLocationSearching] = useState(false);
+  const [resolvingLocationId, setResolvingLocationId] = useState(null);
   const locationTimer = useRef(null);
   const locationAbortRef = useRef(null);
 
@@ -381,16 +402,35 @@ export default function DocumentForm({
               {locationResults.length > 0 && (
                 <div className="absolute z-10 left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
                   {locationResults.map(r => (
-                    <button key={r.id} type="button" onClick={() => {
-                      setFields(prev => ({ ...prev, location_name: r.name, location_lat: r.lat, location_lng: r.lng }));
-                      setLocationQuery(r.name);
-                      setLocationResults([]);
+                    <button key={r.id} type="button" disabled={resolvingLocationId === r.id} onClick={async () => {
+                                            if (r.lat && r.lng) {
+                                                                      setFields(prev => ({ ...prev, location_name: r.name, location_lat: r.lat, location_lng: r.lng }));
+                                                                      setLocationQuery(r.name);
+                                                                      setLocationResults([]);
+                                                                      return;
+                                            }
+                                                                    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+                                            if (!r._placeId || !apiKey) return;
+                                                                    setResolvingLocationId(r.id);
+                                            try {
+                                                                      const details = await fetchGooglePlaceDetails(r._placeId, apiKey);
+                                                                      if (details?.lat && details?.lng) {
+                                                                                                  setFields(prev => ({ ...prev, location_name: details.name || r.name, location_lat: details.lat, location_lng: details.lng }));
+                                                                                                  setLocationQuery(details.name || r.name);
+                                                                                                  setLocationResults([]);
+                                                                      }
+                                            } finally {
+                                                                      setResolvingLocationId(null);
+                                            }
                     }}
-                      className="w-full flex flex-col items-start px-3 py-2.5 text-left hover:bg-secondary/30 transition-colors border-b border-border last:border-0">
-                      <span className="text-sm font-medium text-foreground truncate w-full">{r.name}</span>
-                      {r.address && <span className="text-xs text-muted-foreground truncate w-full">{r.address}</span>}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-secondary/30 transition-colors border-b border-border last:border-0 disabled:opacity-60">
+                                          <span className="flex flex-col items-start flex-1 min-w-0">
+                                                                    <span className="text-sm font-medium text-foreground truncate w-full">{r.name}</span>
+                                            {r.address && <span className="text-xs text-muted-foreground truncate w-full">{r.address}</span>}
+                                          </span>
+                 {resolvingLocationId === r.id && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
                     </button>
-                  ))}
+            )}
                 </div>
               )}
             </div>
