@@ -430,7 +430,7 @@ export default function DocumentForm({
                                           </span>
                  {resolvingLocationId === r.id && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
                     </button>
-            )}
+            ))}
                 </div>
               )}
             </div>
