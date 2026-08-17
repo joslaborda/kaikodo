@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { loadLeaflet } from '@/components/spots/spotsHelpers';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from '@/components/spots/mapTiles';
-import { loadGoogleMaps, isGoogleMapsConfigured, KODO_GOOGLE_MAP_STYLE } from '@/lib/googleMaps';
+import { loadGoogleMaps, isGoogleMapsConfigured, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed } from '@/lib/googleMaps';
 
 // Mini-mapa de la ruta del dia: hotel (si hay uno guardado como spot type
 // 'hotel' para esta ciudad) + los items del dia con coordenadas, numerados
@@ -50,7 +50,7 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
   const routeItems = items.filter(i => i._kind === 'spot' ? (i?.lat && i?.lng) : (i?.location_lat && i?.location_lng));
     const hasHotel = !!(hotelSpot?.lat && hotelSpot?.lng);
     const totalPoints = routeItems.length + (hasHotel ? 1 : 0);
-    const useGoogle = isGoogleMapsConfigured();
+        const useGoogle = isGoogleMapsConfigured() && canUseGoogleToday('mapLoad');
 
   useEffect(() => {
         if (totalPoints === 0) return undefined;
@@ -59,6 +59,7 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
                 if (useGoogle) {
                         loadGoogleMaps().then(google => {
                                   if (cancelled || !containerRef.current) return;
+                                                markGoogleUsed('mapLoad');
                                   markersRef.current.forEach(m => m.setMap(null));
                                   markersRef.current = [];
 
