@@ -245,6 +245,11 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
   const [titleEditing, setTitleEditing] = useState(false);
   const [addingNote,  setAddingNote]  = useState(false);
   const [editingNote, setEditingNote] = useState(null);   // noteIdx
+  // Fix: borrar una nota no pedía confirmación ni se podía deshacer — el
+  // botón "Eliminar" vivía justo al lado del campo de hora, así que parecía
+  // borrar solo la hora. Paridad con el resto de flujos de borrado de la app
+  // (documentos, gastos, fotos...), todos con un paso de confirmación.
+  const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
   const [newNoteTime, setNewNoteTime] = useState('');
   const [savingDoc,   setSavingDoc]   = useState(false);
@@ -661,41 +666,74 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
         </button>
       </div>
 
-      {/* Add note inline */}
+            {/* Add note — antes vivía inline en el flujo de la página (empujando el
+          resto del contenido); ahora es una modal como el resto de "añadir"
+          (documento, etc.), con más alto para escribir/leer cómodo. */}
       {addingNote && (
-        <div className="border-t border-border p-4 bg-secondary/30">
-          <Textarea value={newNoteText} onChange={e => setNewNoteText(e.target.value)}
-            placeholder={t('cities.day.writeNotePlaceholder')} className="text-sm bg-card border-border resize-none w-full mb-3" rows={3} autoFocus />
-          <div className="flex items-center gap-3 flex-wrap">
-            <input type="time" value={newNoteTime} onChange={e => setNewNoteTime(e.target.value)}
-              className="h-8 border border-border rounded-lg px-2 text-xs bg-card text-foreground outline-none focus:border-primary w-[100px]" />
-            <span className="text-xs text-muted-foreground">{t('cities.day.hourOptional')}</span>
-            <div className="ml-auto flex gap-2">
-              <button onClick={() => setAddingNote(false)} className="text-xs text-muted-foreground px-4 py-2 rounded-full border border-border hover:bg-secondary/50 transition-colors">{t('common.cancel')}</button>
-              <button onClick={handleAddNote} disabled={!newNoteText.trim() || savingNotes}
-                className="text-xs text-white bg-primary px-4 py-2 rounded-full font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors">{t('common.save')}</button>
+        <Dialog open={addingNote} onOpenChange={o => { if (!o) setAddingNote(false); }}>
+          <DialogContent className="bg-card border-border max-w-lg p-0 gap-0 flex flex-col">
+            <DialogHeader className="px-5 py-4 border-b border-border flex-shrink-0">
+              <DialogTitle className="text-base font-semibold">{t('cities.day.addNote')}</DialogTitle>
+            </DialogHeader>
+            <div className="p-5">
+              <Textarea value={newNoteText} onChange={e => setNewNoteText(e.target.value)}
+                placeholder={t('cities.day.writeNotePlaceholder')} className="text-sm bg-secondary border-border resize-none w-full mb-3" rows={8} autoFocus />
+              <div className="flex items-center gap-3 flex-wrap">
+                <input type="time" value={newNoteTime} onChange={e => setNewNoteTime(e.target.value)}
+                  className="h-8 border border-border rounded-lg px-2 text-xs bg-card text-foreground outline-none focus:border-primary w-[100px]" />
+                <span className="text-xs text-muted-foreground">{t('cities.day.hourOptional')}</span>
+                <div className="ml-auto flex gap-2">
+                  <button onClick={() => setAddingNote(false)} className="text-xs text-muted-foreground px-4 py-2 rounded-full border border-border hover:bg-secondary/50 transition-colors">{t('common.cancel')}</button>
+                  <button onClick={handleAddNote} disabled={!newNoteText.trim() || savingNotes}
+                    className="text-xs text-white bg-primary px-4 py-2 rounded-full font-medium disabled:opacity-40 hover:bg-primary/90 transition-colors">{t('common.save')}</button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
-      {/* Edit note inline */}
+      {/* Edit/read note — fix #8 (modal en vez de cuadro pequeño inline, ahora
+          con 8 filas de alto para leer/escribir cómodo) y fix #9/#10 (borrar
+          exigía confirmación de un paso, igual que el resto de la app; ya no
+          se borra directo al tocar "Eliminar" junto a la hora). */}
       {editingNote !== null && notesList[editingNote] && (
-        <div className="border-t border-border p-4 bg-secondary/30">
-          <Textarea value={notesList[editingNote].text} onChange={e => updateNote(editingNote, 'text', e.target.value)}
-            className="text-sm bg-card border-border resize-none w-full mb-3" rows={3} autoFocus />
-          <div className="flex items-center gap-3 flex-wrap">
-            <input type="time" value={notesList[editingNote].time || ''} onChange={e => updateNote(editingNote, 'time', e.target.value)}
-              className="h-8 border border-border rounded-lg px-2 text-xs bg-card text-foreground outline-none focus:border-primary w-[100px]" />
-            <button onClick={() => handleDeleteNote(editingNote)} className="text-xs text-red-500 flex items-center gap-1">
-              <Trash2 className="w-3 h-3" />{t('cities.day.delete')}
-            </button>
-            <div className="ml-auto flex gap-2">
-              <button onClick={() => setEditingNote(null)} className="text-xs text-muted-foreground px-4 py-2 rounded-full border border-border hover:bg-secondary/50 transition-colors">{t('common.cancel')}</button>
-              <button onClick={() => handleSaveNote(editingNote)} disabled={savingNotes} className="text-xs text-white bg-primary px-4 py-2 rounded-full font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:pointer-events-none">{t('common.save')}</button>
+        <Dialog open={editingNote !== null} onOpenChange={o => { if (!o) { setEditingNote(null); setConfirmDeleteNote(false); } }}>
+          <DialogContent className="bg-card border-border max-w-lg p-0 gap-0 flex flex-col">
+            <DialogHeader className="px-5 py-4 border-b border-border flex-shrink-0">
+              <DialogTitle className="text-base font-semibold">{t('cities.day.note')}</DialogTitle>
+            </DialogHeader>
+            <div className="p-5">
+              <Textarea value={notesList[editingNote].text} onChange={e => updateNote(editingNote, 'text', e.target.value)}
+                className="text-sm bg-secondary border-border resize-none w-full mb-3" rows={8} autoFocus />
+              <div className="flex items-center gap-3 flex-wrap mb-1">
+                <input type="time" value={notesList[editingNote].time || ''} onChange={e => updateNote(editingNote, 'time', e.target.value)}
+                  className="h-8 border border-border rounded-lg px-2 text-xs bg-card text-foreground outline-none focus:border-primary w-[100px]" />
+                <span className="text-xs text-muted-foreground">{t('cities.day.hourOptional')}</span>
+                <button onClick={() => setConfirmDeleteNote(true)} className="ml-2 text-xs text-red-500 flex items-center gap-1">
+                  <Trash2 className="w-3 h-3" />{t('cities.day.delete')}
+                </button>
+              </div>
+
+              {confirmDeleteNote && (
+                <div className="mt-2 mb-1 flex items-center justify-between gap-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl px-4 py-2.5">
+                  <span className="text-xs text-red-600">{t('cities.day.deleteNoteConfirm')}</span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button onClick={() => setConfirmDeleteNote(false)} className="text-xs text-muted-foreground">{t('common.cancel')}</button>
+                    <button onClick={() => { setConfirmDeleteNote(false); handleDeleteNote(editingNote); }} disabled={savingNotes} className="text-xs font-medium text-red-600 disabled:opacity-50">
+                      {t('common.delete')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 justify-end mt-3">
+                <button onClick={() => { setEditingNote(null); setConfirmDeleteNote(false); }} className="text-xs text-muted-foreground px-4 py-2 rounded-full border border-border hover:bg-secondary/50 transition-colors">{t('common.cancel')}</button>
+                <button onClick={() => handleSaveNote(editingNote)} disabled={savingNotes} className="text-xs text-white bg-primary px-4 py-2 rounded-full font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:pointer-events-none">{t('common.save')}</button>
+              </div>
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Add doc modal */}
