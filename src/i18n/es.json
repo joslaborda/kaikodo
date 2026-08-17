@@ -1153,7 +1153,9 @@
       "today": "Hoy",
       "tomorrow": "Mañana",
       "tapToPlan": "Toca para planificar",
-      "writeNotePlaceholder": "Escribe una nota..."
+      "writeNotePlaceholder": "Escribe una nota...",
+            "note": "Nota",
+            "deleteNoteConfirm": "¿Eliminar esta nota? No se puede deshacer."
     },
     "doc": {
       "view": "Ver documento",
