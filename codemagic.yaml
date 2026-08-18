@@ -26,7 +26,7 @@ workflows:
       - name: Sincronizar Capacitor (copia dist/ al proyecto Android)
         script: npx cap sync android
       - name: Incrementar versionCode de Android
-      script: |
+        script: |
           LATEST_BUILD_NUMBER=$(google-play get-latest-build-number --package-name "com.kaikodo.app" --credentials="$GCLOUD_SERVICE_ACCOUNT_CREDENTIALS" --tracks="internal")
           NEW_VERSION_CODE=$(( ${LATEST_BUILD_NUMBER:-0} + 1 ))
           sed -i '' "s/versionCode [0-9]*/versionCode $NEW_VERSION_CODE/" android/app/build.gradle
