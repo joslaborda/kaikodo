@@ -103,7 +103,7 @@ async function fetchPlaceDetailsGoogle(placeId, apiKey, signal) {
     const res = await fetch('https://places.googleapis.com/v1/places/' + placeId, {
           headers: {
                   'X-Goog-Api-Key': apiKey,
-                  'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types,rating,userRatingCount,photos',
+                  'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types,rating,userRatingCount,photos,regularOpeningHours,currentOpeningHours,internationalPhoneNumber,nationalPhoneNumber,websiteUri,priceLevel',
           },
           signal,
     });
@@ -1079,13 +1079,15 @@ export default function Restaurants() {
     if (dup) { showToastFor({ title: t('spots.create.alreadyInListQuoted', { title: place.name }) }, city); return; }
     setSavingId(place.id);
     try {
+        const apiKey = await getGoogleMapsApiKey();
         let resolved = place;
-        if (place.lat == null && place._placeId) {
-        const cached = enriched[place.id];
-              const apiKey = await getGoogleMapsApiKey();
-                const details = cached || (apiKey ? await fetchPlaceDetailsGoogle(place._placeId, apiKey) : null);
-          if (details) resolved = { ...place, lat: details.lat, lng: details.lng, address: details.address || place.address, type: details.type || place.type, name: details.name || place.name };
-      }
+        let details = null;
+        if (place._placeId) {
+          const cached = enriched[place.id];
+          details = cached || (apiKey ? await fetchPlaceDetailsGoogle(place._placeId, apiKey) : null);
+          if (details) resolved = { ...place, lat: details.lat ?? place.lat, lng: details.lng ?? place.lng, address: details.address || place.address, type: details.type || place.type, name: details.name || place.name };
+        }
+        const photoUrl = details?.photos?.[0]?.name ? `https://places.googleapis.com/v1/${details.photos[0].name}/media?maxWidthPx=400&key=${apiKey}` : undefined;
         const created = await createMutation.mutateAsync({
                 trip_id: tripId || undefined, city_id: effectiveCityId||undefined,
           city_name: effectiveCityName, country: normalizeCountry(country),
@@ -1095,6 +1097,13 @@ export default function Restaurants() {
           visibility: 'trip_members', visited: false,
           created_by: null, created_by_user_id: null,
           saved_by: [user?.email].filter(Boolean),
+          photo_url: photoUrl,
+          rating: details?.rating ?? undefined,
+          user_rating_count: details?.userRatingCount ?? undefined,
+          opening_hours_json: details?.regularOpeningHours ? JSON.stringify(details.regularOpeningHours) : (details?.currentOpeningHours ? JSON.stringify(details.currentOpeningHours) : undefined),
+          phone: details?.nationalPhoneNumber || details?.internationalPhoneNumber || undefined,
+          website: details?.websiteUri || undefined,
+          price_level: details?.priceLevel || undefined,
       });
       setLastSavedId(created?.id);
             setOsmResults([]); setSearchQuery(''); setNearbyFilter([]);

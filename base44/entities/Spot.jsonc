@@ -20,12 +20,6 @@
     },
     "type": {
       "type": "string",
-      // hotel/airport/train/bus se añadieron porque el buscador de spots
-      // (resultados de OpenStreetMap, ver osmToType() en
-      // src/components/spots/spotsHelpers.jsx) y el atajo "+ Añadir hotel"
-      // ya generaban spots con estos valores — sin ellos en el enum, uno de
-      // los flujos de creación más habituales de la app podía guardar un
-      // spot con un type fuera del esquema declarado aquí.
       "enum": [
         "food",
         "sight",
@@ -146,16 +140,48 @@
     },
     "tags": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Etiquetas libres del spot \u2014 el campo faltaba en el schema y se perd\u00eda en cada creaci\u00f3n pese a tener UI completa (SpotsSection, SpotCard, etc.)"
     },
     "image_url": {
       "type": "string",
       "description": "Foto del spot \u2014 usada al importar desde SavedSpot (wishlist personal)"
     },
+    "photo_url": {
+      "type": "string",
+      "description": "URL de la foto principal del lugar obtenida de Google Places (media endpoint) para spots creados desde b\u00fasqueda Google"
+    },
+    "rating": {
+      "type": "number",
+      "description": "Valoraci\u00f3n media del lugar (Google Places rating)"
+    },
+    "user_rating_count": {
+      "type": "number",
+      "description": "N\u00famero de valoraciones que respaldan el rating (Google Places)"
+    },
+    "opening_hours_json": {
+      "type": "string",
+      "description": "JSON.stringify de los horarios de apertura del lugar (regularOpeningHours o currentOpeningHours de Google Places)"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Tel\u00e9fono del lugar (nationalPhoneNumber o internationalPhoneNumber de Google Places)"
+    },
+    "website": {
+      "type": "string",
+      "description": "URL del sitio web del lugar (websiteUri de Google Places)"
+    },
+    "price_level": {
+      "type": "string",
+      "description": "Nivel de precio del lugar (priceLevel de Google Places)"
+    },
     "trip_members": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "Copia de Trip.members en el momento de crear/sincronizar \u2014 usada por rls porque base44 no permite comprobar la pertenencia al viaje contra otra entidad. Se mantiene al d\u00eda v\u00eda syncTripMembers() cada vez que cambia la membres\u00eda del viaje."
     }
   },
@@ -165,26 +191,105 @@
     "type"
   ],
   "rls": {
-    "create": { "data.trip_members": { "$in": ["{{user.email}}"] } },
+    "create": {
+      "data.trip_members": {
+        "$in": [
+          "{{user.email}}"
+        ]
+      }
+    },
     "read": {
       "$or": [
-        { "created_by": "{{user.email}}" },
-        { "data.visibility": "public" },
-        { "$and": [ { "data.visibility": "trip_members" }, { "data.trip_members": { "$in": ["{{user.email}}"] } } ] },
-        { "$and": [ { "data.visibility": "selected_users" }, { "data.shared_with": { "$in": ["{{user.email}}"] } } ] }
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "data.visibility": "public"
+        },
+        {
+          "$and": [
+            {
+              "data.visibility": "trip_members"
+            },
+            {
+              "data.trip_members": {
+                "$in": [
+                  "{{user.email}}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "$and": [
+            {
+              "data.visibility": "selected_users"
+            },
+            {
+              "data.shared_with": {
+                "$in": [
+                  "{{user.email}}"
+                ]
+              }
+            }
+          ]
+        }
       ]
     },
     "update": {
       "$or": [
-        { "created_by": "{{user.email}}" },
-        { "$and": [ { "data.visibility": "trip_members" }, { "data.trip_members": { "$in": ["{{user.email}}"] } } ] },
-        { "$and": [ { "data.visibility": "selected_users" }, { "data.shared_with": { "$in": ["{{user.email}}"] } } ] }
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "$and": [
+            {
+              "data.visibility": "trip_members"
+            },
+            {
+              "data.trip_members": {
+                "$in": [
+                  "{{user.email}}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "$and": [
+            {
+              "data.visibility": "selected_users"
+            },
+            {
+              "data.shared_with": {
+                "$in": [
+                  "{{user.email}}"
+                ]
+              }
+            }
+          ]
+        }
       ]
     },
     "delete": {
       "$or": [
-        { "created_by": "{{user.email}}" },
-        { "$and": [ { "created_by": null }, { "data.trip_members": { "$in": ["{{user.email}}"] } } ] }
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "$and": [
+            {
+              "created_by": null
+            },
+            {
+              "data.trip_members": {
+                "$in": [
+                  "{{user.email}}"
+                ]
+              }
+            }
+          ]
+        }
       ]
     }
   }
