@@ -10,7 +10,7 @@ import { searchUserProfiles } from '@/lib/userProfiles';
 import { normalizeCountry } from '@/lib/countryConfig';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, X, Navigation, MapPin, ArrowRight, Utensils, Landmark, Ticket, ShoppingBag, CirclePlus, Compass, Moon, AlertTriangle, Loader2, Check, CheckCircle2, List, Map as MapIcon, Hotel } from 'lucide-react';
+import { Search, Plus, X, Navigation, MapPin, ArrowRight, Utensils, Landmark, Ticket, ShoppingBag, CirclePlus, Compass, Moon, AlertTriangle, Loader2, Check, CheckCircle2, List, Map as MapIcon, Hotel, Star } from 'lucide-react';
 import OTabBar from '@/components/trip/OTabBar';
 import { Link, useNavigate } from 'react-router-dom';
 import MySpotRow from '@/components/spots/MySpotRow';
@@ -140,18 +140,22 @@ async function fetchPlaceDetailsGoogle(placeId, apiKey, signal) {
     const res = await fetch('https://places.googleapis.com/v1/places/' + placeId, {
           headers: {
                   'X-Goog-Api-Key': apiKey,
-                  'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types',
+                  'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types,rating,userRatingCount,photos',
           },
           signal,
     });
     if (!res.ok) return null;
     markGoogleUsed('placeDetails');
     const p = await res.json();
+  const photoName = p.photos?.[0]?.name;
     return {
           name: p.displayName?.text,
           address: p.formattedAddress,
           lat: p.location?.latitude, lng: p.location?.longitude,
           type: googleTypeToKodoType(p.primaryType ? [p.primaryType, ...(p.types||[])] : p.types),
+      rating: p.rating || null,
+      userRatingCount: p.userRatingCount || null,
+      photoUrl: photoName ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=160&key=${apiKey}` : null,
     };
 }
 
@@ -860,7 +864,10 @@ export default function Restaurants() {
   const [searchQuery, setSearchQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState(() => getRecentSearches());
   const [osmResults, setOsmResults] = useState([]);
-  const [searching, setSearching] = useState(false);
+  const [enriched, setEnriched] = useState({}); // placeId -> {rating, userRatingCount, photoUrl}
+  const enrichedIdsRef = useRef(new Set());
+  const enrichObserverRef = useRef(null);
+ const [searching, setSearching] = useState(false);
   const [nearbyFilter, setNearbyFilter] = useState([]);  // empty = all
   const [showCreate, setShowCreate] = useState(false);
   const [pinPrefill, setPinPrefill] = useState(null); // {lat,lng} — al tocar el mapa de Mis spots
@@ -1029,6 +1036,37 @@ export default function Restaurants() {
     return () => clearTimeout(searchTimer.current);
   }, [searchQuery, selectedCity, city, country]);
 
+    const enrichPlace = async (place) => {
+      if (!place?._placeId || enrichedIdsRef.current.has(place.id)) return;
+      enrichedIdsRef.current.add(place.id);
+      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+      if (!apiKey) return;
+      const details = await fetchPlaceDetailsGoogle(place._placeId, apiKey);
+      if (details) setEnriched(prev => ({ ...prev, [place.id]: details }));
+    };
+
+    const observeCard = (node, place) => {
+      if (!node || !place?._placeId || enrichedIdsRef.current.has(place.id)) return;
+      if (!enrichObserverRef.current) {
+        enrichObserverRef.current = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting && entry.target._kdPlace) {
+              enrichPlace(entry.target._kdPlace);
+              enrichObserverRef.current.unobserve(entry.target);
+            }
+          });
+        }, { rootMargin: '200px' });
+      }
+      node._kdPlace = place;
+      enrichObserverRef.current.observe(node);
+    };
+
+    useEffect(() => {
+      enrichedIdsRef.current = new Set();
+      setEnriched({});
+      osmResults.slice(0, 5).forEach(enrichPlace);
+    }, [osmResults]);
+
   
   const baseData = extra => ({
     trip_id: tripId || undefined, city_id: effectiveCityId||undefined, city_name: effectiveCityName, country: normalizeCountry(country),
@@ -1052,8 +1090,9 @@ export default function Restaurants() {
     try {
         let resolved = place;
         if (place.lat == null && place._placeId) {
+        const cached = enriched[place.id];
               const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-          const details = apiKey ? await fetchPlaceDetailsGoogle(place._placeId, apiKey) : null;
+                const details = cached || (apiKey ? await fetchPlaceDetailsGoogle(place._placeId, apiKey) : null);
           if (details) resolved = { ...place, lat: details.lat, lng: details.lng, address: details.address || place.address, type: details.type || place.type, name: details.name || place.name };
       }
         const created = await createMutation.mutateAsync({
@@ -1427,16 +1466,25 @@ export default function Restaurants() {
                     <div className="bg-card border border-border rounded-2xl overflow-hidden">
                       {osmResults.map((p, i) => {
                         const isDuplicate = spots.some(s => s.title?.toLowerCase().trim() === p.name?.toLowerCase().trim());
+                            const enr = enriched[p.id];
                         return (
-                          <div key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${i < osmResults.length - 1 ? 'border-b border-border' : ''}`}>
-                            <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
-                              {(() => { const I = {food:Utensils,sight:Landmark,activity:Ticket,shopping:ShoppingBag,nightlife:Moon,bar:Moon}[p.type] || Compass; return <I size={14} className="text-muted-foreground" />; })()}
-                            </div>
-                            <div className="flex-1 min-w-0">
+                          <div key={p.id} ref={node => observeCard(node, p)} className={`flex items-center gap-3 px-3 py-2.5 ${i < osmResults.length - 1 ? 'border-b border-border' : ''}`}>
+                            {enr?.photoUrl ? (
+          <img src={enr.photoUrl} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                ) : (
+          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+            {(() => { const I = {food:Utensils,sight:Landmark,activity:Ticket,shopping:ShoppingBag,nightlife:Moon,bar:Moon}[p.type] || Compass; return <I size={14} className="text-muted-foreground" />; })()}
+          </div>
+                )}
                               <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
                               {p.address && <p className="text-xs text-muted-foreground truncate">{p.address}</p>}
-                            </div>
-                            {isDuplicate
+                            {enr?.rating && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Star className="w-3 h-3 fill-current" />
+              {enr.rating}{enr.userRatingCount ? ` (${enr.userRatingCount})` : ''}
+            </p>
+          )}
+                          </div>
                               ? <span className="text-xs text-muted-foreground flex-shrink-0">{t('spots.savedBadge')}</span>
                               : <button onClick={() => saveOsmPlace(p)} disabled={savingId === p.id} className="flex-shrink-0 text-primary hover:text-primary/70 transition-colors">
                                   <Plus className="w-5 h-5" />
