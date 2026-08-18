@@ -79,7 +79,7 @@ export function kodoMarkerIcon(google, { color = '#c2410c', scale = 1.6 } = {}) 
 // todos los dispositivos -- es la barrera contra el escenario real que
 // importa, que es un bug o bucle metiendo cana desde un solo dispositivo. Con
 // el volumen normal de un viaje/grupo esto no se nota nunca.
-const GOOGLE_DAILY_CAPS = { autocomplete: 200, placeDetails: 200, mapLoad: 200 };
+const GOOGLE_DAILY_CAPS = { autocomplete: 200, placeDetails: 200, mapLoad: 200, reverseGeocode: 200 };
 
 function googleCapKey(sku) {
         const day = new Date().toISOString().slice(0, 10);
