@@ -110,6 +110,9 @@
       "airport": "Airport",
       "train": "Train station",
       "bus": "Bus station"
+    },
+    "placeInfo": {
+      "ratings": "ratings"
     }
   },
   "darkMode": {

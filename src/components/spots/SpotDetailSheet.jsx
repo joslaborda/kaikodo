@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { X, MapPin, Navigation } from 'lucide-react';
+import { X, MapPin, Navigation, Star, Clock, Phone, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
@@ -164,6 +164,49 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
             </div>
           )}
 
+          {/* Place info from Google Places */}
+          {(spot.photo_url || spot.rating != null || spot.opening_hours_json || spot.phone || spot.website) && (
+            <div className="space-y-3">
+              {spot.photo_url && (
+                <img src={spot.photo_url} alt="" className="w-full h-40 rounded-xl object-cover" />
+              )}
+              {spot.rating != null && (
+                <div className="flex items-center gap-1.5 text-sm">
+                  <Star className="w-4 h-4 fill-current text-amber-400" />
+                  <span className="font-medium text-foreground">{Number(spot.rating).toFixed(1)}</span>
+                  {spot.user_rating_count != null && (
+                    <span className="text-muted-foreground">({spot.user_rating_count} {t('spotDetail.placeInfo.ratings')})</span>
+                  )}
+                </div>
+              )}
+              {(() => {
+                let hours = null;
+                try { hours = spot.opening_hours_json ? JSON.parse(spot.opening_hours_json) : null; } catch { hours = null; }
+                if (!hours) return null;
+                const descs = hours.weekdayDescriptions;
+                if (!Array.isArray(descs) || !descs.length) return null;
+                return (
+                  <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
+                    <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <div className="space-y-0.5">
+                      {descs.map((d, i) => <p key={i}>{d}</p>)}
+                    </div>
+                  </div>
+                );
+              })()}
+              {spot.phone && (
+                <a href={`tel:${spot.phone}`} className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors">
+                  <Phone className="w-3.5 h-3.5 shrink-0" />{spot.phone}
+                </a>
+              )}
+              {spot.website && (
+                <a href={spot.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors break-all">
+                  <Globe className="w-3.5 h-3.5 shrink-0" />{spot.website}
+                </a>
+              )}
+            </div>
+          )}
+
           {/* Notes */}
           <div>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('spots.sheet.myNote')}</p>
@@ -285,4 +328,3 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
     </>
   );
 }
-

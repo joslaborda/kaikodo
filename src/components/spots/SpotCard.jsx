@@ -354,10 +354,21 @@ export default function SpotCard({ spot, days = [], currentUserEmail, cityId, tr
         <div className="p-4">
           {/* Header */}
           <div className="flex items-start gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${tc.color}`}>{tc.Icon && <tc.Icon size={16} />}</div>
+            {spot.photo_url ? (
+              <img src={spot.photo_url} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
+            ) : (
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${tc.color}`}>{tc.Icon && <tc.Icon size={16} />}</div>
+            )}
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold text-foreground text-sm leading-tight">{spot.title}</p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="font-semibold text-foreground text-sm leading-tight truncate">{spot.title}</p>
+                  {spot.rating != null && (
+                    <span className="inline-flex items-center gap-0.5 text-xs text-foreground font-medium shrink-0">
+                      <Star className="w-3 h-3 fill-current text-amber-400" />{Number(spot.rating).toFixed(1)}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {spot.visited && <span className="inline-flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium"><Check className="w-3 h-3" />{t('spots.card.visited')}</span>}
                   <Pencil className="w-3.5 h-3.5 text-muted-foreground/40" />

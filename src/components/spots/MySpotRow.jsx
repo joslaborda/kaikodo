@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Pencil, Navigation } from 'lucide-react';
+import { Pencil, Navigation, Star } from 'lucide-react';
 import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
 import useLikeSimple from './useLikeSimple';
 import InlineCommentsPopup from './InlineCommentsPopup';
@@ -26,11 +26,22 @@ function MySpotRow({ spot, onTap, userId }) {
     <div className="bg-card border-b border-border last:border-0">
       {/* Main row — clickable to open sheet */}
       <button onClick={() => onTap(spot)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-secondary/20 transition-colors">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${tc.color}`}>{tc.Icon && <tc.Icon size={16} />}</div>
+        {spot.photo_url ? (
+          <img src={spot.photo_url} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+        ) : (
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${tc.color}`}>{tc.Icon && <tc.Icon size={16} />}</div>
+        )}
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium truncate ${spot.visited ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-            {spot.title}
-          </p>
+          <div className="flex items-center gap-1 min-w-0">
+            <p className={`text-sm font-medium truncate ${spot.visited ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
+              {spot.title}
+            </p>
+            {spot.rating != null && (
+              <span className="inline-flex items-center gap-0.5 text-xs text-foreground font-medium shrink-0">
+                <Star className="w-3 h-3 fill-current text-amber-400" />{Number(spot.rating).toFixed(1)}
+              </span>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             {t(tc.tk)}
             {spot.city_name ? ' · ' + spot.city_name : ''}
@@ -79,4 +90,3 @@ function MySpotRow({ spot, onTap, userId }) {
     </div>
   );
 }
-
