@@ -24,7 +24,7 @@ export function getGoogleMapsApiKey() {
     if (apiKeyPromise) return apiKeyPromise;
     apiKeyPromise = base44.functions.invoke('getGoogleMapsKey', {})
         .then(res => {
-            const key = res?.key || '';
+            const key = res?.data?.key || res?.key || '';
             // No cacheamos fallos: si la clave vino vacía (backend en frío que
             // devolvió 500/401, secreto aún no inyectado, sesión no resuelta),
             // descartamos apiKeyPromise para que la próxima llamada vuelva a
