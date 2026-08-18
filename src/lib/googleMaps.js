@@ -23,8 +23,19 @@ let apiKeyPromise = null;
 export function getGoogleMapsApiKey() {
     if (apiKeyPromise) return apiKeyPromise;
     apiKeyPromise = base44.functions.invoke('getGoogleMapsKey', {})
-        .then(res => res?.key || '')
-        .catch(() => '');
+        .then(res => {
+            const key = res?.key || '';
+            // No cacheamos fallos: si la clave vino vacía (backend en frío que
+            // devolvió 500/401, secreto aún no inyectado, sesión no resuelta),
+            // descartamos apiKeyPromise para que la próxima llamada vuelva a
+            // pedir la clave en vez de quedar sellada con '' para toda la
+            // sesión — ese era el bug: searchPlaces hacía `if (!apiKey) return`
+            // silenciosamente y nunca llegaba a fetch aunque el backend ya
+            // funcionara.
+            if (!key) apiKeyPromise = null;
+            return key;
+        })
+        .catch(() => { apiKeyPromise = null; return ''; });
     return apiKeyPromise;
 }
 

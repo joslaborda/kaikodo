@@ -124,7 +124,7 @@ async function fetchPlaceDetailsGoogle(placeId, apiKey, signal) {
 
 async function searchPlaces(query, city, country, signal) {
     const apiKey = await getGoogleMapsApiKey();
-    if (!apiKey) return [];
+    if (!apiKey) { console.warn('[searchPlaces] getGoogleMapsApiKey devolvió clave vacía — el backend devolvió 401/500 o el secreto no está inyectado'); return []; }
     try {
           return await searchPlacesGoogle(query, city, country, signal, apiKey);
     } catch (err) {
