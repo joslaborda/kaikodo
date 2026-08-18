@@ -1721,7 +1721,7 @@ export default function Restaurants() {
                 const daySpots = spots
                   .filter(s => s.id !== assignDateSpot.id && s.assigned_date === date && s.city_id === finalCityId)
                   .sort((a, b) => (a.day_order ?? 999) - (b.day_order ?? 999));
-                if (daySpots.length > 0 && assignDateSpot.lat && assignDateSpot.lng) {
+                if (daySpots.length > 0 && assignDateSpot.lat && assignDateSpot.lng && !data.assigned_time) {
                   const insertIdx = suggestInsertIndex(assignDateSpot, daySpots);
                   const reordered = [...daySpots];
                   reordered.splice(insertIdx, 0, assignDateSpot);
