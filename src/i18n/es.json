@@ -1731,7 +1731,9 @@
     "forgot": {
       "title": "Recuperar contraseña",
       "body": "Te enviaremos un enlace para restablecer tu contraseña.",
-      "sent": "Si existe una cuenta con ese email, te hemos enviado un enlace para restablecer la contraseña."
+      "sent": "Si existe una cuenta con ese email, te hemos enviado un enlace para restablecer la contraseña.",
+      "sending": "Enviando...",
+      "sentGeneric": "Si existe una cuenta con ese email, recibirás un enlace para restablecer la contraseña en breve."
     },
     "errors": {
       "missingFields": "Rellena todos los campos.",
@@ -1744,5 +1746,19 @@
       "otpFailed": "Código incorrecto o caducado.",
       "forgotFailed": "No se pudo enviar el email. Inténtalo de nuevo."
     }
+  },
+  "resetPassword": {
+    "title": "Nueva contraseña",
+    "subtitle": "Introduce tu nueva contraseña",
+    "newPasswordLabel": "Contraseña nueva",
+    "confirmLabel": "Confirmar contraseña",
+    "button": "Restablecer contraseña",
+    "buttonLoading": "Restableciendo...",
+    "mismatchError": "Las contraseñas no coinciden",
+    "tooShortError": "La contraseña debe tener al menos 8 caracteres",
+    "invalidTitle": "Enlace de restablecimiento inválido",
+    "invalidSubtitle": "Este enlace de restablecimiento falta o no es válido",
+    "invalidBody": "El enlace que has usado parece estar incompleto. Solicita un nuevo email para restablecer la contraseña.",
+    "requestNewLink": "Solicitar un enlace nuevo"
   }
 }

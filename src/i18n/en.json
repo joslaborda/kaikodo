@@ -1729,7 +1729,9 @@
     "forgot": {
       "title": "Reset password",
       "body": "We'll send you a link to reset your password.",
-      "sent": "If an account exists with that email, we've sent a password reset link."
+      "sent": "If an account exists with that email, we've sent a password reset link.",
+      "sending": "Sending...",
+      "sentGeneric": "If an account exists with that email, you'll receive a password reset link shortly."
     },
     "errors": {
       "missingFields": "Fill in all fields.",
@@ -1742,5 +1744,19 @@
       "otpFailed": "Incorrect or expired code.",
       "forgotFailed": "Couldn't send the email. Try again."
     }
+  },
+  "resetPassword": {
+    "title": "New password",
+    "subtitle": "Enter your new password below",
+    "newPasswordLabel": "New Password",
+    "confirmLabel": "Confirm Password",
+    "button": "Reset password",
+    "buttonLoading": "Resetting...",
+    "mismatchError": "Passwords do not match",
+    "tooShortError": "Password must be at least 8 characters",
+    "invalidTitle": "Invalid reset link",
+    "invalidSubtitle": "This password reset link is missing or invalid",
+    "invalidBody": "The link you used appears to be incomplete. Please request a new password reset email.",
+    "requestNewLink": "Request a new link"
   }
 }
