@@ -5,6 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { loadLeaflet, TYPE_CONFIG } from './spotsHelpers';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from './mapTiles';
+import { loadGoogleMaps, isGoogleMapsConfigured, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed } from '@/lib/googleMaps';
 
 // Antes cada día usaba uno de los 5 --chart-1..5, todos tonos naranja/marrón
 // muy parecidos entre sí ("los colores... no son suficientemente
@@ -29,6 +30,35 @@ const TUBE_COLORS = [
   '#000000', // Northern — negro
 ];
 
+// Version Google Maps de los mismos iconos que ya usa Leaflet mas abajo
+// (numberedIcon/plainIcon, dentro del componente): mismo diseno visual --
+// circulo numerado por color de dia, o pin plano con el icono real del tipo
+// de spot -- pero como URL de imagen (SVG data-uri), que es lo que exige
+// la API de Marker de Google Maps en vez de un elemento DOM como Leaflet.
+function numberedSvgIcon(google, num, color, size) {
+    size = size || 26;
+    var r = size / 2 - 2.5;
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '"><circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="' + color + '" stroke="#fff" stroke-width="2.5"/><text x="' + size / 2 + '" y="' + (size / 2 + 4) + '" text-anchor="middle" font-size="12" font-weight="800" font-family="sans-serif" fill="#fff">' + num + '</text></svg>';
+    return {
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+          scaledSize: new google.maps.Size(size, size),
+          anchor: new google.maps.Point(size / 2, size / 2),
+    };
+}
+
+function plainSvgIcon(google, spot, size) {
+    size = size || 28;
+    const tc = TYPE_CONFIG[spot.type] || TYPE_CONFIG.custom;
+    const Icon = tc.Icon;
+    const inner = renderToStaticMarkup(<Icon size={13} color="#fff" strokeWidth={2.5} />);
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '"><circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + (size / 2 - 1) + '" fill="#8a8580" fill-opacity="0.35"/><circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + (size / 2 - 5) + '" fill="hsl(16 75% 45%)" fill-opacity="0.92" stroke="#fff" stroke-width="2.5"/><g transform="translate(' + (size / 2 - 6.5) + ',' + (size / 2 - 6.5) + ')">' + inner + '</g></svg>';
+    return {
+          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+          scaledSize: new google.maps.Size(size, size),
+          anchor: new google.maps.Point(size / 2, size / 2),
+    };
+}
+
 // Mapa de "todo el viaje" para la tab Mis spots: "Todos" dibuja, a la vez,
 // la ruta conectada y numerada de CADA día (un color por día, estilo mapa
 // de metro) más los spots sin fecha como pines sueltos — antes "Todos" solo
@@ -44,6 +74,9 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
   const onSelectSpotRef = useRef(onSelectSpot);
   onCreatePinRef.current = onCreatePin;
   onSelectSpotRef.current = onSelectSpot;
+    const markersRef = useRef([]);
+    const polylinesRef = useRef([]);
+    const useGoogle = isGoogleMapsConfigured() && canUseGoogleToday('mapLoad');
 
   const [selectedDate, setSelectedDate] = useState(null);
 
@@ -78,10 +111,11 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
     if (!withCoords.length) return undefined;
     let cancelled = false;
 
-    injectKodoMapStyles();
+    const renderLeaflet = () => {
+          injectKodoMapStyles();
     loadLeaflet().then(L => {
       if (cancelled || !containerRef.current) return;
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+      if (mapRef.current && mapRef.current.remove) { mapRef.current.remove(); mapRef.current = null; }
 
       // zoomControl:true — mismo default que LeafletMap.jsx (el selector de
       // pin al crear spot). Antes lo llevaba a false sin querer y, sumado a
@@ -156,14 +190,73 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
       // siguiente, cuando el tamaño del contenedor ya es fiable al 100%.
       requestAnimationFrame(() => { if (!cancelled) { mapRef.current?.invalidateSize(); fitToPoints(); } });
     });
+    };
+
+      if (useGoogle) {
+            loadGoogleMaps().then(google => {
+                    if (cancelled || !containerRef.current) return;
+                    markGoogleUsed('mapLoad');
+                    markersRef.current.forEach(m => m.setMap(null));
+                    markersRef.current = [];
+                    polylinesRef.current.forEach(p => p.setMap(null));
+                    polylinesRef.current = [];
+
+                    if (!mapRef.current) {
+                              mapRef.current = new google.maps.Map(containerRef.current, {
+                                          styles: KODO_GOOGLE_MAP_STYLE,
+                                          disableDefaultUI: true,
+                                          zoomControl: true,
+                                          gestureHandling: 'greedy',
+                              });
+                              mapRef.current.addListener('click', (e) => {
+                                          if (onCreatePinRef.current) onCreatePinRef.current(e.latLng.lat(), e.latLng.lng());
+                              });
+                    }
+                    const map = mapRef.current;
+                    const bounds = new google.maps.LatLngBounds();
+                    let anyPoints = false;
+
+                    visibleRoutes.forEach(route => {
+                              const path = [];
+                              route.spots.forEach((spot, i) => {
+                                          const pos = { lat: spot.lat, lng: spot.lng };
+                                          const marker = new google.maps.Marker({ position: pos, map, icon: numberedSvgIcon(google, i + 1, route.color) });
+                                          marker.addListener('click', () => { if (onSelectSpotRef.current) onSelectSpotRef.current(spot); });
+                                          markersRef.current.push(marker);
+                                          bounds.extend(pos); path.push(pos); anyPoints = true;
+                              });
+                              if (path.length > 1) {
+                                          const poly = new google.maps.Polyline({ path, map, strokeColor: route.color, strokeOpacity: 0.85, strokeWeight: 2.5, icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1 }, offset: '0', repeat: '10px' }] });
+                                          polylinesRef.current.push(poly);
+                              }
+                    });
+
+                    visibleUnscheduled.forEach(spot => {
+                              const pos = { lat: spot.lat, lng: spot.lng };
+                              const marker = new google.maps.Marker({ position: pos, map, icon: plainSvgIcon(google, spot) });
+                              marker.addListener('click', () => { if (onSelectSpotRef.current) onSelectSpotRef.current(spot); });
+                              markersRef.current.push(marker);
+                              bounds.extend(pos); anyPoints = true;
+                    });
+
+                    if (anyPoints) {
+                              if (markersRef.current.length > 1) map.fitBounds(bounds, 42);
+                              else { map.setCenter(bounds.getCenter()); map.setZoom(15); }
+                    }
+            }).catch(() => { if (!cancelled) renderLeaflet(); });
+      } else {
+            renderLeaflet();
+      }
+    
 
     return () => {
       cancelled = true;
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+      if (mapRef.current && mapRef.current.remove) { mapRef.current.remove(); mapRef.current = null; }
     };
      
   }, [
     selectedDate,
+        useGoogle,
     withCoords.map(s => s.id + '@' + (s.assigned_date || '') + '@' + (s.day_order ?? '') + '@' + (s.assigned_time || '')).join(','),
   ]);
 
