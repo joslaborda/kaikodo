@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef} from 'react';
+—import { useState, useEffect, useMemo, useRef} from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
@@ -180,7 +180,7 @@ function buildBrowseTree(spots) {
   spots.forEach(s => {
     const country = normalizeCountry(s.country || '') || 'Otros';
     const continent = getContinent(country);
-    const city = s.city_name || s.city || '—';
+    const city = s.city_name; // ciudad obligatoria en todo spot (llega de Google o de la validación al crear)
     if (!tree[continent]) tree[continent] = {};
     if (!tree[continent][country]) tree[continent][country] = {};
     if (!tree[continent][country][city]) tree[continent][country][city] = [];
@@ -259,6 +259,166 @@ function SpotBrowser({ tree, savedSpotIds, onSave, isLoading }) {
             )}
           </span>
         ))}
+      </div>
+
+      {!city ? (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          {rows.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-sm text-muted-foreground">{t('profile.noPublicSpots')}</p>
+            </div>
+          ) : rows.map((row, i) => (
+            <button key={row.key} onClick={row.onClick}
+              className={`w-full flex items-center justify-between px-3 py-2.5 hover:bg-secondary/30 transition-colors text-left ${i > 0 ? 'border-t border-border' : ''}`}>
+              <span className="text-sm font-medium text-foreground">{row.label}</span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                {t('profile.spotCount', { count: row.count })}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          {citySpots.map((spot, i) => {
+            const isSaved = savedSpotIds.has(spot.id);
+            return (
+              <div key={spot.id} className={i > 0 ? 'border-t border-border' : ''}>
+                <SpotRow
+                  spot={spot}
+                  isSaved={isSaved}
+                  onSave={isSaved ? null : (s) => onSave(s)}
+                  showLikes
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+// Dado el árbol y un punto de partida, avanza automáticamente por los niveles
+// que solo tienen una opción (un continente con un único país, un país con
+// una única ciudad) — evita obligar a tocar una fila que no tiene alternativa.
+// Solo se llama al entrar en un nivel (montaje o clic explícito de una fila),
+// nunca de forma reactiva en cada render, para que la flecha de "atrás" pueda
+// mostrar ese nivel de una sola fila sin que el auto-avance lo vuelva a saltar
+// hacia adelante en un bucle.
+function cascadeBrowseTree(tree, startContinent, startCountry) {
+  let continent = startContinent, country = startCountry, city = null;
+  if (continent == null) {
+    const continents = CONTINENT_ORDER.filter(c => tree[c]);
+    if (continents.length === 1) continent = continents[0];
+    else return { continent, country, city };
+  }
+  if (country == null) {
+    const countries = Object.keys(tree[continent] || {});
+    if (countries.length === 1) country = countries[0];
+    else return { continent, country, city };
+  }
+  const cities = Object.keys((tree[continent] || {})[country] || {});
+  if (cities.length === 1) city = cities[0];
+  return { continent, country, city };
+}
+
+function SpotBrowser({ tree, savedSpotIds, onSave, isLoading }) {
+  const { t, i18n } = useTranslation();
+  const [continent, setContinent] = useState(null);
+  const [country, setCountry] = useState(null);
+  const [city, setCity] = useState(null);
+
+  // Si el nivel superior tiene un solo hijo (p. ej. todos los spots públicos
+  // son de un único continente), saltar directo en vez de obligar a tocarlo.
+  const cascadedOnMount = useRef(false);
+  useEffect(() => {
+    if (cascadedOnMount.current) return;
+    if (!Object.keys(tree).length) return;
+    cascadedOnMount.current = true;
+    const r = cascadeBrowseTree(tree, null, null);
+    if (r.continent) { setContinent(r.continent); setCountry(r.country); setCity(r.city); }
+  }, [tree]);
+
+  const selectContinent = (c) => {
+    const r = cascadeBrowseTree(tree, c, null);
+    setContinent(r.continent); setCountry(r.country); setCity(r.city);
+  };
+  const selectCountry = (co) => {
+    const r = cascadeBrowseTree(tree, continent, co);
+    setCountry(r.country); setCity(r.city);
+  };
+  const goBack = () => {
+    if (city) setCity(null);
+    else if (country) setCountry(null);
+    else if (continent) setContinent(null);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-6">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mx-auto" />
+      </div>
+    );
+  }
+
+  if (!Object.keys(tree).length) {
+    return (
+      <div className="bg-card border border-border rounded-2xl text-center py-8">
+        <Compass className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
+        <p className="text-sm text-muted-foreground">{t('profile.noPublicSpots')}</p>
+      </div>
+    );
+  }
+
+  const crumbs = [{ label: t('profile.explore'), onClick: () => { setContinent(null); setCountry(null); setCity(null); } }];
+  if (continent) crumbs.push({ label: `${CONTINENT_EMOJI[continent] || ''} ${t(`continents.${continent}`)}`, onClick: () => { setCountry(null); setCity(null); } });
+  if (country) crumbs.push({ label: `${countryFlag(country)} ${getCountryLabel(country, i18n.language)}`, onClick: () => setCity(null) });
+  if (city) crumbs.push({ label: city, onClick: null });
+
+  let rows = [];
+  if (!continent) {
+    rows = CONTINENT_ORDER
+      .filter(c => tree[c])
+      .map(c => ({ key: c, label: `${CONTINENT_EMOJI[c] || ''} ${t(`continents.${c}`)}`, count: countSpots(tree[c]), onClick: () => selectContinent(c) }))
+      .sort((a, b) => b.count - a.count);
+  } else if (!country) {
+    const countries = tree[continent] || {};
+    rows = Object.entries(countries)
+      .map(([cName, cities]) => ({ key: cName, label: `${countryFlag(cName)} ${getCountryLabel(cName, i18n.language)}`, count: countSpots(cities), onClick: () => selectCountry(cName) }))
+      .sort((a, b) => b.count - a.count);
+  } else if (!city) {
+    const cities = (tree[continent] || {})[country] || {};
+    rows = Object.entries(cities)
+      .map(([cityName, citySpotList]) => ({ key: cityName, label: cityName, count: citySpotList.length, onClick: () => setCity(cityName) }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  const citySpots = (continent && country && city) ? (((tree[continent] || {})[country] || {})[city] || []) : [];
+
+  return (
+    <div className="space-y-2">
+      {/* Flecha atrás + breadcrumb */}
+      <div className="flex items-center gap-2 px-1">
+        {continent && (
+          <button aria-label={t('common.back')} onClick={goBack}
+            className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          </button>
+        )}
+        <div className="flex items-center gap-1 flex-wrap text-xs">
+          {crumbs.map((c, i) => (
+            <span key={i} className="flex items-center gap-1">
+              {i > 0 && <span className="text-muted-foreground/50">/</span>}
+              {c.onClick ? (
+                <button onClick={c.onClick} className="text-primary font-medium hover:underline">{c.label}</button>
+              ) : (
+                <span className="text-foreground font-medium">{c.label}</span>
+              )}
+            </span>
+          ))}
+        </div>
       </div>
 
       {!city ? (
