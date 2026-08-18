@@ -1,2 +1,2 @@
 // Re-exported from spotsHelpers.jsx for base44 cloud compatibility
-export { OSM_MAP, osmToType, searchPlaces, nearbyPlaces, reverseGeocode, loadLeaflet, TYPE_CONFIG, getRecentSearches, addRecentSearch, clearRecentSearches, COUNTRY_SPECIAL_TAGS, buildHashtags, getMapsUrl } from './spotsHelpers.jsx';
+export { loadLeaflet, TYPE_CONFIG, getRecentSearches, addRecentSearch, clearRecentSearches, COUNTRY_SPECIAL_TAGS, buildHashtags, getMapsUrl } from './spotsHelpers.jsx';
