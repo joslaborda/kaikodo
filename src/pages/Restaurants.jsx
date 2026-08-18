@@ -29,26 +29,6 @@ import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoM
 
 
 
-// ── OSM helpers ───────────────────────────────────────────────────────────────
-const OSM_MAP = {
-  restaurant:'food', cafe:'food', bar:'food', fast_food:'food', pub:'food', bakery:'food',
-  museum:'sight', monument:'sight', attraction:'sight', viewpoint:'sight', temple:'sight',
-  church:'sight', shrine:'sight', castle:'sight', gallery:'sight', park:'sight',
-  shop:'shopping', mall:'shopping', market:'shopping',
-  sports_centre:'activity', cinema:'activity', theatre:'activity',
-  // Antes ningún tag de alojamiento tenía mapeo, así que buscar un hotel de
-  // verdad en la tab "Buscar" (p. ej. "Marriott Lima") y guardarlo caía en
-  // 'sight' por defecto — se guardaba como "Cultura", no como "Hotel".
-  hotel:'hotel', hostel:'hotel', guest_house:'hotel', motel:'hotel', apartment:'hotel',
-  // Antes bus/tren/aeropuerto caían todos en 'transport' (o ni eso: un
-  // aeropuerto no tenía tag y caía en 'sight') — un icono genérico o el "+"
-  // de custom en vez de avión/tren/bus reales (ver TYPE_CONFIG en
-  // spotsHelpers.jsx, que ahora tiene un tipo — e icono — para cada uno).
-  aerodrome:'airport', international_airport:'airport', airport:'airport',
-  train_station:'train', subway_entrance:'train', station:'train',
-  bus_station:'bus',
-};
-function osmToType(type, cls) { return OSM_MAP[type] || OSM_MAP[cls] || 'sight'; }
 
 // ── Auto-orden por cercanía ──────────────────────────────────────────────────
 // Distancia aproximada en metros (Haversine) — de sobra para decidir "cuál de
@@ -77,26 +57,9 @@ function suggestInsertIndex(newSpot, daySpotsSorted) {
   return daySpotsSorted.findIndex(s => s.id === nearest.id) + 1;
 }
 
-async function searchPlacesNominatim(query, city, country, signal) {
-    const q = [query, city, country].filter(Boolean).join(', ');
-    const params = new URLSearchParams({ q, format:'json', limit:8, addressdetails:1, namedetails:1 });
-    const res = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
-          headers: { 'Accept-Language':'es,en', 'User-Agent':'KodoTravelApp/1.0' },
-          signal: signal || (() => { const c = new AbortController(); setTimeout(() => c.abort(), 8000); return c.signal; })(),
-    });
-    if (!res.ok) throw new Error('search failed');
-    const data = await res.json();
-    return data.map(item => ({
-          id: item.place_id?.toString(),
-          name: item.namedetails?.name || item.display_name?.split(',')[0] || query,
-          address: [item.address?.road, item.address?.city || item.address?.town].filter(Boolean).join(', '),
-          lat: parseFloat(item.lat), lng: parseFloat(item.lon),
-          type: osmToType(item.type, item.class),
-    }));
-}
 
 const GOOGLE_TYPE_MAP = {
-    restaurant:'food', cafe:'food', bar:'food', bakery:'food', meal_takeaway:'food',
+  restaurant:'food', cafe:'food', bar:'food', bakery:'food', meal_takeaway:'food',
     meal_delivery:'food', night_club:'food',
     museum:'sight', art_gallery:'sight', tourist_attraction:'sight', church:'sight',
     hindu_temple:'sight', mosque:'sight', synagogue:'sight', park:'sight',
@@ -171,7 +134,35 @@ async function searchPlaces(query, city, country, signal) {
 }
 
 
+async function reverseGeocodeGoogle(lat, lng, apiKey, signal) {
+  const res = await fetch(
+    `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&language=es&key=${apiKey}`,
+    { signal }
+  );
+  if (!res.ok) return '';
+  const data = await res.json();
+  const result = data.results?.[0];
+  if (!result) return '';
+  const comp = result.address_components || [];
+  const get = type => comp.find(c => c.types.includes(type))?.long_name || '';
+  const road = get('route');
+  const city = get('locality') || get('postal_town') || get('administrative_area_level_2');
+  return [road, city].filter(Boolean).join(', ') || result.formatted_address?.split(',').slice(0, 2).join(',') || '';
+}
+
+// reverseGeocode: intenta primero Google Geocoding (mejor calidad de datos),
+// y si no hay tope disponible ese día o falla, cae a Nominatim (gratis) —
+// mismo patrón de tope+fallback que ya usan autocomplete/placeDetails en
+// googleMaps.js, así nunca se rompe la etiqueta de dirección aunque se
+// agote la cuota de Google.
 async function reverseGeocode(lat, lng) {
+  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  if (apiKey && canUseGoogleToday('reverseGeocode')) {
+    try {
+      const label = await reverseGeocodeGoogle(lat, lng, apiKey, AbortSignal.timeout(6000));
+      if (label) { markGoogleUsed('reverseGeocode'); return label; }
+    } catch {}
+  }
   try {
     const res = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
@@ -548,7 +539,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
           <div>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('spots.create.type')}</p>
             <div className="flex flex-wrap gap-2">
-              {/* airport/train/bus solo salen de la búsqueda (osmToType) —
+              {/* airport/train/bus solo salen de la búsqueda (googleTypeToKodoType) —
                   no tiene sentido que el usuario elija manualmente "eres un
                   aeropuerto", igual que ya pasaba con 'transport'. */}
               {Object.entries(TYPE_CONFIG).filter(([k]) => !['transport', 'airport', 'train', 'bus'].includes(k)).map(([val, tc]) => (
