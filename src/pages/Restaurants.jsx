@@ -494,7 +494,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
     suppressNextSearchRef.current = true;
     let rLat = r.lat, rLng = r.lng, rName = r.name, rAddress = r.address;
     if (rLat == null && r._placeId) {
-          const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+          const apiKey = await getGoogleMapsApiKey();
           const details = apiKey ? await fetchPlaceDetailsGoogle(r._placeId, apiKey) : null;
           if (details) { rLat = details.lat; rLng = details.lng; rAddress = details.address || rAddress; rName = details.name || rName; }
     }
@@ -1082,7 +1082,7 @@ export default function Restaurants() {
         let resolved = place;
         if (place.lat == null && place._placeId) {
         const cached = enriched[place.id];
-              const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+              const apiKey = await getGoogleMapsApiKey();
                 const details = cached || (apiKey ? await fetchPlaceDetailsGoogle(place._placeId, apiKey) : null);
           if (details) resolved = { ...place, lat: details.lat, lng: details.lng, address: details.address || place.address, type: details.type || place.type, name: details.name || place.name };
       }
