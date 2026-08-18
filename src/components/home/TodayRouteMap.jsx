@@ -102,11 +102,12 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
                                                                   map.setCenter(path[0]);
                                                                   map.setZoom(15);
                                                       }
-                        });
+                        }).catch(() => { if (!cancelled) runLeaflet(); });
                         return () => { cancelled = true; };
                 }
 
-                injectKodoMapStyles();
+                function runLeaflet() {
+                    injectKodoMapStyles();
         loadLeaflet().then(L => {
                 if (cancelled || !containerRef.current) return;
                 if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
@@ -156,6 +157,10 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
 
                                  mapRef.current = map;
         });
+                }
+
+      if (!useGoogle) runLeaflet();
+      
 
                 return () => {
                         cancelled = true;
