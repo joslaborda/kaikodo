@@ -975,6 +975,15 @@
     "dayDocs": "Documentos del día",
     "otherDocs": "Otros documentos"
   },
+  "continents": {
+    "europe": "Europa",
+    "asia": "Asia",
+    "africa": "África",
+    "north_america": "Norteamérica",
+    "south_america": "Sudamérica",
+    "oceania": "Oceanía",
+    "other": "Otros"
+  },
   "profile": {
     "title": "Perfil",
     "editProfile": "Editar perfil",
@@ -1017,7 +1026,9 @@
     "savedToast": "{{title}} guardado · Añadido a tu carpeta {{country}}",
     "noResultsFor": "Sin resultados para \"{{query}}\"",
     "resultsCount_one": "{{count}} resultado para \"{{query}}\"",
-    "resultsCount_other": "{{count}} resultados para \"{{query}}\""
+    "resultsCount_other": "{{count}} resultados para \"{{query}}\"",
+    "explore": "Explorar",
+    "noPublicSpots": "Todavía no hay spots públicos de la comunidad"
   },
   "settings": {
     "title": "Ajustes",
