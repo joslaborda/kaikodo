@@ -1742,7 +1742,8 @@
       "loginFailed": "Incorrect email or password.",
       "registerFailed": "Couldn't create the account. Try again.",
       "otpFailed": "Incorrect or expired code.",
-      "forgotFailed": "Couldn't send the email. Try again."
+      "forgotFailed": "Couldn't send the email. Try again.",
+      "turnstileFailed": "Security check failed, please try again"
     }
   },
   "resetPassword": {

@@ -1744,7 +1744,8 @@
       "loginFailed": "Email o contraseña incorrectos.",
       "registerFailed": "No se pudo crear la cuenta. Inténtalo de nuevo.",
       "otpFailed": "Código incorrecto o caducado.",
-      "forgotFailed": "No se pudo enviar el email. Inténtalo de nuevo."
+      "forgotFailed": "No se pudo enviar el email. Inténtalo de nuevo.",
+      "turnstileFailed": "Verificación de seguridad fallida, inténtalo de nuevo"
     }
   },
   "resetPassword": {

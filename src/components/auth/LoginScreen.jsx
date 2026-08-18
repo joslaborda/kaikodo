@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { isNative, openProviderLogin } from '@/lib/nativeAuth';
@@ -63,6 +63,80 @@ export default function LoginScreen({ onSuccess }) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
 
+  // ── Cloudflare Turnstile ────────────────────────────────────────────
+  // Widget solo en registro y "olvidé contraseña" (no en login normal).
+  // El script se inyecta una vez; cada formulario renderiza su propio
+  // widget explícito y guarda el token en un estado independiente.
+  const [turnstileReady, setTurnstileReady] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [forgotTurnstileToken, setForgotTurnstileToken] = useState('');
+  const registerTurnstileRef = useRef(null);
+  const forgotTurnstileRef = useRef(null);
+  const registerWidgetIdRef = useRef(null);
+  const forgotWidgetIdRef = useRef(null);
+
+  // Carga el script de Turnstile una sola vez (idempotente).
+  useEffect(() => {
+    if (window.turnstile) { setTurnstileReady(true); return; }
+    const existing = document.querySelector('script[data-turnstile]');
+    if (existing) {
+      if (window.turnstile) setTurnstileReady(true);
+      else existing.addEventListener('load', () => setTurnstileReady(true));
+      return;
+    }
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+    s.async = true;
+    s.defer = true;
+    s.setAttribute('data-turnstile', '');
+    s.onload = () => setTurnstileReady(true);
+    document.head.appendChild(s);
+  }, []);
+
+  // Resetea los tokens al cambiar de pestaña (los tokens son de un solo uso).
+  useEffect(() => {
+    setTurnstileToken('');
+    setForgotTurnstileToken('');
+  }, [mode]);
+
+  // Renderiza el widget del formulario de registro cuando toca.
+  useEffect(() => {
+    if (mode !== 'register' || !turnstileReady || !window.turnstile) return;
+    const sitekey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+    if (!sitekey || !registerTurnstileRef.current) return;
+    registerWidgetIdRef.current = window.turnstile.render(registerTurnstileRef.current, {
+      sitekey,
+      callback: (token) => setTurnstileToken(token),
+      'expired-callback': () => setTurnstileToken(''),
+      'error-callback': () => setTurnstileToken(''),
+    });
+    return () => {
+      if (registerWidgetIdRef.current != null && window.turnstile) {
+        try { window.turnstile.remove(registerWidgetIdRef.current); } catch {}
+      }
+      registerWidgetIdRef.current = null;
+    };
+  }, [mode, turnstileReady]);
+
+  // Renderiza el widget del formulario de "olvidé contraseña" cuando toca.
+  useEffect(() => {
+    if (mode !== 'forgot' || !turnstileReady || !window.turnstile) return;
+    const sitekey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+    if (!sitekey || !forgotTurnstileRef.current) return;
+    forgotWidgetIdRef.current = window.turnstile.render(forgotTurnstileRef.current, {
+      sitekey,
+      callback: (token) => setForgotTurnstileToken(token),
+      'expired-callback': () => setForgotTurnstileToken(''),
+      'error-callback': () => setForgotTurnstileToken(''),
+    });
+    return () => {
+      if (forgotWidgetIdRef.current != null && window.turnstile) {
+        try { window.turnstile.remove(forgotWidgetIdRef.current); } catch {}
+      }
+      forgotWidgetIdRef.current = null;
+    };
+  }, [mode, turnstileReady]);
+
   const resetMessages = () => { setError(''); setInfo(''); };
 
   const switchTab = (nextMode) => {
@@ -112,8 +186,16 @@ export default function LoginScreen({ onSuccess }) {
     if (!trimmedEmail || !password || !confirmPassword) { setError(t('auth.errors.missingFields')); return; }
     if (password !== confirmPassword) { setError(t('auth.errors.passwordMismatch')); return; }
     if (password.length < 8) { setError(t('auth.errors.passwordTooShort')); return; }
+    if (!turnstileToken) { return; }
     setLoading(true);
     try {
+      // Verifica el token de Turnstile antes de crear la cuenta (los tokens
+      // son de un solo uso y se comprueban en backend con la secret key).
+      const verifyRes = await base44.functions.invoke('verifyTurnstile', { token: turnstileToken });
+      if (!verifyRes?.data?.success) {
+        setError(t('auth.errors.turnstileFailed'));
+        return;
+      }
       // register() manda un código OTP por email pero NO deja al usuario
       // logueado todavía (a diferencia de loginViaEmailPassword) — hay que
       // verificar el código en el siguiente paso antes de poder entrar.
@@ -124,6 +206,10 @@ export default function LoginScreen({ onSuccess }) {
       setError(extractErrorMessage(err, t('auth.errors.registerFailed')));
     } finally {
       setLoading(false);
+      // Fuerza un token nuevo para el siguiente intento (single-use).
+      if (registerWidgetIdRef.current != null && window.turnstile) {
+        try { window.turnstile.reset(registerWidgetIdRef.current); } catch {}
+      }
     }
   };
 
@@ -167,8 +253,14 @@ export default function LoginScreen({ onSuccess }) {
     resetMessages();
     const trimmedEmail = email.trim();
     if (!trimmedEmail) { setError(t('auth.errors.missingEmail')); return; }
+    if (!forgotTurnstileToken) { return; }
     setLoading(true);
     try {
+      const verifyRes = await base44.functions.invoke('verifyTurnstile', { token: forgotTurnstileToken });
+      if (!verifyRes?.data?.success) {
+        setError(t('auth.errors.turnstileFailed'));
+        return;
+      }
       await base44.auth.resetPasswordRequest(trimmedEmail);
       setInfo(t('auth.forgot.sent'));
     } catch (err) {
@@ -178,6 +270,9 @@ export default function LoginScreen({ onSuccess }) {
       setError(extractErrorMessage(err, t('auth.errors.forgotFailed')));
     } finally {
       setLoading(false);
+      if (forgotWidgetIdRef.current != null && window.turnstile) {
+        try { window.turnstile.reset(forgotWidgetIdRef.current); } catch {}
+      }
     }
   };
 
@@ -318,9 +413,10 @@ export default function LoginScreen({ onSuccess }) {
                     className="h-[42px] rounded-[10px]"
                   />
                 </div>
+                <div ref={registerTurnstileRef} className="min-h-[65px] flex items-center justify-center" />
                 <Button
                   type="submit"
-                  disabled={anyLoading}
+                  disabled={anyLoading || !turnstileToken}
                   className="h-11 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold mt-1"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : t('auth.buttons.register')}
@@ -403,7 +499,8 @@ export default function LoginScreen({ onSuccess }) {
                 className="h-[42px] rounded-[10px]"
               />
             </div>
-            <Button type="submit" disabled={anyLoading} className="h-11 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold mt-1">
+            <div ref={forgotTurnstileRef} className="min-h-[65px] flex items-center justify-center" />
+            <Button type="submit" disabled={anyLoading || !forgotTurnstileToken} className="h-11 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold mt-1">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : t('auth.buttons.sendResetLink')}
             </Button>
             <button type="button" onClick={() => switchTab('login')} className="text-xs text-muted-foreground font-medium text-center mt-1">
