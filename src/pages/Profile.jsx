@@ -7,6 +7,7 @@ import { PlaneIcon } from '@/lib/icons';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { getCountryMeta, normalizeCountry, getCountryLabel } from '@/lib/countryConfig';
+import { getContinent, CONTINENT_ORDER, CONTINENT_EMOJI } from '@/lib/continents';
 import { getTripCoverImage } from '@/lib/tripImage';
 import TripCard from '@/components/trip/TripCard';
 import OTabBar from '@/components/trip/OTabBar';
@@ -171,6 +172,134 @@ function SpotCollection({spots, showLikes = false, showVisibility = false }) {
     </div>
   );
 }
+// ─────────────────────────────────────────────────────────────────────────────
+// Browse tree: continente → país → ciudad → spots (para explorar sin buscar)
+// ─────────────────────────────────────────────────────────────────────────────
+function buildBrowseTree(spots) {
+  const tree = {};
+  spots.forEach(s => {
+    const country = normalizeCountry(s.country || '') || 'Otros';
+    const continent = getContinent(country);
+    const city = s.city_name || s.city || '—';
+    if (!tree[continent]) tree[continent] = {};
+    if (!tree[continent][country]) tree[continent][country] = {};
+    if (!tree[continent][country][city]) tree[continent][country][city] = [];
+    tree[continent][country][city].push(s);
+  });
+  return tree;
+}
+
+function countSpots(node) {
+  if (Array.isArray(node)) return node.length;
+  return Object.values(node).reduce((sum, v) => sum + countSpots(v), 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spot browser — jerarquía continente → país → ciudad
+// ─────────────────────────────────────────────────────────────────────────────
+function SpotBrowser({ tree, savedSpotIds, onSave, isLoading }) {
+  const { t, i18n } = useTranslation();
+  const [continent, setContinent] = useState(null);
+  const [country, setCountry] = useState(null);
+  const [city, setCity] = useState(null);
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-6">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mx-auto" />
+      </div>
+    );
+  }
+
+  if (!Object.keys(tree).length) {
+    return (
+      <div className="bg-card border border-border rounded-2xl text-center py-8">
+        <Compass className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
+        <p className="text-sm text-muted-foreground">{t('profile.noPublicSpots')}</p>
+      </div>
+    );
+  }
+
+  const crumbs = [{ label: t('profile.explore'), onClick: () => { setContinent(null); setCountry(null); setCity(null); } }];
+  if (continent) crumbs.push({ label: `${CONTINENT_EMOJI[continent] || ''} ${t(`continents.${continent}`)}`, onClick: () => { setCountry(null); setCity(null); } });
+  if (country) crumbs.push({ label: `${countryFlag(country)} ${getCountryLabel(country, i18n.language)}`, onClick: () => setCity(null) });
+  if (city) crumbs.push({ label: city, onClick: null });
+
+  let rows = [];
+  if (!continent) {
+    rows = CONTINENT_ORDER
+      .filter(c => tree[c])
+      .map(c => ({ key: c, label: `${CONTINENT_EMOJI[c] || ''} ${t(`continents.${c}`)}`, count: countSpots(tree[c]), onClick: () => setContinent(c) }))
+      .sort((a, b) => b.count - a.count);
+  } else if (!country) {
+    const countries = tree[continent] || {};
+    rows = Object.entries(countries)
+      .map(([cName, cities]) => ({ key: cName, label: `${countryFlag(cName)} ${getCountryLabel(cName, i18n.language)}`, count: countSpots(cities), onClick: () => setCountry(cName) }))
+      .sort((a, b) => b.count - a.count);
+  } else if (!city) {
+    const cities = (tree[continent] || {})[country] || {};
+    rows = Object.entries(cities)
+      .map(([cityName, citySpotList]) => ({ key: cityName, label: cityName, count: citySpotList.length, onClick: () => setCity(cityName) }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  const citySpots = (continent && country && city) ? (((tree[continent] || {})[country] || {})[city] || []) : [];
+
+  return (
+    <div className="space-y-2">
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-1 flex-wrap px-1 text-xs">
+        {crumbs.map((c, i) => (
+          <span key={i} className="flex items-center gap-1">
+            {i > 0 && <span className="text-muted-foreground/50">/</span>}
+            {c.onClick ? (
+              <button onClick={c.onClick} className="text-primary font-medium hover:underline">{c.label}</button>
+            ) : (
+              <span className="text-foreground font-medium">{c.label}</span>
+            )}
+          </span>
+        ))}
+      </div>
+
+      {!city ? (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          {rows.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-sm text-muted-foreground">{t('profile.noPublicSpots')}</p>
+            </div>
+          ) : rows.map((row, i) => (
+            <button key={row.key} onClick={row.onClick}
+              className={`w-full flex items-center justify-between px-3 py-2.5 hover:bg-secondary/30 transition-colors text-left ${i > 0 ? 'border-t border-border' : ''}`}>
+              <span className="text-sm font-medium text-foreground">{row.label}</span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                {t('profile.spotCount', { count: row.count })}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          {citySpots.map((spot, i) => {
+            const isSaved = savedSpotIds.has(spot.id);
+            return (
+              <div key={spot.id} className={i > 0 ? 'border-t border-border' : ''}>
+                <SpotRow
+                  spot={spot}
+                  isSaved={isSaved}
+                  onSave={isSaved ? null : (s) => onSave(s)}
+                  showLikes
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Spot search panel
@@ -204,6 +333,8 @@ function SpotSearchPanel({savedSpotIds, onSave }) {
       return matchesText && matchesType;
     }).slice(0, 20);
   }, [query, typeFilter, allPublicSpots]);
+
+  const browseTree = useMemo(() => buildBrowseTree(allPublicSpots), [allPublicSpots]);
 
   const handleSave = async (spot) => {
     await onSave(spot);
@@ -242,7 +373,7 @@ function SpotSearchPanel({savedSpotIds, onSave }) {
       )}
 
       {/* Results */}
-      {query.trim() && (
+      {query.trim() ? (
         <>
           {/* Type filters */}
           <div className="flex gap-2 overflow-x-auto pb-1">
@@ -288,6 +419,13 @@ function SpotSearchPanel({savedSpotIds, onSave }) {
             </div>
           )}
         </>
+      ) : (
+        <SpotBrowser
+          tree={browseTree}
+          savedSpotIds={savedSpotIds}
+          onSave={handleSave}
+          isLoading={isLoading}
+        />
       )}
     </div>
   );
