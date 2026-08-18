@@ -1,3 +1,5 @@
+import { base44 } from '@/api/base44Client';
+
 // Carga perezosa y compartida del SDK de Google Maps (JS API) + Places
 // touch build: forzar rebuild fresco tras re-anadir VITE_GOOGLE_MAPS_API_KEY en Secretos (2026-08-18)
 // (New) -- mismo patron que loadLeaflet() en Restaurants.jsx (inyecta un
@@ -10,6 +12,21 @@
 // isGoogleMapsConfigured() devuelve false y cualquier componente que la use
 // debe mostrar su propio estado de "no disponible" en vez de romper la app.
 let loadPromise = null;
+let apiKeyPromise = null;
+
+// Memoizada a nivel de módulo: llama a getGoogleMapsKey una sola vez por
+// sesión y cachea el resultado (mismo patrón que loadPromise). Base44 solo
+// inyecta Secretos en funciones de backend en runtime, nunca en el bundle
+// del frontend, así que import.meta.env.VITE_GOOGLE_MAPS_API_KEY siempre
+// llega vacío al cliente. Esta función pide la clave al backend que sí
+// tiene acceso al secreto.
+export function getGoogleMapsApiKey() {
+    if (apiKeyPromise) return apiKeyPromise;
+    apiKeyPromise = base44.functions.invoke('getGoogleMapsKey', {})
+        .then(res => res?.key || '')
+        .catch(() => '');
+    return apiKeyPromise;
+}
 
 export function isGoogleMapsConfigured() {
     return typeof import.meta !== 'undefined' && !!import.meta.env?.VITE_GOOGLE_MAPS_API_KEY;
@@ -17,20 +34,18 @@ export function isGoogleMapsConfigured() {
 
 export function loadGoogleMaps() {
     if (loadPromise) return loadPromise;
-    const key = import.meta.env?.VITE_GOOGLE_MAPS_API_KEY;
-    if (!key) {
-          loadPromise = Promise.reject(new Error('VITE_GOOGLE_MAPS_API_KEY no configurada'));
-          return loadPromise;
-    }
-    loadPromise = new Promise((resolve, reject) => {
-          if (window.google?.maps?.places) { resolve(window.google.maps); return; }
-          const cbName = '__kodoGoogleMapsReady';
-          window[cbName] = () => resolve(window.google.maps);
-          const script = document.createElement('script');
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places,marker&v=weekly&loading=async&callback=${cbName}`;
-          script.async = true;
-          script.onerror = () => reject(new Error('No se pudo cargar Google Maps'));
-          document.head.appendChild(script);
+    loadPromise = getGoogleMapsApiKey().then(key => {
+        if (!key) throw new Error('VITE_GOOGLE_MAPS_API_KEY no configurada');
+        return new Promise((resolve, reject) => {
+              if (window.google?.maps?.places) { resolve(window.google.maps); return; }
+              const cbName = '__kodoGoogleMapsReady';
+              window[cbName] = () => resolve(window.google.maps);
+              const script = document.createElement('script');
+              script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places,marker&v=weekly&loading=async&callback=${cbName}`;
+              script.async = true;
+              script.onerror = () => reject(new Error('No se pudo cargar Google Maps'));
+              document.head.appendChild(script);
+        });
     });
     return loadPromise;
 }

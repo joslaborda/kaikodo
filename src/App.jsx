@@ -60,13 +60,6 @@ const AuthenticatedApp = () => {
     // PascalCase que usa el resto de páginas) porque no hay forma de
     // verificar aquí cuál usa realmente la plantilla de email de base44 sin
     // disparar un envío real.
-    const path = location.pathname.toLowerCase();
-    if (path === '/forgot-password' || path === '/forgotpassword') {
-      return <ForgotPassword />;
-    }
-    if (path === '/reset-password' || path === '/resetpassword') {
-      return <ResetPassword />;
-    }
   // Migración silenciosa: mantener UserProfile.email en minúsculas y al día.
   useEffect(() => {
     if (!authUser?.id || !authUser?.email) return;
@@ -84,6 +77,28 @@ const AuthenticatedApp = () => {
       }
     }).catch(() => {});
   }, [authUser?.id, authUser?.email]);
+
+    // #3: el email de "restablecer contraseña" (base44.auth.resetPasswordRequest,
+    // ver LoginScreen.jsx) enlaza a una página propia para poner la contraseña
+    // nueva -- pero ForgotPassword.jsx/ResetPassword.jsx (en src/pages/) nunca
+    // llegaban a montarse: ni estaban registradas en pages.config.js, ni
+    // habrían sido alcanzables aunque lo estuvieran, porque <Routes> de más
+    // abajo solo se monta DESPUÉS de resolver el estado de auth, y un usuario
+    // sin sesión (el caso normal al tocar un link de "olvidé mi contraseña")
+    // cae siempre en la rama authError.type==='auth_required' de aquí abajo,
+    // que muestra LoginScreen sin mirar la URL. Se comprueba la ruta aquí,
+    // lo primero de todo, para que estas dos páginas públicas se monten pase lo
+    // que pase con el login -- se aceptan ambas grafías (kebab-case y el
+    // PascalCase que usa el resto de páginas) porque no hay forma de
+    // verificar aquí cuál usa realmente la plantilla de email de base44 sin
+    // disparar un envío real.
+    const path = location.pathname.toLowerCase();
+    if (path === '/forgot-password' || path === '/forgotpassword') {
+      return <ForgotPassword />;
+    }
+    if (path === '/reset-password' || path === '/resetpassword') {
+      return <ResetPassword />;
+    }
 
     if (isLoadingPublicSettings || isLoadingAuth) {
     return (

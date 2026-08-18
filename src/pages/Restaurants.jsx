@@ -19,7 +19,7 @@ import SpotsMapView from '@/components/spots/SpotsMapView';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
-import { canUseGoogleToday, markGoogleUsed } from '@/lib/googleMaps';
+import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
 // El LeafletMap de aquí abajo es una copia local independiente del
 // componente compartido (src/components/spots/LeafletMap.jsx) — no lo
 // importa, así que arreglar el tile compartido nunca cambió nada en este
@@ -123,7 +123,7 @@ async function fetchPlaceDetailsGoogle(placeId, apiKey, signal) {
 }
 
 async function searchPlaces(query, city, country, signal) {
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const apiKey = await getGoogleMapsApiKey();
     if (!apiKey) return [];
     try {
           return await searchPlacesGoogle(query, city, country, signal, apiKey);
@@ -156,7 +156,7 @@ async function reverseGeocodeGoogle(lat, lng, apiKey, signal) {
 // googleMaps.js, así nunca se rompe la etiqueta de dirección aunque se
 // agote la cuota de Google.
 async function reverseGeocode(lat, lng) {
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  const apiKey = await getGoogleMapsApiKey();
   if (apiKey && canUseGoogleToday('reverseGeocode')) {
     try {
       const label = await reverseGeocodeGoogle(lat, lng, apiKey, AbortSignal.timeout(6000));

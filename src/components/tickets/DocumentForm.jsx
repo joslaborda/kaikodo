@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { checkUpload, convertHeicIfNeeded } from '@/lib/uploadLimits';
 import { normalizeEmail } from '@/lib/utils';
 import { uploadDocFile, resolveDocViewUrl } from '@/lib/privateFiles';
-import { canUseGoogleToday, markGoogleUsed } from '@/lib/googleMaps';
+import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
 
 // ── Exported config (used by DocumentCard, Calendar) ─────────────────────────
 export const CATEGORY_CONFIG = {
@@ -124,7 +124,7 @@ async function fetchGooglePlaceDetails(placeId, apiKey, signal) {
     };
 }
 async function searchLocation(query, signal) {
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const apiKey = await getGoogleMapsApiKey();
     if (!apiKey) return searchLocationNominatim(query, signal);
     try {
           return await searchLocationGooglePlaces(query, signal, apiKey);
@@ -415,7 +415,7 @@ export default function DocumentForm({
                                                                       setLocationResults([]);
                                                                       return;
                                             }
-                                                                    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+                                                                    const apiKey = await getGoogleMapsApiKey();
                                                                 if (!r._placeId || !apiKey) return;
                                           if (resolveAbortRef.current) resolveAbortRef.current.abort();
                                           resolveAbortRef.current = new AbortController();

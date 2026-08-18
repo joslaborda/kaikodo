@@ -5,7 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { loadLeaflet, TYPE_CONFIG } from './spotsHelpers';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from './mapTiles';
-import { loadGoogleMaps, isGoogleMapsConfigured, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed } from '@/lib/googleMaps';
+import { loadGoogleMaps, isGoogleMapsConfigured, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
 
 // Antes cada día usaba uno de los 5 --chart-1..5, todos tonos naranja/marrón
 // muy parecidos entre sí ("los colores... no son suficientemente
@@ -76,7 +76,14 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
   onSelectSpotRef.current = onSelectSpot;
     const markersRef = useRef([]);
     const polylinesRef = useRef([]);
-    const useGoogle = isGoogleMapsConfigured() && canUseGoogleToday('mapLoad');
+    const [useGoogle, setUseGoogle] = useState(false);
+    useEffect(() => {
+        let cancelled = false;
+        getGoogleMapsApiKey().then(key => {
+            if (!cancelled) setUseGoogle(!!key && canUseGoogleToday('mapLoad'));
+        });
+        return () => { cancelled = true; };
+    }, []);
 
   const [selectedDate, setSelectedDate] = useState(null);
 
