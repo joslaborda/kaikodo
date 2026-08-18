@@ -161,12 +161,12 @@ async function fetchPlaceDetailsGoogle(placeId, apiKey, signal) {
 
 async function searchPlaces(query, city, country, signal) {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!apiKey) return searchPlacesNominatim(query, city, country, signal);
+    if (!apiKey) return [];
     try {
           return await searchPlacesGoogle(query, city, country, signal, apiKey);
     } catch (err) {
           if (err?.name === 'AbortError') throw err;
-          return searchPlacesNominatim(query, city, country, signal);
+          return [];
     }
 }
 
@@ -1244,6 +1244,20 @@ export default function Restaurants() {
     }).slice(0, 6);
   }, [searchQuery, seedSpots]);
 
+    // Spots publicos de la comunidad que coinciden con la busqueda — se muestran junto a Google para no duplicar spots que otro usuario ya marco como visibles para todos.
+    const communitySpotResults = useMemo(() => {
+      if (!searchQuery.trim() || searchQuery.length < 2) return [];
+      const q = searchQuery.toLowerCase();
+      const cityQ = normCityName(selectedCity || city);
+      return publicSpots.filter(s => {
+        if (spots.some(sp => sp.title?.toLowerCase().trim() === s.title?.toLowerCase().trim())) return false;
+        const matchesQuery = s.title?.toLowerCase().includes(q) || s.notes?.toLowerCase().includes(q) || s.tags?.some(tag => tag.toLowerCase().includes(q));
+        if (!matchesQuery) return false;
+        if (!cityQ) return true;
+        return normCityName(s.city_name) === cityQ;
+      }).slice(0, 8);
+    }, [searchQuery, publicSpots, spots, selectedCity, city]);
+
   // Hashtags
   const hashtags = useMemo(() => buildHashtags(spots, tripCities), [spots, tripCities]);
 
@@ -1458,6 +1472,23 @@ export default function Restaurants() {
                   );
                 })()}
 
+            {/* Spots de la comunidad Kaikodo, junto a los resultados de Google */}
+            {communitySpotResults.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t('spots.communityResults')}</p>
+                <div className="space-y-2">
+                  {communitySpotResults.map(spot => (
+                    <PlaceResultCard
+                      key={spot.id}
+                      place={{ ...spot, name: spot.title }}
+                      onSave={saveCommunitySpot}
+                      saving={savingId === (spot.id || spot.title)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
                 {/* Resultados OSM */}
                 {searching && <p className="text-sm text-muted-foreground text-center py-4">{t('spots.searching')}</p>}
                 {!searching && osmResults.length > 0 && (
@@ -1485,7 +1516,7 @@ export default function Restaurants() {
             </p>
           )}
                           </div>
-                              ? <span className="text-xs text-muted-foreground flex-shrink-0">{t('spots.savedBadge')}</span>
+                            {isDuplicate ? <span className="text-xs text-muted-foreground flex-shrink-0">{t('spots.savedBadge')}</span>
                               : <button onClick={() => saveOsmPlace(p)} disabled={savingId === p.id} className="flex-shrink-0 text-primary hover:text-primary/70 transition-colors">
                                   <Plus className="w-5 h-5" />
                                 </button>
