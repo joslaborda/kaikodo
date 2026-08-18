@@ -748,6 +748,7 @@
     "assignedBadge": "Assigned",
     "savedBadge": "Saved",
     "searching": "Searching...",
+    "communityResults": "From the Kaikōdo community",
     "moreResults": "More results",
     "noResultsFor": "No results for \"{{query}}\"",
     "createManually": "Create manually",
