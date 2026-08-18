@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef} from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
-import { Check, CirclePlus, Compass, Hotel, Landmark, Loader2, MapPin, Plus, Search, ShoppingBag, Ticket, TrainFront, BusFront, Utensils, X } from 'lucide-react';
+import { Check, CirclePlus, Compass, Hotel, Landmark, Loader2, MapPin, Plus, Search, ShoppingBag, Star, Ticket, TrainFront, BusFront, Utensils, X } from 'lucide-react';
 import { PlaneIcon } from '@/lib/icons';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
@@ -69,7 +69,7 @@ function SpotRow({ spot, isSaved, onSave, onUnsave, showLikes = false, showVisib
     }
   };
   const SpotTypeIcon = SPOT_ICONS_MAP[spot.type] || MapPin;
-  const coverImg = spot.image_url || (spot.city_name || spot.country
+  const coverImg = spot.photo_url || spot.image_url || (spot.city_name || spot.country
     ? getTripCoverImage(spot.city_name, spot.country)
     : null);
   return (
@@ -83,7 +83,14 @@ function SpotRow({ spot, isSaved, onSave, onUnsave, showLikes = false, showVisib
         <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0"><SpotTypeIcon size={16} className="text-muted-foreground" /></div>
       )}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground truncate">{spot.title}</p>
+        <div className="flex items-center gap-1 min-w-0">
+          <p className="text-sm font-medium text-foreground truncate">{spot.title}</p>
+          {spot.rating != null && (
+            <span className="inline-flex items-center gap-0.5 text-xs text-foreground font-medium shrink-0">
+              <Star className="w-3 h-3 fill-current text-amber-400" />{Number(spot.rating).toFixed(1)}
+            </span>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground mt-0.5">
           {spot.city_name || spot.city || ''}
           {showLikes && spot.likes_count ? ` · ${t('profile.likesCount', { count: spot.likes_count })}` : ''}
