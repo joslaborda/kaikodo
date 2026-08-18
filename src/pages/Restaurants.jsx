@@ -1476,7 +1476,7 @@ export default function Restaurants() {
             {(() => { const I = {food:Utensils,sight:Landmark,activity:Ticket,shopping:ShoppingBag,nightlife:Moon,bar:Moon}[p.type] || Compass; return <I size={14} className="text-muted-foreground" />; })()}
           </div>
                 )}
-                              <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
+                              <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{p.name}</p>
                               {p.address && <p className="text-xs text-muted-foreground truncate">{p.address}</p>}
                             {enr?.rating && (
             <p className="text-xs text-muted-foreground flex items-center gap-1">
