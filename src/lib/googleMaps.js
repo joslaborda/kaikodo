@@ -1,7 +1,7 @@
 import { base44 } from '@/api/base44Client';
 
 // Carga perezosa y compartida del SDK de Google Maps (JS API) + Places
-// touch build: forzar rebuild fresco tras re-anadir VITE_GOOGLE_MAPS_API_KEY en Secretos (2026-08-18)
+// touch build: forzar rebuild fresco tras re-anadir VITE_GOOGLE_MAPS_API_KEY en Secretos (2026-08-18) v2
 // (New) -- mismo patron que loadLeaflet() en Restaurants.jsx (inyecta un
 // <script> una sola vez, singleton por promesa), asi no hace falta anadir
 // ninguna dependencia nueva a package.json ni arriesgar el pipeline de

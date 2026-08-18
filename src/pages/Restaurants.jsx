@@ -1030,7 +1030,7 @@ export default function Restaurants() {
     const enrichPlace = async (place) => {
       if (!place?._placeId || enrichedIdsRef.current.has(place.id)) return;
       enrichedIdsRef.current.add(place.id);
-      const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+      const apiKey = await getGoogleMapsApiKey();
       if (!apiKey) return;
       const details = await fetchPlaceDetailsGoogle(place._placeId, apiKey);
       if (details) setEnriched(prev => ({ ...prev, [place.id]: details }));
