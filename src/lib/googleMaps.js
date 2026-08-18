@@ -1,4 +1,5 @@
 // Carga perezosa y compartida del SDK de Google Maps (JS API) + Places
+// touch build: forzar rebuild fresco tras re-anadir VITE_GOOGLE_MAPS_API_KEY en Secretos (2026-08-18)
 // (New) -- mismo patron que loadLeaflet() en Restaurants.jsx (inyecta un
 // <script> una sola vez, singleton por promesa), asi no hace falta anadir
 // ninguna dependencia nueva a package.json ni arriesgar el pipeline de
