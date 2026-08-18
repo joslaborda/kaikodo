@@ -608,11 +608,10 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
         `}>
 
         {/* Time column */}
-        <div className="w-12 shrink-0 flex flex-col items-center pt-3.5 pb-1 pl-4 gap-0">
-          {item._time
-            ? <span className="text-label2 font-medium text-primary leading-none whitespace-nowrap">{item._time}</span>
-            : <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 cursor-grab touch-none mt-0.5" />}
-          {!isLast && <div className="w-px flex-1 bg-border/50 mt-1.5" />}
+<div className="w-12 shrink-0 flex flex-col items-center pt-3.5 pb-1 pl-4 gap-0.5 touch-none cursor-grab">
+  {item._time && <span className="text-label2 font-medium text-primary leading-none whitespace-nowrap">{item._time}</span>}
+  <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 mt-0.5" />
+  {!isLast && <div className="w-px flex-1 bg-border/50 mt-1.5" />}
         </div>
 
         {/* Tappable body — opens view */}
@@ -732,7 +731,7 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
             </DialogHeader>
             <div className="p-5">
               <Textarea value={notesList[editingNote].text} onChange={e => updateNote(editingNote, 'text', e.target.value)}
-                className="text-sm bg-secondary border-border resize-none w-full mb-3" rows={8} autoFocus />
+                className="text-sm bg-secondary border-border resize-none w-full mb-3" rows={8} />
               <div className="flex items-center gap-3 flex-wrap mb-1">
                 <input type="time" value={notesList[editingNote].time || ''} onChange={e => updateNote(editingNote, 'time', e.target.value)}
                   className="h-8 border border-border rounded-lg px-2 text-xs bg-card text-foreground outline-none focus:border-primary w-[100px]" />
