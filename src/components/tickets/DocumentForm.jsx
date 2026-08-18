@@ -195,6 +195,7 @@ export default function DocumentForm({
   const [resolvingLocationId, setResolvingLocationId] = useState(null);
   const locationTimer = useRef(null);
   const locationAbortRef = useRef(null);
+  const resolveAbortRef = useRef(null);
 
   // Al editar un documento que ya tiene file_uri (subido a storage privado),
   // fields.file_url arranca vacío a propósito (no se persiste la firma
@@ -415,18 +416,26 @@ export default function DocumentForm({
                                                                       return;
                                             }
                                                                     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-                                            if (!r._placeId || !apiKey) return;
-                                                                    setResolvingLocationId(r.id);
-                                            try {
-                                                                      const details = await fetchGooglePlaceDetails(r._placeId, apiKey);
-                                                                      if (details?.lat && details?.lng) {
-                                                                                                  setFields(prev => ({ ...prev, location_name: details.name || r.name, location_lat: details.lat, location_lng: details.lng }));
-                                                                                                  setLocationQuery(details.name || r.name);
-                                                                                                  setLocationResults([]);
-                                                                      }
-                                            } finally {
-                                                                      setResolvingLocationId(null);
-                                            }
+                                                                if (!r._placeId || !apiKey) return;
+                                          if (resolveAbortRef.current) resolveAbortRef.current.abort();
+                                          resolveAbortRef.current = new AbortController();
+                                          setResolvingLocationId(r.id);
+                                          try {
+                                                                  const details = await fetchGooglePlaceDetails(r._placeId, apiKey, resolveAbortRef.current.signal);
+                                                                  if (details?.lat && details?.lng) {
+                                                                                            setFields(prev => ({ ...prev, location_name: details.name || r.name, location_lat: details.lat, location_lng: details.lng }));
+                                                                                            setLocationQuery(details.name || r.name);
+                                                                                            setLocationResults([]);
+                                                                  } else {
+                                                                                            toast({ title: t('common.error'), description: t('common.tryAgain'), variant: 'destructive' });
+                                                                  }
+                                          } catch (err) {
+                                                                  if (err?.name !== 'AbortError') {
+                                                                                            toast({ title: t('common.error'), description: t('common.tryAgain'), variant: 'destructive' });
+                                                                  }
+                                          } finally {
+                                                                  setResolvingLocationId(null);
+                                          }
                     }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-secondary/30 transition-colors border-b border-border last:border-0 disabled:opacity-60">
                                           <span className="flex flex-col items-start flex-1 min-w-0">
