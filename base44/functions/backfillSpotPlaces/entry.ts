@@ -29,6 +29,9 @@ Deno.serve(async (req) => {
     if (!user?.email) {
       return Response.json({ error: "No autenticado" }, { status: 401 });
     }
+    if (user.role !== 'admin') {
+      return Response.json({ error: "No autorizado: esta función es solo para administradores" }, { status: 403 });
+    }
 
     const apiKey = Deno.env.get("VITE_GOOGLE_MAPS_API_KEY") || "";
     if (!apiKey) {
