@@ -1168,7 +1168,8 @@
       "today": "Today",
       "tomorrow": "Tomorrow",
       "tapToPlan": "Tap to plan",
-      "writeNotePlaceholder": "Write a note..."
+      "writeNotePlaceholder": "Write a note...",
+      "map": "Map"
     },
     "doc": {
       "view": "View document",

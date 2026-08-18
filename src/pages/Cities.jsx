@@ -21,6 +21,7 @@ import DocumentForm from '@/components/tickets/DocumentForm';
 import PDFViewer from '@/components/PDFViewer';
 import { resolveDocViewUrl } from '@/lib/privateFiles';
 import SpotDetailModal from '@/components/trip/SpotDetailModal';
+import DaySpotsMap from '@/components/spots/DaySpotsMap';
 import SettingsDialog from '@/components/home/SettingsDialog';
 import DeleteTripModal from '@/components/trip/DeleteTripModal';
 import LeaveTripModal from '@/components/trip/LeaveTripModal';
@@ -259,6 +260,8 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
   const [savingTitle, setSavingTitle] = useState(false);
   const [deletingDoc, setDeletingDoc] = useState(false);
   const [order, setOrder]             = useState(null);   // manual drag order for no-time items
+  const [showMap, setShowMap]          = useState(false);  // mapa colapsable del día (lazy: no carga nada hasta desplegar)
+  const hasMappableSpots = spots.some(s => s.lat && s.lng);
 
   // Notes
   const parseNotes = (raw) => {
@@ -664,14 +667,35 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
             <button aria-label={t('common.save')} onClick={saveTitle} disabled={savingTitle} className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0 disabled:opacity-60 disabled:pointer-events-none"><Check className="w-3.5 h-3.5 text-white" /></button>
           </div>
         ) : (
-          <button onClick={() => setTitleEditing(true)} className="w-full flex items-center gap-2 text-left group">
-            <span className={`flex-1 text-sm ${titleVal ? 'font-medium text-foreground' : 'text-muted-foreground italic'}`}>
-              {titleVal || t('cities.day.addTitle')}
-            </span>
-            <Pencil className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setTitleEditing(true)} className="flex-1 flex items-center gap-2 text-left group min-w-0">
+              <span className={`flex-1 text-sm ${titleVal ? 'font-medium text-foreground' : 'text-muted-foreground italic'}`}>
+                {titleVal || t('cities.day.addTitle')}
+              </span>
+              <Pencil className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+            </button>
+            {hasMappableSpots && (
+              <button
+                onClick={() => setShowMap(s => !s)}
+                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors shrink-0 ${
+                  showMap ? 'bg-primary text-white border-primary' : 'bg-card text-muted-foreground border-border hover:border-primary/40'
+                }`}
+              >
+                <Map className="w-3.5 h-3.5" />
+                {t('cities.day.map')}
+                {showMap ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            )}
+          </div>
         )}
       </div>
+
+      {/* Day spots map — collapsed by default; lazy (no map-load quota until expanded) */}
+      {showMap && hasMappableSpots && (
+        <div className="px-4 pt-1 pb-3 bg-card border-t border-border">
+          <DaySpotsMap spots={spots} height={220} onSelectSpot={setEditingSpot} />
+        </div>
+      )}
 
       {/* Timeline */}
       {timeline.map((item, idx) => renderItem(item, idx))}

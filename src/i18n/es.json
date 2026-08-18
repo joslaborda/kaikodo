@@ -1170,7 +1170,8 @@
       "tapToPlan": "Toca para planificar",
       "writeNotePlaceholder": "Escribe una nota...",
             "note": "Nota",
-            "deleteNoteConfirm": "¿Eliminar esta nota? No se puede deshacer."
+            "deleteNoteConfirm": "¿Eliminar esta nota? No se puede deshacer.",
+      "map": "Mapa"
     },
     "doc": {
       "view": "Ver documento",
