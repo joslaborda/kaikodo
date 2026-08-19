@@ -26,6 +26,12 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  * ni escribirlo salvo su dueño original vía "delete", que sigue abierto a
  * created_by).
  */
+
+const SYNCED_ENTITIES = [
+  "City", "Expense", "Ticket", "TripMessage", "DiaryEntry",
+  "PackingItem", "Spot", "ItineraryDay", "TodoItem", "UsefulInfo",
+];
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -94,6 +100,21 @@ Deno.serve(async (req) => {
         { error: "No se pudo salir del viaje. Vuelve a intentarlo.", code: "conflict" },
         { status: 409 }
       );
+    }
+
+    // Sincronizar trip_members en el contenido YA EXISTENTE del viaje —
+    // mismo bug de seguridad que manageTripMember (acción "remove") pero en
+    // la ruta de auto-abandono: sin esto, quien se va conserva su email en el
+    // trip_members de cada gasto/documento/mensaje/etc. creado antes de su
+    // salida y sigue pudiendo leer/editar/borrar todo ese contenido para
+    // siempre, pese a ya no ser miembro del viaje.
+    for (const entityName of SYNCED_ENTITIES) {
+      try {
+        const records = await service.entities[entityName].filter({ trip_id: tripId });
+        for (const record of records) {
+          await service.entities[entityName].update(record.id, { trip_members: finalTrip.members });
+        }
+      } catch (e) { /* no bloquear la respuesta por un fallo puntual de una entidad */ }
     }
 
     return Response.json({ ok: true, trip: finalTrip });

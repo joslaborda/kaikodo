@@ -31,6 +31,10 @@ import { createClientFromRequest } from "npm:@base44/sdk";
 
 const VALID_ROLES = ["admin", "editor", "viewer"];
 
+function norm(s: unknown): string {
+  return typeof s === "string" ? s.trim().toLowerCase() : "";
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -62,8 +66,13 @@ Deno.serve(async (req) => {
       return Response.json({ error: "Viaje no encontrado" }, { status: 404 });
     }
 
-    const members: string[] = trip.members || [];
-    const roles: Record<string, string> = trip.roles || {};
+    const members: string[] = (trip.members || []).map((e: string) => norm(e));
+    const rawRoles: Record<string, string> = trip.roles || {};
+    const roles: Record<string, string> = {};
+    for (const [rawEmail, r] of Object.entries(rawRoles)) {
+      const key = norm(rawEmail);
+      if (key) roles[key] = r as string;
+    }
 
     // La comprobación central: solo alguien que YA es miembro del viaje
     // puede invitar a más gente a él. Esto es lo que antes NO se verificaba
@@ -79,7 +88,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: "Ese usuario ya es miembro del viaje." }, { status: 400 });
     }
 
-    const requesterIsAdmin = roles[requesterEmail] === "admin" || trip.created_by === requesterEmail;
+    const requesterIsAdmin = roles[requesterEmail] === "admin" || norm(trip.created_by) === requesterEmail;
 
     // Solo un admin puede invitar con rol "admin" o "viewer" — cualquier
     // miembro normal puede invitar, pero siempre como "editor" (mismo
