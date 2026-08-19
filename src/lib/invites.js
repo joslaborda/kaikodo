@@ -11,8 +11,8 @@ export function generateInviteToken() {
          Math.random().toString(36).substring(2, 15);
 }
 
-export async function sendTripInvite({ tripId, email, role, tripName, inviterEmail, inviterName }) {
-  const normalizedEmail = email.trim().toLowerCase();
+export async function sendTripInvite({ tripId, email, targetUserId, role, tripName, inviterEmail, inviterName }) {
+  const normalizedEmail = email ? email.trim().toLowerCase() : undefined;
 
   // Solo para rellenar el email bonito (destino/fechas) — ya no decide nada
   // de seguridad, eso lo hace createTripInvite server-side. Si fallara (p.
@@ -33,6 +33,7 @@ export async function sendTripInvite({ tripId, email, role, tripName, inviterEma
     createResult = await base44.functions.invoke('createTripInvite', {
       tripId,
       email: normalizedEmail,
+      targetUserId,
       role: role || 'editor',
     });
   } catch (e) {
@@ -46,6 +47,13 @@ export async function sendTripInvite({ tripId, email, role, tripName, inviterEma
   if (data?.error) throw new Error(data.error);
   const invite = data.invite;
   const inviteToken = invite.invite_token;
+  // El email definitivo del invitado lo decide el backend (createTripInvite):
+  // puede venir de `email` (invitar por email conocido) o resolverse ahí
+  // server-side a partir de `targetUserId` (invitar por username, donde el
+  // email del invitado nunca pasa por el navegador de quien invita). A
+  // partir de aquí se usa invite.email para todo lo que necesite el email
+  // real (enviar el correo, crear la notificación in-app).
+  const targetEmail = invite.email;
 
   // URL de aceptación
   const inviteUrl = `${window.location.origin}/Invites?token=${inviteToken}`;
@@ -62,7 +70,7 @@ export async function sendTripInvite({ tripId, email, role, tripName, inviterEma
   let emailSent = false;
   try {
     const result = await base44.functions.invoke('sendInviteEmail', {
-      to: normalizedEmail,
+      to: targetEmail,
       tripName,
       inviterName,
       inviterEmail,
@@ -82,7 +90,7 @@ export async function sendTripInvite({ tripId, email, role, tripName, inviterEma
     console.warn('[sendTripInvite] Resend falló, usando SendEmail de reserva:', e?.message);
     try {
       await base44.integrations.Core.SendEmail({
-        to: normalizedEmail,
+        to: targetEmail,
         subject: `${inviterName || inviterEmail} te invita a "${tripName}" en Kaikōdo ✈️`,
         body: `Hola,
 
@@ -94,7 +102,7 @@ ${inviteUrl}
 
 Si el enlace no se abre solo al tocarlo, cópialo y pégalo en el navegador.
 
-Si aún no tienes cuenta en Kaikōdo, el mismo enlace te lleva a crearla con este email (${normalizedEmail}) — la invitación aparecerá automáticamente en cuanto entres.
+Si aún no tienes cuenta en Kaikōdo, el mismo enlace te lleva a crearla con este email (${targetEmail}) — la invitación aparecerá automáticamente en cuanto entres.
 
 ¡Buen viaje! 🧳`
       });
@@ -110,7 +118,7 @@ Si aún no tienes cuenta en Kaikōdo, el mismo enlace te lleva a crearla con est
     // UserProfile.read se cerró en el rls — se lee vía función backend con
     // un email ya conocido (el que se está invitando), así que la respuesta
     // sí incluye user_id — ver src/lib/userProfiles.js.
-    const profiles = await searchUserProfiles({ emails: [normalizedEmail] });
+    const profiles = await searchUserProfiles({ emails: [targetEmail] });
     if (profiles.length > 0 && profiles[0].user_id) {
       await notify({
         userId: profiles[0].user_id,

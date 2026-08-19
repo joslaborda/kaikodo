@@ -89,6 +89,7 @@ export default function MembersPanel({
     setInviting(true);
     try {
       let resolvedEmail = raw;
+      let targetUserId;
       // If not an email, search by username
       if (!raw.includes('@')) {
         const query = raw.startsWith('@') ? raw.slice(1) : raw;
@@ -103,38 +104,33 @@ export default function MembersPanel({
           return;
         }
         const profile = found[0];
-        // Resolver email: primero desde el campo email del perfil
-        // (backfilled). Si no, antes se intentaba con
-        // base44.entities.User.filter({id:...}) desde el cliente — esa
-        // llamada da SIEMPRE 403 para cualquier usuario no colaborador del
-        // proyecto en Base44, así que este fallback nunca resolvía nada en
-        // la práctica para un usuario normal. searchUserProfiles ya hace
-        // este mismo fallback en el backend con permisos de servicio.
+        // Cierre de la fuga de emails: ya no se resuelve el email de un
+        // desconocido vía searchUserProfiles({userIds}) — ese modo ahora
+        // solo devuelve email si ya hay una relación real (mismo viaje o
+        // uno mismo). Si el perfil no trae email, se invita por
+        // targetUserId y el backend resuelve el email sin que pase por el
+        // navegador de quien invita.
         if (profile.email) {
           resolvedEmail = profile.email;
         } else {
-          const resolved = await searchUserProfiles({ userIds: [profile.user_id] });
-          const foundEmail = resolved[0]?.email;
-          if (!foundEmail) {
-            toast({ title: t('common.error'), description: t('membersPanel.resolveEmailError') });
-            setInviting(false);
-            return;
-          }
-          resolvedEmail = foundEmail;
+          targetUserId = profile.user_id;
         }
       }
-      // members está normalizado en minúsculas; sin normalizar resolvedEmail
-      // aquí, un mismo miembro con distinto casing pasaba este check de
-      // duplicado y podía re-invitarse.
-      resolvedEmail = normalizeEmail(resolvedEmail);
-      if (members.some(m => normalizeEmail(m) === resolvedEmail)) {
-        toast({ title: t('membersPanel.alreadyMember'), description: t('membersPanel.alreadyMemberDesc') });
-        setInviting(false);
-        return;
+      // Duplicate check solo cuando conocemos el email en el cliente; si
+      // invitamos por targetUserId, createTripInvite ya verifica server-side
+      // si ese email ya es miembro.
+      if (!targetUserId) {
+        resolvedEmail = normalizeEmail(resolvedEmail);
+        if (members.some(m => normalizeEmail(m) === resolvedEmail)) {
+          toast({ title: t('membersPanel.alreadyMember'), description: t('membersPanel.alreadyMemberDesc') });
+          setInviting(false);
+          return;
+        }
       }
       const result = await sendTripInvite({
         tripId: trip.id,
-        email: resolvedEmail,
+        email: targetUserId ? undefined : resolvedEmail,
+        targetUserId,
         role: inviteRole,
         tripName: trip.name,
         inviterEmail: currentUserEmail,

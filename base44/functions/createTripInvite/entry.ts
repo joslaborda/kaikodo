@@ -40,14 +40,23 @@ Deno.serve(async (req) => {
     }
     const requesterEmail = user.email.toLowerCase();
 
-    const { tripId, email: rawEmail, role: rawRole } = await req.json();
-    const targetEmail = (rawEmail || "").trim().toLowerCase();
+    const { tripId, email: rawEmail, role: rawRole, targetUserId } = await req.json();
+    const service = base44.asServiceRole;
+
+    // Si no viene email pero sí targetUserId (invitar a alguien encontrado
+    // por username, cuyo email no se conoce en el cliente — ver cierre de
+    // la fuga de emails en searchUserProfiles), se resuelve el email aquí
+    // con permisos de servicio. Mismo patrón que createNotification/entry.ts.
+    let targetEmail = (rawEmail || "").trim().toLowerCase();
+    if (!targetEmail && targetUserId) {
+      const targetUsers = await service.entities.User.filter({ id: targetUserId });
+      targetEmail = (targetUsers[0]?.email || "").trim().toLowerCase();
+    }
 
     if (!tripId || !targetEmail) {
       return Response.json({ error: "Faltan datos" }, { status: 400 });
     }
 
-    const service = base44.asServiceRole;
     const trip = await service.entities.Trip.get(tripId);
     if (!trip) {
       return Response.json({ error: "Viaje no encontrado" }, { status: 404 });

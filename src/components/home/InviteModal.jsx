@@ -189,24 +189,22 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
 
   const handleInvite = async (profile, resolvedEmail) => {
     let email = resolvedEmail;
-    // Perfiles antiguos (o creados sin backfill) pueden no tener `email`
-    // guardado — antes esto cortaba aquí en silencio: el botón parecía
-    // activo pero pulsarlo no hacía nada, ni error ni invitación. Se
-    // intentaba resolver vía base44.entities.User.filter({id:...}) desde el
-    // cliente — esa llamada da SIEMPRE 403 para cualquier usuario no
-    // colaborador del proyecto en Base44, así que este caso nunca se
-    // resolvía en la práctica. searchUserProfiles ya resuelve este mismo
-    // fallback en el backend (con permisos de servicio) — ver
-    // base44/functions/searchUserProfiles/entry.ts.
+    // Cierre de la fuga de emails: ya no se resuelve el email de un
+    // desconocido vía searchUserProfiles({userIds}) — ese modo ahora solo
+    // devuelve email si ya hay una relación real (mismo viaje o uno mismo).
+    // Si no hay email resuelto (búsqueda por username en modo
+    // descubrimiento, que nunca devuelve email), se invita por
+    // targetUserId y el backend resuelve el email sin que pase por el
+    // navegador de quien invita.
+    let targetUserId;
     if (!email && profile?.user_id) {
-      const resolved = await searchUserProfiles({ userIds: [profile.user_id] });
-      email = resolved[0]?.email || '';
+      targetUserId = profile.user_id;
     }
-    if (!email) { setError(t('invites.modal.resolveEmailError')); return; }
+    if (!email && !targetUserId) { setError(t('invites.modal.resolveEmailError')); return; }
     setSending(true); setError('');
     try {
       const result = await sendTripInvite({
-        tripId, email, role: 'editor',
+        tripId, email: email || undefined, targetUserId, role: 'editor',
         tripName: trip?.name || t('invites.modal.theTrip'),
         inviterEmail: currentUserEmail || trip?.created_by || '',
         inviterName: currentUserName || currentUserEmail || trip?.created_by || '',

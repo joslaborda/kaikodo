@@ -28,7 +28,7 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  * persona.
  */
 
-const MAX_IDS = 200;
+const MAX_IDS = 25;
 
 function safeProfile(p: any) {
   return {
@@ -64,24 +64,32 @@ Deno.serve(async (req) => {
       const ids = userIds.filter((x: unknown) => typeof x === "string").slice(0, MAX_IDS);
       const rows = ids.length ? await service.entities.UserProfile.filter({ user_id: { $in: ids } }) : [];
       // Perfiles antiguos (creados antes del backfill de email) tienen
-      // user_id pero no email guardado en UserProfile — mismo caso que en
-      // el modo `emails` de abajo. InviteModal.jsx y MembersPanel.jsx
-      // resolvían esto llamando ellos mismos a base44.entities.User.filter
-      // ({id: ...}) desde el cliente — esa llamada da SIEMPRE 403 para
-      // cualquier usuario no colaborador del proyecto en Base44 ("Only
-      // collaborators can view the list of users"), así que el email nunca
-      // llegaba a resolverse para esos perfiles viejos (el botón de invitar
-      // parecía activo pero no hacía nada). Se resuelve aquí, con
-      // asServiceRole (que sí puede leer User sin esa restricción), en vez
-      // de en el cliente.
+      // user_id pero no email guardado en UserProfile. Se resuelve aquí, con
+      // asServiceRole (que sí puede leer User), igual que en el modo `emails`.
       const missingIds = rows.filter((p: any) => !p.email).map((p: any) => p.user_id).filter(Boolean);
       let emailById: Record<string, string> = {};
       if (missingIds.length) {
         const users = await service.entities.User.filter({ id: { $in: missingIds } });
         emailById = Object.fromEntries(users.map((u: any) => [u.id, (u.email || "").toLowerCase()]));
       }
+      // Cierre de la fuga de emails: el modo userIds se usaba para resolver
+      // el email de un perfil encontrado por username (un desconocido), lo
+      // que dejaba a cualquier usuario autenticado aprender el email de
+      // cualquiera con solo saber su user_id. Ahora solo se devuelve el
+      // email si quien llama YA tiene una relación real con ese usuario:
+      // es él mismo, o comparten al menos un viaje.
+      const myTrips = await service.entities.Trip.filter({ members: { $elemMatch: { $eq: user.email.toLowerCase() } } });
+      const myMemberEmails = new Set(
+        (myTrips as any[]).flatMap((t: any) => t.members || []).map((e: string) => (e || "").toLowerCase()).filter(Boolean)
+      );
       return Response.json({
-        profiles: rows.map((p: any) => ({ ...safeProfile(p), email: p.email || emailById[p.user_id] || null })),
+        profiles: rows.map((p: any) => {
+          const isSelf = p.user_id === user.id;
+          const resolvedEmail = (p.email || emailById[p.user_id] || "").toLowerCase();
+          const sharesTrip = !!resolvedEmail && myMemberEmails.has(resolvedEmail);
+          const email = (isSelf || sharesTrip) ? (p.email || emailById[p.user_id] || null) : null;
+          return { ...safeProfile(p), email };
+        }),
       });
     }
 
