@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import i18n from '@/i18n';
 
 // Recordatorios locales en el propio dispositivo para vuelos, trenes, bus y
 // actividades con hora asignada. A diferencia de las notificaciones push
@@ -79,12 +80,12 @@ export async function scheduleTicketReminder(ticket) {
   if (!dt) return;
   const minutesBefore = MINUTES_BEFORE[ticket.category] ?? MINUTES_BEFORE.default;
   const at = new Date(dt.getTime() - minutesBefore * 60000);
-  const label = ticket.category === 'flight' ? 'Vuelo' : ticket.category === 'train' ? 'Tren' : 'Bus';
+  const label = i18n.t(`reminders.category.${ticket.category}`);
   const route = ticket.origin && ticket.destination ? `${ticket.origin} -> ${ticket.destination}` : (ticket.name || label);
-  const hoursLabel = minutesBefore >= 60 ? `${Math.round(minutesBefore / 60)} h` : `${minutesBefore} min`;
+  const hoursLabel = minutesBefore >= 60 ? i18n.t('reminders.hoursShort', { count: Math.round(minutesBefore / 60) }) : i18n.t('reminders.minutesShort', { count: minutesBefore });
   await scheduleAt({
     id: idFromString(`ticket-${ticket.id}`),
-    title: `${label} en ${hoursLabel}`,
+    title: i18n.t('reminders.ticketTitle', { label, time: hoursLabel }),
     body: `${route} - ${ticket.time}`,
     at,
   });
@@ -104,7 +105,7 @@ export async function scheduleSpotReminder(spot) {
   const at = new Date(dt.getTime() - minutesBefore * 60000);
   await scheduleAt({
     id: idFromString(`spot-${spot.id}`),
-    title: `${spot.title} en ${minutesBefore} min`,
+    title: i18n.t('reminders.spotTitle', { title: spot.title, minutes: minutesBefore }),
     body: spot.assigned_time || '',
     at,
   });

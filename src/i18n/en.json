@@ -1170,6 +1170,8 @@
       "tomorrow": "Tomorrow",
       "tapToPlan": "Tap to plan",
       "writeNotePlaceholder": "Write a note...",
+      "note": "Note",
+      "deleteNoteConfirm": "Delete this note? This can't be undone.",
       "map": "Map",
       "docsCount_one": "{{count}} doc",
       "docsCount_other": "{{count}} docs",
@@ -1768,5 +1770,18 @@
     "invalidSubtitle": "This password reset link is missing or invalid",
     "invalidBody": "The link you used appears to be incomplete. Please request a new password reset email.",
     "requestNewLink": "Request a new link"
+  },
+  "reminders": {
+    "category": {
+      "flight": "Flight",
+      "train": "Train",
+      "bus": "Bus"
+    },
+    "hoursShort_one": "{{count}} h",
+    "hoursShort_other": "{{count}} h",
+    "minutesShort_one": "{{count}} min",
+    "minutesShort_other": "{{count}} min",
+    "ticketTitle": "{{label}} in {{time}}",
+    "spotTitle": "{{title}} in {{minutes}} min"
   }
 }

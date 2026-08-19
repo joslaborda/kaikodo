@@ -17,6 +17,7 @@ import MySpotRow from '@/components/spots/MySpotRow';
 import SpotDetailSheet from '@/components/spots/SpotDetailSheet';
 import SpotsMapView from '@/components/spots/SpotsMapView';
 import { useTranslation } from 'react-i18next';
+import { getLanguage } from '@/i18n/index.js';
 import { useToast } from '@/components/ui/use-toast';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
 import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
@@ -83,7 +84,7 @@ async function searchPlacesGoogle(query, city, country, signal, apiKey) {
     const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey },
-          body: JSON.stringify({ input, languageCode: 'es' }),
+          body: JSON.stringify({ input, languageCode: getLanguage() === 'en' ? 'en' : 'es' }),
           signal,
     });
     if (!res.ok) return [];

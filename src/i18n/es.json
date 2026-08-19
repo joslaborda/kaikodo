@@ -1770,5 +1770,18 @@
     "invalidSubtitle": "Este enlace de restablecimiento falta o no es válido",
     "invalidBody": "El enlace que has usado parece estar incompleto. Solicita un nuevo email para restablecer la contraseña.",
     "requestNewLink": "Solicitar un enlace nuevo"
+  },
+  "reminders": {
+    "category": {
+      "flight": "Vuelo",
+      "train": "Tren",
+      "bus": "Bus"
+    },
+    "hoursShort_one": "{{count}} h",
+    "hoursShort_other": "{{count}} h",
+    "minutesShort_one": "{{count}} min",
+    "minutesShort_other": "{{count}} min",
+    "ticketTitle": "{{label}} en {{time}}",
+    "spotTitle": "{{title}} en {{minutes}} min"
   }
 }
