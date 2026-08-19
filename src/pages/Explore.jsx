@@ -359,12 +359,12 @@ export default function Explore() {
       source_display_name: profileMap[spot.created_by_user_id]?.display_name || '',
       tags: spot.tags || [],
     }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['savedSpots', currentUser?.id] }); setSavingSpotId(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['savedSpots', currentUser?.id] }); },
   
     onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
   });
 
-  const handleSaveSpot = async spot => { setSavingSpotId(spot.id); await saveSpotMutation.mutateAsync(spot); };
+  const handleSaveSpot = async spot => { setSavingSpotId(spot.id); try { await saveSpotMutation.mutateAsync(spot); } finally { setSavingSpotId(null); } };
   // mutateAsync (no mutate): UserCard espera esta promesa para mantener su
   // botón deshabilitado mientras la mutación está en curso — con mutate()
   // (fire-and-forget) el guard local se liberaba antes de que terminase la
