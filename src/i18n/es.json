@@ -859,6 +859,7 @@
       "allDays": "Todos los días",
       "dayRouteHint": "Ruta de ese día, en el orden de tu itinerario"
     },
+    "mapLoadError": "No se pudo cargar el mapa. Comprueba tu conexión.",
     "autoOrder": {
       "title": "Orden sugerido",
       "body": "Colocado en la posición {{position}} del día — arrástralo en la lista si no encaja"
@@ -1171,7 +1172,13 @@
       "writeNotePlaceholder": "Escribe una nota...",
             "note": "Nota",
             "deleteNoteConfirm": "¿Eliminar esta nota? No se puede deshacer.",
-      "map": "Mapa"
+      "map": "Mapa",
+      "docsCount_one": "{{count}} doc",
+      "docsCount_other": "{{count}} docs",
+      "spotsCount_one": "{{count}} spot",
+      "spotsCount_other": "{{count}} spots",
+      "notesCount_one": "{{count}} nota",
+      "notesCount_other": "{{count}} notas"
     },
     "doc": {
       "view": "Ver documento",
@@ -1656,7 +1663,8 @@
       "beFirst": "Sé de los primeros en unirte"
     },
     "mustSignIn": "Debes iniciar sesión",
-    "mustSignInDesc": "Inicia sesión para guardar itinerarios"
+    "mustSignInDesc": "Inicia sesión para guardar itinerarios",
+    "discoveredBy": "Descubierto por @{{username}}"
   },
   "offline": {
     "restored": "Conexión restaurada",

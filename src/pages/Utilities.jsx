@@ -1013,11 +1013,15 @@ function EmergencyContent({ country, homeCountry, secondNationality, meta, activ
                 };
                 const key = Object.keys(domains).find(k => app.name?.includes(k));
                 const domain = key ? domains[key] : null;
-                return domain ? (
-                  <img src={'https://www.google.com/s2/favicons?domain=' + domain + '&sz=64'} alt={app.name} className="w-9 h-9 rounded-xl object-cover flex-shrink-0 bg-secondary" onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-                ) : null;
+                return (
+                  <>
+                    {domain ? (
+                      <img src={'https://www.google.com/s2/favicons?domain=' + domain + '&sz=64'} alt={app.name} className="w-9 h-9 rounded-xl object-cover flex-shrink-0 bg-secondary" onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
+                    ) : null}
+                    <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0 text-sm font-semibold text-primary" style={{ display: domain ? 'none' : 'flex' }}>{app.name?.[0]?.toUpperCase() || '?'}</div>
+                  </>
+                );
               })()}
-              <div className="w-9 h-9 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0 text-sm font-semibold text-primary" style={{display: 'none'}}>{app.name?.[0]?.toUpperCase() || '?'}</div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground">{app.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{app.description}</p>

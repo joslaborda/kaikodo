@@ -928,9 +928,9 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
   // Pills de contenido
   const notesCount = day?.notes?.length || 0;
   const pillItems = [
-    docs.length > 0 && { label: `${docs.length} doc${docs.length > 1 ? 's' : ''}`, cls: 'bg-orange-50 dark:bg-orange-950/30 text-primary' },
-    spots.length > 0 && { label: `${spots.length} spot${spots.length > 1 ? 's' : ''}`, cls: 'bg-violet-50 dark:bg-violet-950/30 text-violet-700' },
-    notesCount > 0 && { label: `${notesCount} nota${notesCount > 1 ? 's' : ''}`, cls: 'bg-green-50 dark:bg-green-950/30 text-green-700' },
+    docs.length > 0 && { label: t('cities.day.docsCount', { count: docs.length }), cls: 'bg-orange-50 dark:bg-orange-950/30 text-primary' },
+    spots.length > 0 && { label: t('cities.day.spotsCount', { count: spots.length }), cls: 'bg-violet-50 dark:bg-violet-950/30 text-violet-700' },
+    notesCount > 0 && { label: t('cities.day.notesCount', { count: notesCount }), cls: 'bg-green-50 dark:bg-green-950/30 text-green-700' },
   ].filter(Boolean);
 
   return (

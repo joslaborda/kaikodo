@@ -859,6 +859,7 @@
       "allDays": "All days",
       "dayRouteHint": "That day's route, in your itinerary order"
     },
+    "mapLoadError": "Couldn't load the map. Check your connection.",
     "autoOrder": {
       "title": "Suggested order",
       "body": "Placed at position {{position}} of the day — drag it in the list if it doesn't fit"
@@ -1169,7 +1170,13 @@
       "tomorrow": "Tomorrow",
       "tapToPlan": "Tap to plan",
       "writeNotePlaceholder": "Write a note...",
-      "map": "Map"
+      "map": "Map",
+      "docsCount_one": "{{count}} doc",
+      "docsCount_other": "{{count}} docs",
+      "spotsCount_one": "{{count}} spot",
+      "spotsCount_other": "{{count}} spots",
+      "notesCount_one": "{{count}} note",
+      "notesCount_other": "{{count}} notes"
     },
     "doc": {
       "view": "View document",
@@ -1654,7 +1661,8 @@
       "beFirst": "Be one of the first to join"
     },
     "mustSignIn": "You must sign in",
-    "mustSignInDesc": "Sign in to save itineraries"
+    "mustSignInDesc": "Sign in to save itineraries",
+    "discoveredBy": "Discovered by @{{username}}"
   },
   "offline": {
     "restored": "Connection restored",

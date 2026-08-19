@@ -63,7 +63,7 @@ function FeedSpotCard({ spot, profile, currentUser, onSave, saving }) {
         </div>
         {attribution && (
           <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-            <Heart className="w-3 h-3 text-primary/60"/>Descubierto por @{attribution}
+            <Heart className="w-3 h-3 text-primary/60"/>{t('explore.discoveredBy', { username: attribution })}
           </p>
         )}
         <div className="flex items-center gap-2 mb-1">

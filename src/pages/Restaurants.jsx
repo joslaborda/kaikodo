@@ -288,9 +288,11 @@ function clearRecentSearches() {
 
 // ── Leaflet map ───────────────────────────────────────────────────────────────
 function LeafletMap({ lat, lng, onMove }) {
+  const { t } = useTranslation();
   const leafletRef = useRef(null);
   const markerRef = useRef(null);
   const containerRef = useRef(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -318,7 +320,7 @@ function LeafletMap({ lat, lng, onMove }) {
       leafletRef.current = map;
       markerRef.current = marker;
       setTimeout(() => map.invalidateSize(), 100);
-    }).catch(() => {});
+    }).catch(() => setLoadError(true));
     return () => { cancelled = true; if (leafletRef.current) { leafletRef.current.remove(); leafletRef.current = null; } };
   }, []);
 
@@ -329,6 +331,9 @@ function LeafletMap({ lat, lng, onMove }) {
     }
   }, [lat, lng]);
 
+  if (loadError) {
+    return <div className="bg-secondary flex items-center justify-center" style={{ height: '180px', width: '100%', borderRadius: '12px' }}><p className="text-xs text-muted-foreground text-center px-4">{t('spots.mapLoadError')}</p></div>;
+  }
   return <div ref={containerRef} className="kodo-map-warm" style={{ height: '180px', width: '100%', borderRadius: '12px', overflow: 'hidden', zIndex: 0 }}/>;
 }
 
