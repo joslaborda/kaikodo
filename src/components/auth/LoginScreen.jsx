@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { isNative, openProviderLogin } from '@/lib/nativeAuth';
+import { getTurnstileSiteKey } from '@/lib/turnstile';
 import Logo from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -100,17 +101,27 @@ export default function LoginScreen({ onSuccess }) {
   }, [mode]);
 
   // Renderiza el widget del formulario de registro cuando toca.
+  // La site key se pide al backend (getTurnstileSiteKey) porque Base44 no
+  // inyecta Secretos en el bundle del frontend — import.meta.env siempre
+  // llega vacío. Mismo patrón "let cancelled" que TodayRouteMap.jsx usa
+  // para getGoogleMapsApiKey(), para no romper el cleanup existente de
+  // window.turnstile.remove() si el componente se desmonta antes de que
+  // llegue la key.
   useEffect(() => {
     if (mode !== 'register' || !turnstileReady || !window.turnstile) return;
-    const sitekey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-    if (!sitekey || !registerTurnstileRef.current) return;
-    registerWidgetIdRef.current = window.turnstile.render(registerTurnstileRef.current, {
-      sitekey,
-      callback: (token) => setTurnstileToken(token),
-      'expired-callback': () => setTurnstileToken(''),
-      'error-callback': () => setTurnstileToken(''),
+    let cancelled = false;
+    getTurnstileSiteKey().then(sitekey => {
+      if (cancelled) return;
+      if (!sitekey || !registerTurnstileRef.current) return;
+      registerWidgetIdRef.current = window.turnstile.render(registerTurnstileRef.current, {
+        sitekey,
+        callback: (token) => setTurnstileToken(token),
+        'expired-callback': () => setTurnstileToken(''),
+        'error-callback': () => setTurnstileToken(''),
+      });
     });
     return () => {
+      cancelled = true;
       if (registerWidgetIdRef.current != null && window.turnstile) {
         try { window.turnstile.remove(registerWidgetIdRef.current); } catch {}
       }
@@ -121,15 +132,19 @@ export default function LoginScreen({ onSuccess }) {
   // Renderiza el widget del formulario de "olvidé contraseña" cuando toca.
   useEffect(() => {
     if (mode !== 'forgot' || !turnstileReady || !window.turnstile) return;
-    const sitekey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
-    if (!sitekey || !forgotTurnstileRef.current) return;
-    forgotWidgetIdRef.current = window.turnstile.render(forgotTurnstileRef.current, {
-      sitekey,
-      callback: (token) => setForgotTurnstileToken(token),
-      'expired-callback': () => setForgotTurnstileToken(''),
-      'error-callback': () => setForgotTurnstileToken(''),
+    let cancelled = false;
+    getTurnstileSiteKey().then(sitekey => {
+      if (cancelled) return;
+      if (!sitekey || !forgotTurnstileRef.current) return;
+      forgotWidgetIdRef.current = window.turnstile.render(forgotTurnstileRef.current, {
+        sitekey,
+        callback: (token) => setForgotTurnstileToken(token),
+        'expired-callback': () => setForgotTurnstileToken(''),
+        'error-callback': () => setForgotTurnstileToken(''),
+      });
     });
     return () => {
+      cancelled = true;
       if (forgotWidgetIdRef.current != null && window.turnstile) {
         try { window.turnstile.remove(forgotWidgetIdRef.current); } catch {}
       }
