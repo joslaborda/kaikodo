@@ -1349,7 +1349,8 @@
     "notAllowed": "Not allowed",
     "needOneAdmin": "There must be at least one admin on the trip.",
     "removeError": "Couldn't remove the member",
-    "roleChangeError": "Couldn't change the role"
+    "roleChangeError": "Couldn't change the role",
+    "pendingInvites": "Pending invites"
   },
   "utilities": {
     "title": "Utilities",

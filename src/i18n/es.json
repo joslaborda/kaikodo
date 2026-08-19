@@ -1351,7 +1351,8 @@
     "notAllowed": "No permitido",
     "needOneAdmin": "Debe haber al menos un admin en el viaje.",
     "removeError": "No se pudo expulsar al miembro",
-    "roleChangeError": "No se pudo cambiar el rol"
+    "roleChangeError": "No se pudo cambiar el rol",
+    "pendingInvites": "Invitaciones pendientes"
   },
   "utilities": {
     "title": "Utilidades",

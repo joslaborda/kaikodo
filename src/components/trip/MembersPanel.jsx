@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, UserPlus, Crown, Pencil, Eye, Mail, Copy, Check, Trash2 } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Users, UserPlus, Crown, Pencil, Eye, Mail, Copy, Check, Trash2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/use-toast';
+import { base44 } from '@/api/base44Client';
 import { sendTripInvite } from '@/lib/invites';
 import { removeTripMember, setTripMemberRole } from '@/lib/tripMembers';
 import { useTranslation } from 'react-i18next';
@@ -27,7 +28,14 @@ export default function MembersPanel({
   const [shareLink, setShareLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState(null);
+  const [cancelling, setCancelling] = useState(null);
   const queryClient = useQueryClient();
+
+  const { data: pendingInvites = [] } = useQuery({
+    queryKey: ['tripPendingInvites', trip.id],
+    queryFn: () => base44.entities.TripInvite.filter({ trip_id: trip.id, status: 'pending' }),
+    enabled: !!trip?.id,
+  });
 
   const members = trip?.members || [];
   const roles = trip?.roles || {};
@@ -155,6 +163,20 @@ export default function MembersPanel({
     }
   };
 
+  const handleCancelInvite = async (inv) => {
+    setCancelling(inv.id);
+    try {
+      const result = await base44.functions.invoke('respondToTripInvite', { inviteId: inv.id, action: 'cancel' });
+      const data = result?.data ?? result;
+      if (data?.error) throw new Error(data.error);
+      queryClient.invalidateQueries({ queryKey: ['tripPendingInvites', trip.id] });
+    } catch (e) {
+      const serverError = e?.response?.data?.error || e?.data?.error;
+      toast({ title: t('common.error'), description: serverError || e?.message || t('invites.modal.cancelError') });
+    }
+    setCancelling(null);
+  };
+
   const handleRoleChange = (email, newRole) => {
     const adminCount = Object.values(roles).filter(r => r === 'admin').length;
     if (roles[email] === 'admin' && adminCount <= 1 && newRole !== 'admin') {
@@ -237,6 +259,33 @@ export default function MembersPanel({
           );
         })}
       </div>
+
+      {/* Invitaciones pendientes — solo admin puede verlas y retirarlas */}
+      {isAdmin && pendingInvites.length > 0 && (
+        <div className="pt-3 border-t border-border space-y-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('membersPanel.pendingInvites')}</p>
+          {pendingInvites.map(inv => (
+            <div key={inv.id} className="flex items-center justify-between p-3 bg-card rounded-xl border border-border">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{inv.email}</p>
+                  <span className="text-xs text-muted-foreground">{t('common.pending')}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => handleCancelInvite(inv)}
+                disabled={cancelling === inv.id}
+                className="text-xs text-muted-foreground hover:text-red-500 transition-colors flex-shrink-0 disabled:opacity-50"
+              >
+                {cancelling === inv.id ? '…' : t('common.cancel')}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Confirmación de expulsión */}
       {memberToRemove && (
