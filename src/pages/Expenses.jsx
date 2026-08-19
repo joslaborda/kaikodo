@@ -840,6 +840,7 @@ function ExpenseDetailSheet({ expense, baseCurrency, userMap, profilesByEmail, o
 // ── Expense add/edit sheet ────────────────────────────────────────────────────
 function ExpenseSheet({ open, onClose, editingExpense, members, defaultCurrency, baseCurrency, availableCurrencies, userMap, onSave, saving, currentUserEmail, profilesByEmail, cities, defaultCityId, minDate, maxDate }) {
   const { t } = useTranslation();
+  const [formValid, setFormValid] = useState(true);
   if (!open) return null;
   return (
     <div className="fixed inset-0 flex items-end justify-center bg-black/40" onClick={onClose} style={{zIndex:70}}>
@@ -870,6 +871,7 @@ function ExpenseSheet({ open, onClose, editingExpense, members, defaultCurrency,
             defaultCityId={defaultCityId}
             minDate={minDate}
             maxDate={maxDate}
+            onValidityChange={setFormValid}
           />
         </div>
         {/* Buttons — outside scroll, always visible */}
@@ -881,7 +883,7 @@ function ExpenseSheet({ open, onClose, editingExpense, members, defaultCurrency,
           <button
             form="expense-form"
             onClick={() => document.getElementById('expense-form-submit')?.click()}
-            disabled={saving}
+            disabled={saving || !formValid}
             className="py-3 bg-primary text-white rounded-full text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:pointer-events-none" style={{flex:2}}>
             {saving ? t('common.loading') : (editingExpense ? t('expenses.saveChanges') : t('expenses.saveExpense'))}
           </button>

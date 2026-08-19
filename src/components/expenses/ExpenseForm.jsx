@@ -49,6 +49,7 @@ export default function ExpenseForm({
   defaultCityId = '',
   minDate = '',
   maxDate = '',
+  onValidityChange,
 }) {
   const { t } = useTranslation();
   // userMap está indexado por email normalizado (minúsculas) — nunca se
@@ -162,6 +163,12 @@ export default function ExpenseForm({
     (form.split_type === 'custom' && customTotal > 0 && customCuadra && !customHasNegative)
   );
 
+  // Notifica al contenedor (ExpenseSheet) si el formulario es válido en
+  // tiempo real, para que el botón "Guardar" se deshabilite antes de pulsarlo
+  // — no solo al pulsarlo (handleSave vuelve a validar, pero así hay feedback
+  // visual inmediato).
+  useEffect(() => { if (onValidityChange) onValidityChange(canSave); }, [canSave]);
+
   const handleSave = async () => {
     if (!form.amount || parseFloat(form.amount) <= 0) {
       toast({ title: t('expenses.form.amountRequired'), description: t('expenses.form.amountRequiredDesc'), variant: 'destructive' });
@@ -169,6 +176,15 @@ export default function ExpenseForm({
     }
     if (form.split_type === 'custom' && customHasNegative) {
       toast({ title: t('expenses.form.amountRequired'), description: t('expenses.form.negativeSplitDesc'), variant: 'destructive' });
+      return;
+    }
+    if (form.split_type === 'equal' && form.split_with.length === 0) {
+      toast({ title: t('expenses.form.pickSomeone'), variant: 'destructive' });
+      return;
+    }
+    if (form.split_type === 'custom' && (customTotal <= 0 || !customCuadra)) {
+      const diff = parseFloat(form.amount || 0) - customTotal;
+      toast({ title: t('expenses.form.amountRequired'), description: diff > 0 ? t('expenses.form.missingToAssign', { amount: Math.abs(diff).toFixed(2), currency }) : t('expenses.form.overAssigned', { amount: Math.abs(diff).toFixed(2), currency }), variant: 'destructive' });
       return;
     }
     if (!form.description.trim()) {
