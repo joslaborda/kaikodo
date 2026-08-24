@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { isNative, openProviderLogin } from '@/lib/nativeAuth';
-import { getTurnstileSiteKey } from '@/lib/turnstile';
+import KaikodoCaptcha from '@/components/auth/KaikodoCaptcha';
 import Logo from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,93 +64,21 @@ export default function LoginScreen({ onSuccess }) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
 
-  // ── Cloudflare Turnstile ────────────────────────────────────────────
+  // ── Captcha propio de Kaikōdo (ver src/lib/captcha.js) ───────────────
   // Widget solo en registro y "olvidé contraseña" (no en login normal).
-  // El script se inyecta una vez; cada formulario renderiza su propio
-  // widget explícito y guarda el token en un estado independiente.
-  const [turnstileReady, setTurnstileReady] = useState(false);
-  const [turnstileToken, setTurnstileToken] = useState('');
-  const [forgotTurnstileToken, setForgotTurnstileToken] = useState('');
-  const registerTurnstileRef = useRef(null);
-  const forgotTurnstileRef = useRef(null);
-  const registerWidgetIdRef = useRef(null);
-  const forgotWidgetIdRef = useRef(null);
+  // KaikodoCaptcha resuelve el reto de prueba-de-trabajo internamente y
+  // avisa via onToken; *CaptchaKey solo sirve para forzar un reto nuevo
+  // tras cada intento de envío (los retos son de un solo uso).
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [forgotCaptchaToken, setForgotCaptchaToken] = useState('');
+  const [registerCaptchaKey, setRegisterCaptchaKey] = useState(0);
+  const [forgotCaptchaKey, setForgotCaptchaKey] = useState(0);
 
-  // Carga el script de Turnstile una sola vez (idempotente).
+  // Limpia los tokens al cambiar de pestaña (son de un solo uso).
   useEffect(() => {
-    if (window.turnstile) { setTurnstileReady(true); return; }
-    const existing = document.querySelector('script[data-turnstile]');
-    if (existing) {
-      if (window.turnstile) setTurnstileReady(true);
-      else existing.addEventListener('load', () => setTurnstileReady(true));
-      return;
-    }
-    const s = document.createElement('script');
-    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-    s.async = true;
-    s.defer = true;
-    s.setAttribute('data-turnstile', '');
-    s.onload = () => setTurnstileReady(true);
-    document.head.appendChild(s);
-  }, []);
-
-  // Resetea los tokens al cambiar de pestaña (los tokens son de un solo uso).
-  useEffect(() => {
-    setTurnstileToken('');
-    setForgotTurnstileToken('');
+    setCaptchaToken('');
+    setForgotCaptchaToken('');
   }, [mode]);
-
-  // Renderiza el widget del formulario de registro cuando toca.
-  // La site key se pide al backend (getTurnstileSiteKey) porque Base44 no
-  // inyecta Secretos en el bundle del frontend — import.meta.env siempre
-  // llega vacío. Mismo patrón "let cancelled" que TodayRouteMap.jsx usa
-  // para getGoogleMapsApiKey(), para no romper el cleanup existente de
-  // window.turnstile.remove() si el componente se desmonta antes de que
-  // llegue la key.
-  useEffect(() => {
-    if (mode !== 'register' || !turnstileReady || !window.turnstile) return;
-    let cancelled = false;
-    getTurnstileSiteKey().then(sitekey => {
-      if (cancelled) return;
-      if (!sitekey || !registerTurnstileRef.current) return;
-      registerWidgetIdRef.current = window.turnstile.render(registerTurnstileRef.current, {
-        sitekey,
-        callback: (token) => setTurnstileToken(token),
-        'expired-callback': () => setTurnstileToken(''),
-        'error-callback': () => setTurnstileToken(''),
-      });
-    });
-    return () => {
-      cancelled = true;
-      if (registerWidgetIdRef.current != null && window.turnstile) {
-        try { window.turnstile.remove(registerWidgetIdRef.current); } catch {}
-      }
-      registerWidgetIdRef.current = null;
-    };
-  }, [mode, turnstileReady]);
-
-  // Renderiza el widget del formulario de "olvidé contraseña" cuando toca.
-  useEffect(() => {
-    if (mode !== 'forgot' || !turnstileReady || !window.turnstile) return;
-    let cancelled = false;
-    getTurnstileSiteKey().then(sitekey => {
-      if (cancelled) return;
-      if (!sitekey || !forgotTurnstileRef.current) return;
-      forgotWidgetIdRef.current = window.turnstile.render(forgotTurnstileRef.current, {
-        sitekey,
-        callback: (token) => setForgotTurnstileToken(token),
-        'expired-callback': () => setForgotTurnstileToken(''),
-        'error-callback': () => setForgotTurnstileToken(''),
-      });
-    });
-    return () => {
-      cancelled = true;
-      if (forgotWidgetIdRef.current != null && window.turnstile) {
-        try { window.turnstile.remove(forgotWidgetIdRef.current); } catch {}
-      }
-      forgotWidgetIdRef.current = null;
-    };
-  }, [mode, turnstileReady]);
 
   const resetMessages = () => { setError(''); setInfo(''); };
 
@@ -201,12 +129,12 @@ export default function LoginScreen({ onSuccess }) {
     if (!trimmedEmail || !password || !confirmPassword) { setError(t('auth.errors.missingFields')); return; }
     if (password !== confirmPassword) { setError(t('auth.errors.passwordMismatch')); return; }
     if (password.length < 8) { setError(t('auth.errors.passwordTooShort')); return; }
-    if (!turnstileToken) { return; }
+    if (!captchaToken) { return; }
     setLoading(true);
     try {
-      // Verifica el token de Turnstile antes de crear la cuenta (los tokens
-      // son de un solo uso y se comprueban en backend con la secret key).
-      const verifyRes = await base44.functions.invoke('verifyTurnstile', { token: turnstileToken });
+      // Verifica el token del captcha propio antes de crear la cuenta (los
+      // retos son de un solo uso y se comprueban en backend).
+      const verifyRes = await base44.functions.invoke('verifyCaptcha', { token: captchaToken });
       if (!verifyRes?.data?.success) {
         setError(t('auth.errors.turnstileFailed'));
         return;
@@ -221,10 +149,8 @@ export default function LoginScreen({ onSuccess }) {
       setError(extractErrorMessage(err, t('auth.errors.registerFailed')));
     } finally {
       setLoading(false);
-      // Fuerza un token nuevo para el siguiente intento (single-use).
-      if (registerWidgetIdRef.current != null && window.turnstile) {
-        try { window.turnstile.reset(registerWidgetIdRef.current); } catch {}
-      }
+      // Fuerza un reto nuevo para el siguiente intento (single-use).
+      setRegisterCaptchaKey(k => k + 1);
     }
   };
 
@@ -268,10 +194,10 @@ export default function LoginScreen({ onSuccess }) {
     resetMessages();
     const trimmedEmail = email.trim();
     if (!trimmedEmail) { setError(t('auth.errors.missingEmail')); return; }
-    if (!forgotTurnstileToken) { return; }
+    if (!forgotCaptchaToken) { return; }
     setLoading(true);
     try {
-      const verifyRes = await base44.functions.invoke('verifyTurnstile', { token: forgotTurnstileToken });
+      const verifyRes = await base44.functions.invoke('verifyCaptcha', { token: forgotCaptchaToken });
       if (!verifyRes?.data?.success) {
         setError(t('auth.errors.turnstileFailed'));
         return;
@@ -285,9 +211,7 @@ export default function LoginScreen({ onSuccess }) {
       setError(extractErrorMessage(err, t('auth.errors.forgotFailed')));
     } finally {
       setLoading(false);
-      if (forgotWidgetIdRef.current != null && window.turnstile) {
-        try { window.turnstile.reset(forgotWidgetIdRef.current); } catch {}
-      }
+      setForgotCaptchaKey(k => k + 1);
     }
   };
 
@@ -428,10 +352,10 @@ export default function LoginScreen({ onSuccess }) {
                     className="h-[42px] rounded-[10px]"
                   />
                 </div>
-                <div ref={registerTurnstileRef} className="min-h-[65px] flex items-center justify-center" />
+                <KaikodoCaptcha active={mode === 'register'} resetKey={registerCaptchaKey} onToken={setCaptchaToken} />
                 <Button
                   type="submit"
-                  disabled={anyLoading || !turnstileToken}
+                  disabled={anyLoading || !captchaToken}
                   className="h-11 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold mt-1"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : t('auth.buttons.register')}
@@ -514,8 +438,8 @@ export default function LoginScreen({ onSuccess }) {
                 className="h-[42px] rounded-[10px]"
               />
             </div>
-            <div ref={forgotTurnstileRef} className="min-h-[65px] flex items-center justify-center" />
-            <Button type="submit" disabled={anyLoading || !forgotTurnstileToken} className="h-11 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold mt-1">
+            <KaikodoCaptcha active={mode === 'forgot'} resetKey={forgotCaptchaKey} onToken={setForgotCaptchaToken} />
+            <Button type="submit" disabled={anyLoading || !forgotCaptchaToken} className="h-11 rounded-full bg-primary hover:bg-primary/90 text-white font-semibold mt-1">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : t('auth.buttons.sendResetLink')}
             </Button>
             <button type="button" onClick={() => switchTab('login')} className="text-xs text-muted-foreground font-medium text-center mt-1">
