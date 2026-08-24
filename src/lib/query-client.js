@@ -1,5 +1,4 @@
 import { QueryClient, QueryCache, MutationCache } from '@tanstack/react-query';
-import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { base44 } from '@/api/base44Client';
 
@@ -89,12 +88,24 @@ export function clearPersistedQueryCache() {
   }
 }
 
-persistQueryClient({
-  queryClient: queryClientInstance,
+// Fix (24-ago): antes esto llamaba a persistQueryClient() directamente, que
+// restaura la caché de forma asíncrona SIN que nada bloquee el primer
+// render de la app — con conexión esto pasa desapercibido (todo vuelve a
+// pedirse a la red igualmente), pero offline se convertía en una carrera de
+// condición real: si una pantalla (p. ej. TripsList) lanzaba su query antes
+// de que la restauración terminara, esa query fallaba sin red antes de que
+// hubiera nada que mostrar, y para cuando la restauración sí completaba
+// react-query no siempre volvía a pintar esos datos — resultado: "Crea tu
+// primer viaje" con la app en modo offline aunque la caché sí tuviera el
+// viaje guardado. persistOptions se exporta aquí para que App.jsx use
+// PersistQueryClientProvider (mismo paquete, patrón oficial) en vez de
+// QueryClientProvider — ese provider expone un estado "restaurando" que
+// react-query respeta automáticamente: ninguna query dispara su fetch hasta
+// que la restauración desde localStorage ha terminado.
+export const persistOptions = {
   persister: localStoragePersister,
   // Keep cache for 24 hours
   maxAge: 1000 * 60 * 60 * 24,
-  // Don't persist mutation state — only query data
   dehydrateOptions: {
     shouldDehydrateQuery: (query) => {
       // Persist all successful queries. Auth itself isn't a react-query
@@ -106,4 +117,4 @@ persistQueryClient({
       return query.state.status === 'success';
     },
   },
-});
+};
