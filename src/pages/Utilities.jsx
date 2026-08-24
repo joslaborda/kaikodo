@@ -1138,7 +1138,7 @@ export default function Utilities() {
   return (
     <div className="min-h-screen bg-background">
       <div className="sticky top-0 z-10 bg-background border-b border-border">
-        <div className="px-4 pt-12 pb-0">
+        <div className="px-4 pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-0">
           <div className="flex items-center justify-between mb-3">
             <div>
               <Link to={createPageUrl('Home') + '?trip_id=' + tripId}>

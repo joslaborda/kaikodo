@@ -1300,7 +1300,7 @@ export default function Expenses() {
     <div className="bg-background min-h-screen">
       {/* ── Header — same pattern as Restaurants/Translator/Documents ── */}
       <div className="bg-background sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-5 pt-12 pb-0">
+        <div className="max-w-3xl mx-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-0">
           <div className="flex items-center justify-between mb-4">
             <Link to={createPageUrl('Home') + '?trip_id=' + tripId}>
               <button className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-sm font-medium transition-colors">

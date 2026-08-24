@@ -351,7 +351,7 @@ export default function Home() {
     <div className="bg-background min-h-screen">
       {/* Header — light option D */}
       <div className="bg-background sticky top-0 z-20">
-        <div className="max-w-3xl mx-auto px-5 pt-12 pb-0">
+        <div className="max-w-3xl mx-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-0">
 
           {/* Top row */}
           <div className="flex items-center justify-between mb-4">

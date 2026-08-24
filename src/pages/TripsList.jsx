@@ -266,7 +266,7 @@ export default function TripsList() {
 
       {/* ── Header ── */}
       <div className="bg-background border-b border-border sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-5 pt-12 pb-4">
+        <div className="max-w-3xl mx-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-4">
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2">

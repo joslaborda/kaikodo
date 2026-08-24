@@ -282,7 +282,7 @@ export default function Invites() {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         {/* Header Kōdo */}
-        <div className="px-5 pt-14 pb-6 border-b border-border bg-background">
+        <div className="px-5 pt-[calc(env(safe-area-inset-top,0px)+3.5rem)] pb-6 border-b border-border bg-background">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-950/30 flex items-center justify-center">
               <Mail className="w-4 h-4 text-primary" />
@@ -359,7 +359,7 @@ export default function Invites() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="px-5 pt-14 pb-5 bg-background border-b border-border sticky top-0 z-10">
+      <div className="px-5 pt-[calc(env(safe-area-inset-top,0px)+3.5rem)] pb-5 bg-background border-b border-border sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(createPageUrl('TripsList'))} className="w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center">
             <ChevronLeft className="w-4 h-4 text-foreground" />
