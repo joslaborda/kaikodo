@@ -44,7 +44,7 @@
     "trip_editors": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Subconjunto de trip_members que NO tiene rol 'viewer' (más el creador del viaje, siempre) -- ver el mismo campo en Expense.jsonc para el porqué completo. IMPORTANTE: el rls de esta entidad TODAVÍA no lo usa a propósito -- hace falta rellenarlo en los registros ya existentes (backfillTripEditors) antes de cambiar create/update/delete a comprobar este campo, o se bloquearía a todo el mundo de golpe."
+      "description": "Subconjunto de trip_members que NO tiene rol 'viewer' (más el creador del viaje, siempre) -- ver el mismo campo en Expense.jsonc para el porqué completo. Activado en el rls el 24-ago-2026, tras ejecutar backfillTripEditors sobre los registros ya existentes (15 viajes, 0 errores)."
     }
   },
   "required": [
@@ -52,9 +52,9 @@
     "name"
   ],
   "rls": {
-    "create": { "data.trip_members": { "$in": ["{{user.email}}"] } },
+    "create": { "data.trip_editors": { "$in": ["{{user.email}}"] } },
     "read": { "data.trip_members": { "$in": ["{{user.email}}"] } },
-    "update": { "data.trip_members": { "$in": ["{{user.email}}"] } },
-    "delete": { "data.trip_members": { "$in": ["{{user.email}}"] } }
+    "update": { "data.trip_editors": { "$in": ["{{user.email}}"] } },
+    "delete": { "data.trip_editors": { "$in": ["{{user.email}}"] } }
   }
 }
