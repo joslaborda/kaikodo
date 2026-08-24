@@ -1,1 +1,4 @@
-{ "name": "backfillTripEditors", "entry": "entry.ts" }
+{
+  "name": "backfillTripEditors",
+  "entry": "entry.ts"
+}
