@@ -1,0 +1,33 @@
+{
+  "name": "CaptchaChallenge",
+  "type": "object",
+  "properties": {
+    "challenge": {
+      "type": "string"
+    },
+    "difficulty": {
+      "type": "number"
+    },
+    "used": {
+      "type": "boolean"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "challenge",
+    "difficulty",
+    "used",
+    "expires_at"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}

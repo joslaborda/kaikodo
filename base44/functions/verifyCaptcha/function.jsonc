@@ -1,0 +1,4 @@
+{
+  "name": "verifyCaptcha",
+  "entry": "entry.ts"
+}

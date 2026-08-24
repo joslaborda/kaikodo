@@ -1,0 +1,4 @@
+{
+  "name": "getCaptchaChallenge",
+  "entry": "entry.ts"
+}
