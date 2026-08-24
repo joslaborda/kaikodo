@@ -38,17 +38,13 @@
     },
     "trip_members": {
       "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Copia de Trip.members, usada por rls. Se mantiene al d\u00eda v\u00eda syncTripMembers()."
+      "items": { "type": "string" },
+      "description": "Copia de Trip.members en el momento de crear/sincronizar — usada por rls porque base44 no permite comprobar la pertenencia al viaje contra otra entidad. Se mantiene al día vía syncTripMembers() cada vez que cambia la membresía del viaje."
     },
     "trip_editors": {
       "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Subconjunto de trip_members que NO es viewer (mas el creador). Usado en rls create/update/delete cuando se active -- ver hallazgo #6. TODAVIA no lo usa el rls a proposito, hace falta backfillTripEditors primero."
+      "items": { "type": "string" },
+      "description": "Subconjunto de trip_members que NO tiene rol 'viewer' (más el creador del viaje, siempre) -- ver el mismo campo en Expense.jsonc para el porqué completo. IMPORTANTE: el rls de esta entidad TODAVÍA no lo usa a propósito -- hace falta rellenarlo en los registros ya existentes (backfillTripEditors) antes de cambiar create/update/delete a comprobar este campo, o se bloquearía a todo el mundo de golpe."
     }
   },
   "required": [
@@ -56,33 +52,9 @@
     "name"
   ],
   "rls": {
-    "create": {
-      "data.trip_members": {
-        "$in": [
-          "{{user.email}}"
-        ]
-      }
-    },
-    "read": {
-      "data.trip_members": {
-        "$in": [
-          "{{user.email}}"
-        ]
-      }
-    },
-    "update": {
-      "data.trip_members": {
-        "$in": [
-          "{{user.email}}"
-        ]
-      }
-    },
-    "delete": {
-      "data.trip_members": {
-        "$in": [
-          "{{user.email}}"
-        ]
-      }
-    }
+    "create": { "data.trip_members": { "$in": ["{{user.email}}"] } },
+    "read": { "data.trip_members": { "$in": ["{{user.email}}"] } },
+    "update": { "data.trip_members": { "$in": ["{{user.email}}"] } },
+    "delete": { "data.trip_members": { "$in": ["{{user.email}}"] } }
   }
 }
