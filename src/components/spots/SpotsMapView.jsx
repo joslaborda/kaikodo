@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { loadLeaflet, TYPE_CONFIG } from './spotsHelpers';
+import { loadLeaflet } from './spotsHelpers';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from './mapTiles';
 import { loadGoogleMaps, isGoogleMapsConfigured, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
+import { spotTypeIconSvg } from './spotTypeIcon';
 
 // Antes cada día usaba uno de los 5 --chart-1..5, todos tonos naranja/marrón
 // muy parecidos entre sí ("los colores... no son suficientemente
@@ -48,9 +48,7 @@ function numberedSvgIcon(google, num, color, size) {
 
 function plainSvgIcon(google, spot, size) {
     size = size || 28;
-    const tc = TYPE_CONFIG[spot.type] || TYPE_CONFIG.custom;
-    const Icon = tc.Icon;
-    const inner = renderToStaticMarkup(<Icon size={13} color="#fff" strokeWidth={2.5} />);
+    const inner = spotTypeIconSvg(spot.type, { size: 13, color: '#fff', strokeWidth: 2.5 });
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '"><circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + (size / 2 - 1) + '" fill="#8a8580" fill-opacity="0.35"/><circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + (size / 2 - 5) + '" fill="hsl(16 75% 45%)" fill-opacity="0.92" stroke="#fff" stroke-width="2.5"/><g transform="translate(' + (size / 2 - 6.5) + ',' + (size / 2 - 6.5) + ')">' + inner + '</g></svg>';
     return {
           url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
@@ -147,9 +145,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
       // Spot sin fecha — pin suelto con el icono real de su tipo, sin
       // número ni línea (no pertenece a ninguna ruta de día todavía).
       const plainIcon = (spot, size = 28) => {
-        const tc = TYPE_CONFIG[spot.type] || TYPE_CONFIG.custom;
-        const Icon = tc.Icon;
-        const inner = renderToStaticMarkup(<Icon size={13} color="#fff" strokeWidth={2.5} />);
+        const inner = spotTypeIconSvg(spot.type, { size: 13, color: '#fff', strokeWidth: 2.5 });
         return L.divIcon({
           html: '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;padding:3px;background:hsl(var(--muted-foreground) / .35)">' +
             '<div style="width:100%;height:100%;background:hsl(16 75% 45% / .92);color:#fff;border:2.5px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center">' + inner + '</div>' +
@@ -250,7 +246,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
                               if (markersRef.current.length > 1) map.fitBounds(bounds, 42);
                               else { map.setCenter(bounds.getCenter()); map.setZoom(15); }
                     }
-            }).catch(() => { if (!cancelled) renderLeaflet(); });
+            }).catch((err) => { console.warn('[SpotsMapView] Google Maps fallo, cayendo a Leaflet:', err); if (!cancelled) renderLeaflet(); });
       } else {
             renderLeaflet();
       }

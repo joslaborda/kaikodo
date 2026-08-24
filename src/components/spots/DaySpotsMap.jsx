@@ -110,7 +110,7 @@ export default function DaySpotsMap({ spots = [], height = 220, onSelectSpot }) 
         } else {
           map.setCenter(path[0]); map.setZoom(15);
         }
-      }).catch(() => { if (!cancelled) runLeaflet(); });
+      }).catch((err) => { console.warn('[DaySpotsMap] Google Maps fallo, cayendo a Leaflet:', err); if (!cancelled) runLeaflet(); });
     } else {
       runLeaflet();
     }
