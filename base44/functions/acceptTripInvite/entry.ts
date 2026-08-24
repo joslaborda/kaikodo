@@ -32,6 +32,30 @@ const SYNCED_ENTITIES = [
   "PackingItem", "Spot", "ItineraryDay", "TodoItem", "UsefulInfo",
 ];
 
+// Ver el mismo comentario en manageTripMember/entry.ts y syncTripMembers.js
+// -- entidades donde además de trip_members hace falta trip_editors (quién
+// NO es viewer). Un miembro que se une con rol "viewer" no debería poder
+// escribir en el contenido del viaje desde el minuto uno.
+const ROLE_AWARE_ENTITIES = ["City", "Expense"];
+
+function norm(s: unknown): string {
+  return typeof s === "string" ? s.trim().toLowerCase() : "";
+}
+
+function computeEditors(members: string[], createdBy: string, roles: Record<string, string>): string[] {
+  const createdByNorm = norm(createdBy);
+  const normRoles: Record<string, string> = {};
+  for (const [rawEmail, r] of Object.entries(roles || {})) {
+    const key = norm(rawEmail);
+    if (key) normRoles[key] = r;
+  }
+  return members.filter((email) => {
+    const key = norm(email);
+    if (key === createdByNorm) return true;
+    return (normRoles[key] || "viewer") !== "viewer";
+  });
+}
+
 const ROLE_HIERARCHY: Record<string, number> = { admin: 3, editor: 2, viewer: 1 };
 
 Deno.serve(async (req) => {
@@ -130,11 +154,15 @@ Deno.serve(async (req) => {
     // cree a partir de ahora. Con permisos de servicio, así que no falla por
     // el propio problema que se está resolviendo.
     const syncFailed: { entity: string; error: string }[] = [];
+    const editors = computeEditors(finalTrip.members || [], finalTrip.created_by, finalTrip.roles || {});
     for (const entityName of SYNCED_ENTITIES) {
       try {
         const records = await service.entities[entityName].filter({ trip_id: tripId });
+        const patch = ROLE_AWARE_ENTITIES.includes(entityName)
+          ? { trip_members: finalTrip.members, trip_editors: editors }
+          : { trip_members: finalTrip.members };
         for (const record of records) {
-          await service.entities[entityName].update(record.id, { trip_members: finalTrip.members });
+          await service.entities[entityName].update(record.id, patch);
         }
       } catch (e) {
         syncFailed.push({ entity: entityName, error: e.message });
