@@ -122,6 +122,7 @@ function buildRequirements(countries, originCountry, secondNationality = null, l
 
 export default function PreTripTab({ trip, cities, packingItems, documents, myProfile, profiles, onInvite, currentUserEmail }) {
   const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === 'en' ? undefined : es;
   const tripId = trip?.id;
   const originCountry = myProfile?.home_country || 'España';
   const [collapsedGroups, setCollapsedGroups] = useState({});
@@ -222,7 +223,7 @@ export default function PreTripTab({ trip, cities, packingItems, documents, myPr
           {sortedCities.length > 0 && (
             <p className="text-xs text-primary mt-2">
               {t('pretrip.firstStop')}: {sortedCities[0].name}
-              {trip?.start_date && ` · ${format(parseISO(trip.start_date), 'dd MMM yyyy', { locale: es })}`}
+              {trip?.start_date && ` · ${format(parseISO(trip.start_date), 'dd MMM yyyy', { locale: dateLocale })}`}
             </p>
           )}
         </div>

@@ -19,13 +19,14 @@ const MAX_AVATARS = 4;
 // entonces — auditoría v2, punto 1.2. Se sustituye por el componente
 // compartido, que nunca cae al email.
 function TravelersSheet({ open, onClose, trip, profilesByEmail, currentUserEmail }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === 'en' ? undefined : es;
   if (!open) return null;
   const memberEmails = (trip?.members || []).map(normalizeEmail);
   const roles = trip?.roles || {};
   const tripCreator = normalizeEmail(trip?.created_by);
   const dateRange = trip?.start_date && trip?.end_date
-    ? `${format(parseISO(trip.start_date), 'dd MMM', { locale: es })} – ${format(parseISO(trip.end_date), 'dd MMM yyyy', { locale: es })}`
+    ? `${format(parseISO(trip.start_date), 'dd MMM', { locale: dateLocale })} – ${format(parseISO(trip.end_date), 'dd MMM yyyy', { locale: dateLocale })}`
     : null;
 
   return createPortal(
@@ -82,6 +83,7 @@ function TravelersSheet({ open, onClose, trip, profilesByEmail, currentUserEmail
 export default function FinishedTab({ trip, cities, expenses, spots, tripId, currentUserEmail, profiles = [] }) {
   const [showTravelers, setShowTravelers] = useState(false);
   const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === 'en' ? undefined : es;
   const allTripSpots = spots;
   const meNorm = normalizeEmail(currentUserEmail);
 
@@ -173,7 +175,7 @@ export default function FinishedTab({ trip, cities, expenses, spots, tripId, cur
         <p className="text-2xl font-semibold text-foreground">{countriesLabel}</p>
         {trip?.start_date && trip?.end_date && (
           <p className="text-xs text-muted-foreground mt-2">
-            {format(parseISO(trip.start_date), 'dd MMM', { locale: es })} – {format(parseISO(trip.end_date), 'dd MMM yyyy', { locale: es })}
+            {format(parseISO(trip.start_date), 'dd MMM', { locale: dateLocale })} – {format(parseISO(trip.end_date), 'dd MMM yyyy', { locale: dateLocale })}
           </p>
         )}
       </div>

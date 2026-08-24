@@ -1,16 +1,17 @@
-import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { createPageUrl } from '@/utils';
+import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { Users, Car, FileText, Hotel, TrainFront } from 'lucide-react';
 import { BusFront, PlaneIcon } from '@/lib/icons';
 import { getCountryMeta } from '@/lib/countryConfig';
+import { getTripCoverImage } from '@/lib/tripImage';
 import { daysUntil } from '@/lib/tripDays';
 import MemberAvatarRow from './MemberAvatarRow';
+import PDFViewer from '@/components/PDFViewer';
 import { useTranslation } from 'react-i18next';
 
 export default function InicioTab({ trip, cities, documents, packingItems, profiles, tripId, onInvite, currentUserEmail }) {
   const { t } = useTranslation();
+  const [viewFile, setViewFile] = useState(null);
   const todayStr  = format(new Date(), 'yyyy-MM-dd');
   const tripStart = trip?.start_date || '';
   const daysLeft  = tripStart ? daysUntil(tripStart) : null;
@@ -67,9 +68,18 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
   const firstCity  = sortedCities[0];
   const countryMeta = getCountryMeta(firstCity?.country || trip?.country || '');
 
+  const coverImage = getTripCoverImage(trip, cities);
+
   return (
     <div className="space-y-3">
       <div className="rounded-2xl overflow-hidden relative" style={{ minHeight: 160, background: 'var(--kodo-hero-bg)' }}>
+        <img src={coverImage} alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={e => {
+            // Mismo fallback que TripCard/HeroTripCard: si la foto no carga,
+            // se queda solo el color de fondo + degradado (nunca un hueco roto).
+            e.currentTarget.style.display = 'none';
+          }} />
         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,.75) 0%, rgba(0,0,0,.15) 100%)' }} />
         {countryMeta?.flag && (
           <div style={{ position: 'absolute', top: 14, right: 16, fontSize: 32, zIndex: 1 }}>{countryMeta.flag}</div>
@@ -107,10 +117,11 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
           </div>
           {(firstDoc.file_url || firstDoc.file_uri) && (
             <div className="px-4 pb-3">
-              <Link to={createPageUrl('Documents') + '?trip_id=' + tripId}
+              <button type="button"
+                onClick={() => setViewFile(firstDoc.file_url || firstDoc.file_uri)}
                 className="block w-full py-2.5 bg-primary text-white text-sm font-medium text-center rounded-full">
                 {t('home.inicio.viewTicket')}
-              </Link>
+              </button>
             </div>
           )}
         </div>

@@ -109,7 +109,7 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
                                                                   map.setCenter(path[0]);
                                                                   map.setZoom(15);
                                                       }
-                        }).catch(() => { if (!cancelled) runLeaflet(); });
+                        }).catch((err) => { console.warn('[TodayRouteMap] Google Maps fallo, cayendo a Leaflet:', err); if (!cancelled) runLeaflet(); });
                         return () => { cancelled = true; };
                 }
 
