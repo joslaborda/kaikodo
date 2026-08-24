@@ -1,0 +1,4 @@
+{
+  "name": "createNativeAuthCode",
+  "entry": "entry.ts"
+}

@@ -1,0 +1,4 @@
+{
+  "name": "exchangeNativeAuthCode",
+  "entry": "entry.ts"
+}

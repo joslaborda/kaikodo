@@ -1,0 +1,40 @@
+{
+  "name": "NativeAuthCode",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string"
+    },
+    "code_challenge": {
+      "type": "string"
+    },
+    "access_token": {
+      "type": "string"
+    },
+    "user_email": {
+      "type": "string"
+    },
+    "used": {
+      "type": "boolean"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "code",
+    "code_challenge",
+    "access_token",
+    "used",
+    "expires_at"
+  ],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
