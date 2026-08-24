@@ -177,83 +177,6 @@ async function reverseGeocode(lat, lng) {
   } catch { return ''; }
 }
 
-// ── Nearby (búsqueda real por categoría, sin texto) ─────────────────────────
-//
-// Antes las 5 pills de categoría (Comer/Cultural/Interés/Compras/Noche) solo
-// escribían en `nearbyFilter`, que ÚNICAMENTE filtraba `filteredSpots` (la
-// lista de "Mis spots") — en la pestaña "Buscar", donde viven las pills, no
-// tenían ningún efecto visible. Y el texto de estado vacío prometía "usa
-// Nearby para descubrir qué hay alrededor" sin que existiera ninguna
-// búsqueda de ese tipo en el código. Esto implementa la búsqueda real:
-// géocodifica la ciudad activa una vez, pide sitios cercanos a Google
-// Places (New) filtrados por los tipos de las categorías seleccionadas, y
-// alimenta el mismo `osmResults`/render que ya usa la búsqueda por texto.
-
-const NEARBY_PILL_TYPES = {
-  food:      ['restaurant', 'cafe', 'bakery'],
-  cultural:  ['museum', 'art_gallery', 'tourist_attraction', 'historical_landmark', 'church', 'hindu_temple', 'mosque', 'synagogue', 'place_of_worship'],
-  interest:  ['amusement_park', 'zoo', 'movie_theater', 'bowling_alley', 'stadium', 'park', 'spa'],
-  shop:      ['shopping_mall', 'clothing_store', 'department_store', 'supermarket', 'book_store', 'market'],
-  nightlife: ['bar', 'night_club'],
-};
-// Tipo interno (para icono/color, mismo TYPE_MAP que ya usa filteredSpots)
-// por pill, no por tipo de Google — evita depender de GOOGLE_TYPE_MAP, que
-// ni siquiera contempla 'nightlife' (los bares los mete dentro de 'food').
-const NEARBY_PILL_KODO_TYPE = { food: 'food', cultural: 'sight', interest: 'activity', shop: 'shopping', nightlife: 'nightlife' };
-
-async function geocodeCityGoogle(cityName, country, apiKey, signal) {
-  const address = [cityName, country].filter(Boolean).join(', ');
-  if (!address) return null;
-  const res = await fetch(
-    `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`,
-    { signal }
-  );
-  if (!res.ok) return null;
-  const data = await res.json();
-  const loc = data.results?.[0]?.geometry?.location;
-  return loc ? { lat: loc.lat, lng: loc.lng } : null;
-}
-
-async function searchNearbyGoogle(lat, lng, pillKeys, apiKey, signal) {
-  const includedTypes = [...new Set(pillKeys.flatMap(k => NEARBY_PILL_TYPES[k] || []))];
-  if (!includedTypes.length) return [];
-  const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.photos',
-    },
-    body: JSON.stringify({
-      includedTypes,
-      maxResultCount: 20,
-      languageCode: getLanguage() === 'en' ? 'en' : 'es',
-      locationRestriction: { circle: { center: { latitude: lat, longitude: lng }, radius: 3000 } },
-    }),
-    signal,
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.places || []).map(p => {
-    // Asigna el tipo interno por la primera pill cuyo listado de tipos de
-    // Google case con este lugar — determina qué icono se muestra.
-    const pillKey = pillKeys.find(k => (NEARBY_PILL_TYPES[k] || []).some(t => (p.types || []).includes(t))) || pillKeys[0];
-    const photoName = p.photos?.[0]?.name;
-    return {
-      id: p.id,
-      name: p.displayName?.text || '',
-      address: p.formattedAddress || '',
-      lat: p.location?.latitude ?? null,
-      lng: p.location?.longitude ?? null,
-      type: NEARBY_PILL_KODO_TYPE[pillKey] || 'sight',
-      rating: p.rating || null,
-      userRatingCount: p.userRatingCount || null,
-      photoUrl: photoName ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=160&key=${apiKey}` : null,
-      _placeId: p.id,
-    };
-  });
-}
-
 async function loadLeaflet() {
   if (window.L) return window.L;
   await new Promise((res, rej) => {
@@ -942,9 +865,6 @@ export default function Restaurants() {
   const enrichedIdsRef = useRef(new Set());
   const enrichObserverRef = useRef(null);
  const [searching, setSearching] = useState(false);
-  const [nearbyFilter, setNearbyFilter] = useState([]);  // empty = all
-  const [nearbyError, setNearbyError] = useState(null); // 'no-key' | 'cap' | 'geo' | 'empty' | null
-  const nearbyCacheRef = useRef(new Map()); // "ciudad|país|pills-ordenadas" -> resultados
   const [showCreate, setShowCreate] = useState(false);
   const [pinPrefill, setPinPrefill] = useState(null); // {lat,lng} — al tocar el mapa de Mis spots
   const [mySpotsView, setMySpotsView] = useState('lista'); // 'lista' | 'mapa'
@@ -1111,59 +1031,6 @@ export default function Restaurants() {
     }, 700);
     return () => clearTimeout(searchTimer.current);
   }, [searchQuery, selectedCity, city, country]);
-
-  // Nearby: pills de categoría sin texto de búsqueda. Sin pills seleccionadas
-  // se deja el estado vacío de siempre (no se llama a Google sin que el
-  // usuario haya pedido algo). Cachea por ciudad+combinación de pills para
-  // no regeocodificar/repetir la llamada a Nearby Search en cada toggle.
-  useEffect(() => {
-    if (searchQuery.trim()) return; // la búsqueda por texto manda si hay una
-    if (nearbyFilter.length === 0) { setOsmResults([]); setNearbyError(null); return; }
-
-    const cityName = selectedCity || city || '';
-    const cacheKey = `${cityName}|${country || ''}|${[...nearbyFilter].sort().join(',')}`;
-    const cached = nearbyCacheRef.current.get(cacheKey);
-    if (cached) { setOsmResults(cached); setNearbyError(null); return; }
-
-    let cancelled = false;
-    (async () => {
-      setSearching(true);
-      setNearbyError(null);
-      try {
-        const apiKey = await getGoogleMapsApiKey();
-        if (!apiKey) { if (!cancelled) setNearbyError('no-key'); return; }
-        if (!canUseGoogleToday('nearby')) { if (!cancelled) setNearbyError('cap'); return; }
-
-        let center = nearbyCacheRef.current.get(`geo:${cityName}|${country || ''}`);
-        if (!center) {
-          if (!canUseGoogleToday('reverseGeocode')) { if (!cancelled) setNearbyError('cap'); return; }
-          center = await geocodeCityGoogle(cityName, country, apiKey, AbortSignal.timeout(6000));
-          markGoogleUsed('reverseGeocode');
-          if (center) nearbyCacheRef.current.set(`geo:${cityName}|${country || ''}`, center);
-        }
-        if (!center) { if (!cancelled) setNearbyError('geo'); return; }
-
-        const results = await searchNearbyGoogle(center.lat, center.lng, nearbyFilter, apiKey, AbortSignal.timeout(8000));
-        markGoogleUsed('nearby');
-        if (cancelled) return;
-        nearbyCacheRef.current.set(cacheKey, results);
-        setOsmResults(results);
-        if (results.length === 0) setNearbyError('empty');
-        // No hace falta rellenar `enriched` a mano aquí: el useEffect de más
-        // abajo que reacciona a cambios en osmResults ya re-enriquece los
-        // primeros 5 resultados automáticamente (mismo mecanismo que usa la
-        // búsqueda por texto) — este resultado ya trae rating/foto directos
-        // de todos modos, así que ese re-fetch de placeDetails es un poco
-        // redundante pero no incorrecto, y mantiene un único camino de
-        // enriquecido en vez de dos.
-      } catch (e) {
-        if (!cancelled && e?.name !== 'AbortError') setNearbyError('fetch');
-      } finally {
-        if (!cancelled) setSearching(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [nearbyFilter, searchQuery, selectedCity, city, country]);
 
     const enrichPlace = async (place) => {
       if (!place?._placeId || enrichedIdsRef.current.has(place.id)) return;
@@ -1426,19 +1293,8 @@ export default function Restaurants() {
         s.city_name?.toLowerCase().includes(q)
       );
     }
-    if (nearbyFilter.length > 0) {
-      const TYPE_MAP = {
-        food:      ['food'],
-        cultural:  ['sight'],
-        interest:  ['activity', 'custom'],
-        shop:      ['hotel', 'transport', 'shopping'],
-        nightlife: ['nightlife', 'bar'],
-      };
-      const allowed = new Set(nearbyFilter.flatMap(k => TYPE_MAP[k] || []));
-      result = result.filter(s => allowed.has(s.type));
-    }
     return result;
-  }, [spots, stateFilter, mySpotSearch, nearbyFilter]);
+  }, [spots, stateFilter, mySpotSearch]);
 
   const isSearchActive = searchQuery.length >= 2;
 
@@ -1537,62 +1393,22 @@ export default function Restaurants() {
               </div>
             )}
 
-            {/* Chips de categoría */}
-            {!searchQuery && (
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { key: 'food',      Icon: Utensils,    label: t('spots.cat.food') },
-                  { key: 'cultural',  Icon: Landmark,    label: t('spots.cat.cultural') },
-                  { key: 'interest',  Icon: Ticket,      label: t('spots.cat.interest') },
-                  { key: 'shop',      Icon: ShoppingBag, label: t('spots.cat.shopping') },
-                  { key: 'nightlife', Icon: Moon,        label: t('spots.cat.nightlife') },
-                ].map(({ key: k, Icon, label }) => (
-                  <button key={k} type="button"
-                    onClick={() => {
-                      const next = nearbyFilter.includes(k) ? nearbyFilter.filter(x => x !== k) : [...nearbyFilter, k];
-                      setNearbyFilter(next);
-                    }}
-                    className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border transition-colors ${
-                      nearbyFilter.includes(k)
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-card text-muted-foreground border-border hover:border-primary/40'
-                    }`}>
-                    <Icon size={13} />{label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Buscando Nearby (sin texto de búsqueda) */}
-            {!searchQuery && searching && nearbyFilter.length > 0 && (
-              <p className="text-sm text-muted-foreground text-center py-8">{t('spots.searching')}</p>
-            )}
-
-            {/* Estado vacío / error de Nearby */}
+            {/* Estado vacío */}
             {!searchQuery && osmResults.length === 0 && !searching && (
               <div className="text-center py-12">
                 <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-3">
                   <Compass className="w-6 h-6 text-muted-foreground/50" />
                 </div>
-                {nearbyError === 'empty' ? (
-                  <p className="text-sm text-muted-foreground">{t('spots.errors.noNearby')}<br />{t('spots.errors.tryByName')}</p>
-                ) : nearbyError === 'geo' ? (
-                  <p className="text-sm text-muted-foreground">{t('spots.errors.locUnavailable')}<br />{t('spots.errors.tryByName')}</p>
-                ) : nearbyError ? (
-                  <p className="text-sm text-muted-foreground">{t('spots.errors.nearbyFailed')}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">{t('spots.emptySearchLine1')}<br />{t('spots.emptySearchLine2')}</p>
-                )}
+                <p className="text-sm text-muted-foreground">{t('spots.emptySearchLine1')}<br />{t('spots.emptySearchLine2')}</p>
               </div>
             )}
 
-            {/* Resultados con búsqueda o Nearby */}
-            {(searchQuery.length >= 2 || (nearbyFilter.length > 0 && !searchQuery)) && (
+            {/* Resultados con búsqueda */}
+            {searchQuery.length >= 2 && (
               <div className="space-y-4">
 
-                {/* Tus spots que coinciden — primero (solo con texto: en modo
-                    Nearby "" .includes("") matchearía todos los spots) */}
-                {searchQuery.length >= 2 && (() => {
+                {/* Tus spots que coinciden — primero */}
+                {(() => {
                   const q = searchQuery.toLowerCase();
                   const matched = spots.filter(s =>
                     s.title?.toLowerCase().includes(q) ||
