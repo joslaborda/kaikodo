@@ -20,7 +20,18 @@
     -->
     <meta name="google" content="notranslate" />
     <link rel="icon" type="image/svg+xml" href="https://base44.com/logo_v2.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <!--
+      viewport-fit=cover: sin esto, env(safe-area-inset-top/bottom/left/right)
+      SIEMPRE vale 0 en iOS/WKWebView, aunque el CSS lo use bien — es la causa
+      raíz de que la X de cerrar en PDFViewer.jsx quedara pegada arriba del
+      todo pese al padding "calc(env(safe-area-inset-top,0px) + 12px)" ya
+      escrito ahí: ese cálculo nunca sumaba nada real. Mismo mecanismo afecta
+      a Restaurants.jsx y Expenses.jsx, que también dependen de
+      safe-area-inset. Con esto activo, cover hace que el WebView pinte
+      debajo del notch/isla dinámica y la barra de estado, y env() empieza a
+      devolver el valor real en vez de 0.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <link rel="manifest" href="/manifest.json" />
     <meta property="og:site_name" content="Kaikōdo" />
     <title>Kaikōdo</title>
