@@ -42,6 +42,30 @@ const SYNCED_ENTITIES = [
   "PackingItem", "Spot", "ItineraryDay", "TodoItem", "UsefulInfo",
 ];
 
+// Entidades que además de trip_members necesitan trip_editors (quién NO es
+// viewer) porque su propio rls lo comprueba — ver comentario largo en
+// syncTripMembers.js (mismo criterio, duplicado aquí porque backend y
+// frontend son runtimes distintos). Hallazgo de esta ronda: esta función
+// sincronizaba trip_members al expulsar a alguien, pero NUNCA sincronizaba
+// nada al cambiar el rol de alguien (action === "setRole") — así que
+// degradar a un miembro a "viewer" no le quitaba permisos de escritura
+// hasta que además lo expulsaran del viaje.
+const ROLE_AWARE_ENTITIES = ["City", "Expense"];
+
+function computeEditors(members: string[], createdBy: string, roles: Record<string, string>): string[] {
+  const createdByNorm = norm(createdBy);
+  const normRoles: Record<string, string> = {};
+  for (const [rawEmail, r] of Object.entries(roles || {})) {
+    const key = norm(rawEmail);
+    if (key) normRoles[key] = r;
+  }
+  return members.filter((email) => {
+    const key = norm(email);
+    if (key === createdByNorm) return true;
+    return (normRoles[key] || "viewer") !== "viewer";
+  });
+}
+
 type Action = "remove" | "setRole";
 const VALID_ROLES = new Set(["admin", "editor", "viewer"]);
 
@@ -243,17 +267,36 @@ Deno.serve(async (req) => {
     }
 
     // Si se expulsó a alguien, revocar su acceso al contenido YA EXISTENTE
-    // del viaje — el hallazgo principal de esta ronda. Sin esto, su email
-    // queda congelado en el trip_members de cada registro desde antes de la
-    // expulsión y conserva lectura/edición/borrado sobre todo ello para
-    // siempre, pese a ya no ser miembro del viaje.
+    // del viaje. Si se cambió un rol, actualizar quién puede escribir. En
+    // ambos casos trip_editors puede haber cambiado; trip_members solo
+    // cambia al expulsar.
     const syncFailed: { entity: string; error: string }[] = [];
+    const editors = computeEditors(
+      action === "remove" ? newMembers : (updatedTrip.members || []),
+      updatedTrip.created_by,
+      updatedTrip.roles || {}
+    );
     if (action === "remove") {
       for (const entityName of SYNCED_ENTITIES) {
         try {
           const records = await service.entities[entityName].filter({ trip_id: tripId });
+          const patch = ROLE_AWARE_ENTITIES.includes(entityName)
+            ? { trip_members: newMembers, trip_editors: editors }
+            : { trip_members: newMembers };
           for (const record of records) {
-            await service.entities[entityName].update(record.id, { trip_members: newMembers });
+            await service.entities[entityName].update(record.id, patch);
+          }
+        } catch (e) {
+          syncFailed.push({ entity: entityName, error: (e as Error).message });
+        }
+      }
+    } else {
+      // action === "setRole" -- trip_members no cambia, solo trip_editors.
+      for (const entityName of ROLE_AWARE_ENTITIES) {
+        try {
+          const records = await service.entities[entityName].filter({ trip_id: tripId });
+          for (const record of records) {
+            await service.entities[entityName].update(record.id, { trip_editors: editors });
           }
         } catch (e) {
           syncFailed.push({ entity: entityName, error: (e as Error).message });
