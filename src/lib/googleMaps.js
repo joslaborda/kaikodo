@@ -48,9 +48,20 @@ export function loadGoogleMaps() {
     loadPromise = getGoogleMapsApiKey().then(key => {
         if (!key) throw new Error('VITE_GOOGLE_MAPS_API_KEY no configurada');
         return new Promise((resolve, reject) => {
-              if (window.google?.maps?.places) { resolve(window.google.maps); return; }
+              // Fix (24-ago, encontrado en vivo con el console.warn ya puesto en
+              // los 3 componentes de mapa): esto resolvía con
+              // window.google.maps, pero TODO el código que llama a
+              // loadGoogleMaps() usa el patrón estándar de la API de Google
+              // (google.maps.Map, google.maps.Marker, google.maps.Size...) --
+              // con `google` siendo ya `window.google.maps`, esas llamadas
+              // intentaban leer `.maps` otra vez sobre el propio namespace de
+              // maps, que no existe: "Cannot read properties of undefined
+              // (reading 'Map')". Resolver con window.google (el namespace
+              // completo, no solo su sub-propiedad .maps) es lo que espera
+              // cada callback existente, sin tocar ninguno de ellos.
+              if (window.google?.maps?.places) { resolve(window.google); return; }
               const cbName = '__kodoGoogleMapsReady';
-              window[cbName] = () => resolve(window.google.maps);
+              window[cbName] = () => resolve(window.google);
               const script = document.createElement('script');
               script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places,marker&v=weekly&loading=async&callback=${cbName}`;
               script.async = true;
