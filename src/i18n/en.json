@@ -263,6 +263,7 @@
     "pretrip": "Pre-trip",
     "departure": "Departure",
     "today": "Today",
+    "lastDay": "Last day",
     "tomorrow": "Tomorrow",
     "summary": "Summary",
     "chat": "Chat",
@@ -445,7 +446,7 @@
     },
     "balance": {
       "yourBalance": "Your balance",
-      "upToDate": "All settled",
+      "upToDate": "You're settled up",
       "theyOweYou": "They owe you",
       "youOwe": "You owe",
       "iPaid": "I paid",
@@ -632,9 +633,9 @@
       "departsInHours": "Departs in {{hours}}h",
       "departsInMinutes": "Departs in {{count}} min",
       "todayRoute": "Today's route",
-      "hotelPlusStops": "Hotel + {{count}} stops",
+      "hotelPlusStops": "Accommodation + {{count}} stops",
       "stopsCount": "{{count}} stops",
-      "addHotel": "+ Add hotel"
+      "addHotel": "+ Add accommodation"
     },
     "tomorrow": {
       "emptyTitle": "Nothing planned for tomorrow",
@@ -721,7 +722,8 @@
       "permission": "Allow location access in your browser",
       "locUnavailable": "Location unavailable right now",
       "timeout": "Request timed out. Try again.",
-      "cantGetLocation": "Couldn't get your location"
+      "cantGetLocation": "Couldn't get your location",
+      "nearbyFailed": "Couldn't load. Try again."
     },
     "cat": {
       "food": "Eat",
@@ -1074,7 +1076,7 @@
     "baseCurrency": "Base currency",
     "baseCurrencySub": "· Expenses and conversions",
     "notifEnabled": "Notifications",
-        "notifEnabledSub": "Alerts for invites, expenses, and trip updates",
+    "notifEnabledSub": "Alerts for invites, expenses, and trip updates",
     "privacy": "Privacy",
     "spotsPublic": "Public spots by default",
     "spotsPublicSub": "The spots you create will be visible to the community",
@@ -1755,6 +1757,12 @@
       "otpFailed": "Incorrect or expired code.",
       "forgotFailed": "Couldn't send the email. Try again.",
       "turnstileFailed": "Security check failed, please try again"
+    },
+    "captcha": {
+      "verifying": "Verifying you’re human…",
+      "verified": "Verified",
+      "failed": "Couldn’t verify. Try again.",
+      "retry": "Retry"
     }
   },
   "resetPassword": {

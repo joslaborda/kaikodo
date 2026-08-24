@@ -263,6 +263,7 @@
     "pretrip": "Pre-viaje",
     "departure": "Salida",
     "today": "Hoy",
+    "lastDay": "Último día",
     "tomorrow": "Mañana",
     "summary": "Resumen",
     "chat": "Chat",
@@ -445,7 +446,7 @@
     },
     "balance": {
       "yourBalance": "Tu balance",
-      "upToDate": "Al día",
+      "upToDate": "Estás en paz",
       "theyOweYou": "Te deben",
       "youOwe": "Debes",
       "iPaid": "He pagado",
@@ -632,9 +633,9 @@
       "departsInHours": "Sale en {{hours}}h",
       "departsInMinutes": "Sale en {{count}} min",
       "todayRoute": "Ruta de hoy",
-      "hotelPlusStops": "Hotel + {{count}} paradas",
+      "hotelPlusStops": "Alojamiento + {{count}} paradas",
       "stopsCount": "{{count}} paradas",
-      "addHotel": "+ Añadir hotel"
+      "addHotel": "+ Añadir alojamiento"
     },
     "tomorrow": {
       "emptyTitle": "Nada planificado para mañana",
@@ -721,7 +722,8 @@
       "permission": "Permite el acceso a tu ubicación en el navegador",
       "locUnavailable": "Ubicación no disponible en este momento",
       "timeout": "Tiempo de espera agotado. Intenta de nuevo.",
-      "cantGetLocation": "No se pudo obtener tu ubicación"
+      "cantGetLocation": "No se pudo obtener tu ubicación",
+      "nearbyFailed": "No se pudo cargar. Inténtalo de nuevo."
     },
     "cat": {
       "food": "Comer",
@@ -1074,7 +1076,7 @@
     "baseCurrency": "Moneda base",
     "baseCurrencySub": "· Gastos y conversiones",
     "notifEnabled": "Notificaciones",
-        "notifEnabledSub": "Avisos de invitaciones, gastos y novedades del viaje",
+    "notifEnabledSub": "Avisos de invitaciones, gastos y novedades del viaje",
     "privacy": "Privacidad",
     "spotsPublic": "Spots públicos por defecto",
     "spotsPublicSub": "Los spots que crees serán visibles para la comunidad",
@@ -1170,8 +1172,8 @@
       "tomorrow": "Mañana",
       "tapToPlan": "Toca para planificar",
       "writeNotePlaceholder": "Escribe una nota...",
-            "note": "Nota",
-            "deleteNoteConfirm": "¿Eliminar esta nota? No se puede deshacer.",
+      "note": "Nota",
+      "deleteNoteConfirm": "¿Eliminar esta nota? No se puede deshacer.",
       "map": "Mapa",
       "docsCount_one": "{{count}} doc",
       "docsCount_other": "{{count}} docs",
@@ -1755,6 +1757,12 @@
       "otpFailed": "Código incorrecto o caducado.",
       "forgotFailed": "No se pudo enviar el email. Inténtalo de nuevo.",
       "turnstileFailed": "Verificación de seguridad fallida, inténtalo de nuevo"
+    },
+    "captcha": {
+      "verifying": "Verificando que eres una persona…",
+      "verified": "Verificado",
+      "failed": "No se pudo verificar. Inténtalo de nuevo.",
+      "retry": "Reintentar"
     }
   },
   "resetPassword": {
