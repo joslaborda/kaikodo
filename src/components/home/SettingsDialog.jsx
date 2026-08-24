@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
+import { computeEditors } from '@/lib/syncTripMembers';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChevronDown, Trash2, LogOut } from 'lucide-react';
@@ -232,6 +233,7 @@ function SettingsDialog({
         start_date: cityDraft.start_date || '',
         end_date: cityDraft.end_date || '',
         trip_members: trip.members,
+        trip_editors: computeEditors(trip.members, trip),
       });
       queryClient.invalidateQueries({ queryKey: ['cities', tripId] });
       closeCityEdit();
