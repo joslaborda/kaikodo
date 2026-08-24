@@ -216,6 +216,15 @@ function BalancesTab({ expenses, members, currentUserEmail, userMap, baseCurrenc
 
   const myBalance = balances[meNorm] || 0;
   const iSettled = Math.abs(myBalance) < 0.01;
+  // Bug real (24-ago, reportado con captura): "Todos en paz" / "No hay
+  // deudas pendientes en el grupo" se mostraba en cuanto MI balance
+  // llegaba a cero (p. ej. justo después de saldar mi propia deuda),
+  // aunque el resto del grupo siguiera debiéndose dinero entre sí — el
+  // texto prometía algo sobre TODO el grupo pero la condición solo miraba
+  // a una persona. `debts` (ver arriba) ya es la lista de deudas
+  // pendientes de TODO el grupo tras `calculateBalances`/`getDebts` — así
+  // que "de verdad no queda nadie a deber" es simplemente que esté vacía.
+  const allSettled = debts.length === 0;
 
   const iOwe   = debts.filter(d => d.from === meNorm);
   const owesMe = debts.filter(d => d.to   === meNorm);
@@ -456,8 +465,10 @@ function BalancesTab({ expenses, members, currentUserEmail, userMap, baseCurrenc
         </div>
       )}
 
-      {/* Saldo de todos */}
-      {!iSettled && (
+      {/* Saldo de todos — visible mientras quede alguna deuda en el GRUPO,
+          no solo mientras yo tenga una (si no, en cuanto te saldas tú
+          desaparece justo la información de quién más debe todavía). */}
+      {!allSettled && (
         <div>
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('expenses.balance.groupBalance')}</p>
           <div className="bg-card rounded-2xl border border-border overflow-hidden">
@@ -488,7 +499,7 @@ function BalancesTab({ expenses, members, currentUserEmail, userMap, baseCurrenc
         </div>
       )}
 
-      {iSettled && (
+      {allSettled && (
         <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900/40 rounded-2xl p-4 text-center">
           <p className="text-sm font-medium text-green-700">{t('expenses.balance.everyoneSettled')}</p>
           <p className="text-xs text-green-600 mt-1">{t('expenses.balance.noDebts')}</p>

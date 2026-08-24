@@ -431,7 +431,7 @@ export default function Photos() {
                     // puede no traerlo — de ahí parseServerDate en ese caso.
                     currentPhoto.taken_at ? parseISO(currentPhoto.taken_at) : parseServerDate(currentPhoto.created_date),
                     "d MMM yyyy · HH:mm",
-                    { locale: es }
+                    { locale: i18n?.language === 'en' ? undefined : es }
                   )
                 : ''}
             </p>

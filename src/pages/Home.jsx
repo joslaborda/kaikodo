@@ -54,7 +54,8 @@ const chatReadStorageKey = (tripId) => `kaikodo_chat_last_read_${tripId}`;
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function Home() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === 'en' ? undefined : es;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
@@ -258,6 +259,10 @@ export default function Home() {
   const tripNotStarted = tripStart && todayStr < tripStart;
   const tripFinished = tripEnd && todayStr > tripEnd;
   const tripInProgress = tripStart && tripEnd && todayStr >= tripStart && todayStr <= tripEnd;
+  // Último día del viaje: no tiene sentido una pestaña "Mañana" (ya no
+  // queda nada del viaje que planificar para entonces) — antes se seguía
+  // mostrando Hoy/Mañana/Chat igual que cualquier otro día en curso.
+  const isLastDay = tripEnd && todayStr === tripEnd;
 
   // Notifications
   // notifications handled by NotificationBell component
@@ -285,6 +290,13 @@ export default function Home() {
       return [{ key: 'resumen', label: t('tabs.summary') }, { key: 'chat', label: t('tabs.chat'), badge: unreadMessages }];
     }
     if (tripInProgress && !isDeparture) {
+      if (isLastDay) {
+        // Último día — sin Mañana, "Hoy" pasa a llamarse "Último día".
+        return [
+          { key: 'hoy', label: t('tabs.lastDay'), urgent: true },
+          { key: 'chat', label: t('tabs.chat'), badge: unreadMessages },
+        ];
+      }
       // Viaje en curso (no el primer día) — sin tab Salida
       return [
         { key: 'hoy', label: t('tabs.today'), urgent: true },
@@ -313,7 +325,7 @@ export default function Home() {
       { key: 'previaje', label: t('tabs.pretrip') },
       { key: 'chat', label: t('tabs.chat'), badge: unreadMessages },
     ];
-  }, [tripFinished, isDeparture, tripInProgress, isDMinus1, unreadMessages]);
+  }, [tripFinished, isDeparture, tripInProgress, isDMinus1, isLastDay, unreadMessages]);
 
   // Auto-correct tab when trip status changes
   useEffect(() => {
@@ -379,8 +391,8 @@ export default function Home() {
             {trip?.start_date && (
               <span className="flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5" />
-                {format(parseISO(trip.start_date), 'dd MMM', { locale: es })}
-                {trip.end_date && ` – ${format(parseISO(trip.end_date), 'dd MMM yyyy', { locale: es })}`}
+                {format(parseISO(trip.start_date), 'dd MMM', { locale: dateLocale })}
+                {trip.end_date && ` – ${format(parseISO(trip.end_date), 'dd MMM yyyy', { locale: dateLocale })}`}
               </span>
             )}
           </div>

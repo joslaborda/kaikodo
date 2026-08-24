@@ -497,6 +497,13 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
   const [draggingId, setDraggingId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const touchDragId = useRef(null);
+  // Fix (24-ago): draggable/onTouchStart estaban puestos en toda la fila, así
+  // que cualquier scroll que empezara sobre un spot se interpretaba como un
+  // intento de reordenar. Ahora solo el handle de los 6 puntos puede iniciar
+  // un arrastre — para el ratón (HTML5 DnD, escritorio/web) via este ref
+  // (se marca en el mousedown del handle, se consulta en onDragStart de la
+  // fila); para touch, moviendo onTouchStart directamente al handle.
+  const dragAllowedRef = useRef(false);
 
   // Se puede recolocar cualquier cosa donde quieras, EXCEPTO invertir el
   // orden entre dos items que ya tienen hora fija — un spot a las 14:00 no
@@ -567,10 +574,13 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
     }
   };
 
-  const onDragStart = (e, id) => { e.stopPropagation(); setDraggingId(id); e.dataTransfer.effectAllowed = 'move'; };
+  const onDragStart = (e, id) => {
+    if (!dragAllowedRef.current) { e.preventDefault(); return; }
+    e.stopPropagation(); setDraggingId(id); e.dataTransfer.effectAllowed = 'move';
+  };
   const onDragOver  = (e, id) => { e.preventDefault(); setDragOverId(id); };
   const onDrop = (e, id) => { e.preventDefault(); reorderTimeline(draggingId, id); setDraggingId(null); setDragOverId(null); };
-  const onDragEnd = () => { setDraggingId(null); setDragOverId(null); };
+  const onDragEnd = () => { setDraggingId(null); setDragOverId(null); dragAllowedRef.current = false; };
   const onTouchStart = (e, id) => { touchDragId.current = id; setDraggingId(id); };
   const onTouchMove = (e) => {
     if (!touchDragId.current) return;
@@ -604,14 +614,18 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
         onDragOver={e => onDragOver(e, item.id)}
         onDrop={e => onDrop(e, item.id)}
         onDragEnd={onDragEnd}
-        onTouchStart={e => onTouchStart(e, item.id)}
         className={`flex items-stretch border-t border-border transition-all select-none
           ${isDragging ? 'opacity-40' : ''}
           ${isDragOver ? 'bg-accent/20' : ''}
         `}>
 
-        {/* Time column */}
-<div className="w-12 shrink-0 flex flex-col items-center pt-3.5 pb-1 pl-4 gap-0.5 touch-none cursor-grab">
+        {/* Time column — único punto desde el que se puede iniciar un
+            arrastre (los 6 puntos). Antes toda la fila era "draggable" y
+            cualquier scroll que empezara sobre un spot se confundía con un
+            intento de reordenar. */}
+<div className="w-12 shrink-0 flex flex-col items-center pt-3.5 pb-1 pl-4 gap-0.5 touch-none cursor-grab"
+  onMouseDown={() => { dragAllowedRef.current = true; }}
+  onTouchStart={e => { e.stopPropagation(); onTouchStart(e, item.id); }}>
   {item._time && <span className="text-label2 font-medium text-primary leading-none whitespace-nowrap">{item._time}</span>}
   <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40 mt-0.5" />
   {!isLast && <div className="w-px flex-1 bg-border/50 mt-1.5" />}
@@ -891,7 +905,8 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
 
 // ── Day row ───────────────────────────────────────────────────────────────────
 function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isTomorrow_, queryClient, defaultOpen, trip, cities, itineraryDays, profiles, userId, currentUserEmail }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === 'en' ? undefined : es;
   const [open, setOpen] = useState(defaultOpen);
 
   // Un día de tránsito (una ciudad termina el mismo día que la siguiente
@@ -920,7 +935,7 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
 
   const hasContent = docs.length > 0 || spots.length > 0;
   const isEmpty = !day?.title && !hasContent;
-  const label = isToday_ ? format(parseISO(dateStr), 'dd MMM', { locale: es }) : format(parseISO(dateStr), 'dd MMM', { locale: es });
+  const label = format(parseISO(dateStr), 'dd MMM', { locale: dateLocale });
 
   const rowBorder = isToday_ ? 'border-t-2 border-t-primary' : 'border-t border-t-border';
   const rowBg = isToday_ ? 'bg-orange-50/70 dark:bg-orange-950/20' : open ? 'bg-secondary/20' : 'bg-card hover:bg-secondary/10';
@@ -947,10 +962,10 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
             {/* Fecha */}
             <div className="flex flex-col items-center w-9 flex-shrink-0">
               <span className={`text-lg font-bold leading-none ${isToday_ ? 'text-primary' : 'text-foreground'}`}>
-                {format(parseISO(dateStr), 'd', { locale: es })}
+                {format(parseISO(dateStr), 'd', { locale: dateLocale })}
               </span>
               <span className="text-micro uppercase tracking-wide font-semibold text-muted-foreground mt-0.5">
-                {format(parseISO(dateStr), 'MMM', { locale: es })}
+                {format(parseISO(dateStr), 'MMM', { locale: dateLocale })}
               </span>
             </div>
             {/* Info */}
@@ -1007,7 +1022,8 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
 
 // ── City block ────────────────────────────────────────────────────────────────
 function CityBlock({ city, idx, total, allDocs, allSpots, itineraryDays, tripId, isActive, isPast, queryClient, trip, cities, profiles, userId, forceOpenCityId, currentUserEmail }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === 'en' ? undefined : es;
   // Al venir de "Abrir <ciudad>" en Home (ver DayCard.jsx), llega el id
   // exacto de ESTA estancia — si la misma ciudad aparece dos veces en el
   // viaje (ida y vuelta a Lima, por ejemplo), cada una tiene su propio
@@ -1067,7 +1083,7 @@ function CityBlock({ city, idx, total, allDocs, allSpots, itineraryDays, tripId,
           </span>
           <span className="text-xs text-muted-foreground ml-2">
             {city.start_date && city.end_date
-              ? `${format(parseISO(city.start_date), 'dd MMM', { locale: es })} – ${format(parseISO(city.end_date), 'dd MMM', { locale: es })}`
+              ? `${format(parseISO(city.start_date), 'dd MMM', { locale: dateLocale })} – ${format(parseISO(city.end_date), 'dd MMM', { locale: dateLocale })}`
               : t('cities.noDates')}
           </span>
         </div>

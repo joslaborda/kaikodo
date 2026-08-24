@@ -16,6 +16,7 @@ import { normalizeEmail } from '@/lib/utils';
 
 export default function Invites() {
   const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === 'en' ? undefined : es;
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
   const navigate = useNavigate();
@@ -306,8 +307,8 @@ export default function Invites() {
             {trip.start_date && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="w-4 h-4 text-primary flex-shrink-0" />
-                {format(parseISO(trip.start_date), "d 'de' MMMM yyyy", { locale: es })}
-                {trip.end_date && ` — ${format(parseISO(trip.end_date), "d 'de' MMMM yyyy", { locale: es })}`}
+                {format(parseISO(trip.start_date), i18n.language === 'en' ? 'MMMM d, yyyy' : "d 'de' MMMM yyyy", { locale: dateLocale })}
+                {trip.end_date && ` — ${format(parseISO(trip.end_date), i18n.language === 'en' ? 'MMMM d, yyyy' : "d 'de' MMMM yyyy", { locale: dateLocale })}`}
               </div>
             )}
 
@@ -440,8 +441,8 @@ export default function Invites() {
                     {tripData.start_date && (
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-primary" />
-                        {format(parseISO(tripData.start_date), "d MMM yyyy", { locale: es })}
-                        {tripData.end_date && ` — ${format(parseISO(tripData.end_date), "d MMM yyyy", { locale: es })}`}
+                        {format(parseISO(tripData.start_date), "d MMM yyyy", { locale: dateLocale })}
+                        {tripData.end_date && ` — ${format(parseISO(tripData.end_date), "d MMM yyyy", { locale: dateLocale })}`}
                       </p>
                     )}
                   </div>
