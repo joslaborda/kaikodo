@@ -722,8 +722,7 @@
       "permission": "Permite el acceso a tu ubicación en el navegador",
       "locUnavailable": "Ubicación no disponible en este momento",
       "timeout": "Tiempo de espera agotado. Intenta de nuevo.",
-      "cantGetLocation": "No se pudo obtener tu ubicación",
-      "nearbyFailed": "No se pudo cargar. Inténtalo de nuevo."
+      "cantGetLocation": "No se pudo obtener tu ubicación"
     },
     "cat": {
       "food": "Comer",

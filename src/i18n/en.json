@@ -722,8 +722,7 @@
       "permission": "Allow location access in your browser",
       "locUnavailable": "Location unavailable right now",
       "timeout": "Request timed out. Try again.",
-      "cantGetLocation": "Couldn't get your location",
-      "nearbyFailed": "Couldn't load. Try again."
+      "cantGetLocation": "Couldn't get your location"
     },
     "cat": {
       "food": "Eat",
