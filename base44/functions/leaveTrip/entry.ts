@@ -32,6 +32,27 @@ const SYNCED_ENTITIES = [
   "PackingItem", "Spot", "ItineraryDay", "TodoItem", "UsefulInfo",
 ];
 
+// Ver el mismo comentario en manageTripMember/entry.ts y syncTripMembers.js.
+const ROLE_AWARE_ENTITIES = ["City", "Expense"];
+
+function norm(s: unknown): string {
+  return typeof s === "string" ? s.trim().toLowerCase() : "";
+}
+
+function computeEditors(members: string[], createdBy: string, roles: Record<string, string>): string[] {
+  const createdByNorm = norm(createdBy);
+  const normRoles: Record<string, string> = {};
+  for (const [rawEmail, r] of Object.entries(roles || {})) {
+    const key = norm(rawEmail);
+    if (key) normRoles[key] = r;
+  }
+  return members.filter((email) => {
+    const key = norm(email);
+    if (key === createdByNorm) return true;
+    return (normRoles[key] || "viewer") !== "viewer";
+  });
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -111,8 +132,12 @@ Deno.serve(async (req) => {
     for (const entityName of SYNCED_ENTITIES) {
       try {
         const records = await service.entities[entityName].filter({ trip_id: tripId });
+        const editors = computeEditors(finalTrip.members || [], finalTrip.created_by, finalTrip.roles || {});
+        const patch = ROLE_AWARE_ENTITIES.includes(entityName)
+          ? { trip_members: finalTrip.members, trip_editors: editors }
+          : { trip_members: finalTrip.members };
         for (const record of records) {
-          await service.entities[entityName].update(record.id, { trip_members: finalTrip.members });
+          await service.entities[entityName].update(record.id, patch);
         }
       } catch (e) { /* no bloquear la respuesta por un fallo puntual de una entidad */ }
     }
