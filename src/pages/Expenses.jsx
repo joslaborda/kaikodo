@@ -13,6 +13,7 @@ import { getCountryMeta, computeAvailableCurrencies } from '@/lib/countryConfig'
 import { getFxRate } from '@/lib/fxRates';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { calculateBalances, getDebts } from '@/lib/expenseBalances';
+import { computeEditors } from '@/lib/syncTripMembers';
 import { normalizeEmail, isZeroDecimalCurrency } from '@/lib/utils';
 import { searchUserProfiles } from '@/lib/userProfiles';
 import ExpenseForm from '@/components/expenses/ExpenseForm';
@@ -1204,7 +1205,7 @@ export default function Expenses() {
   const createMutation = useMutation({
     mutationFn: d => {
       if (!trip?.members?.length) throw new Error(t('cities.tripNotLoadedRetry'));
-      return base44.entities.Expense.create({ ...d, trip_id: tripId, amount: parseFloat(d.amount), trip_members: trip.members });
+      return base44.entities.Expense.create({ ...d, trip_id: tripId, amount: parseFloat(d.amount), trip_members: trip.members, trip_editors: computeEditors(trip.members, trip) });
     },
     onError: (error) => toast({ title: t('expenses.saveError'), description: error?.message || t('common.tryAgain'), variant: 'destructive' }),
     onSuccess: async (_, d) => {
