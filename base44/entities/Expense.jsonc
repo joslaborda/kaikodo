@@ -175,7 +175,7 @@
     },
     "paid_by": {
       "type": "string",
-      "description": "Email del usuario que pagó"
+      "description": "Email del usuario que pag\u00f3"
     },
     "category": {
       "type": "string",
@@ -201,18 +201,18 @@
         "solo"
       ],
       "default": "equal",
-      "description": "Tipo de división: a partes iguales o personalizado"
+      "description": "Tipo de divisi\u00f3n: a partes iguales o personalizado"
     },
     "split_with": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "Emails de usuarios incluidos en la división (incluye paid_by)"
+      "description": "Emails de usuarios incluidos en la divisi\u00f3n (incluye paid_by)"
     },
     "amounts_by_user": {
       "type": "object",
-      "description": "Cantidades específicas por usuario (solo si split_type=custom). Formato: {email: amount}"
+      "description": "Cantidades espec\u00edficas por usuario (solo si split_type=custom). Formato: {email: amount}"
     },
     "receipt_photos": {
       "type": "array",
@@ -223,15 +223,15 @@
     },
     "amount_base": {
       "type": "number",
-      "description": "Importe convertido a la moneda base del viaje (para cálculo de balances)"
+      "description": "Importe convertido a la moneda base del viaje (para c\u00e1lculo de balances)"
     },
     "exchange_rate": {
       "type": "number",
-      "description": "Tipo de cambio usado en la conversión (currency → base_currency)"
+      "description": "Tipo de cambio usado en la conversi\u00f3n"
     },
     "fx_rate_to_base": {
       "type": "number",
-      "description": "Tipo de cambio usado en la conversión (currency → base_currency)"
+      "description": "Tipo de cambio usado en la conversi\u00f3n"
     },
     "fx_source": {
       "type": "string",
@@ -239,25 +239,34 @@
     },
     "fx_timestamp": {
       "type": "string",
-      "description": "Timestamp de la obtención del tipo de cambio"
+      "description": "Timestamp de la obtenci\u00f3n del tipo de cambio"
     },
     "is_settlement": {
       "type": "boolean",
       "default": false,
-      "description": "true si es un registro de liquidación de deuda entre miembros (no un gasto real) — se excluye de estadísticas y desgloses"
+      "description": "true si es un registro de liquidaci\u00f3n de deuda entre miembros"
     },
     "city_id": {
       "type": "string",
-      "description": "ID de la ciudad donde ocurrió el gasto (opcional)"
+      "description": "ID de la ciudad donde ocurri\u00f3 el gasto (opcional)"
     },
     "city_name": {
       "type": "string",
-      "description": "Nombre de la ciudad donde ocurrió el gasto, usado en el desglose 'Por ciudad'"
+      "description": "Nombre de la ciudad donde ocurri\u00f3 el gasto"
     },
     "trip_members": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Copia de Trip.members en el momento de crear/sincronizar — usada por rls porque base44 no permite comprobar la pertenencia al viaje contra otra entidad. Se mantiene al día vía syncTripMembers() cada vez que cambia la membresía del viaje."
+      "items": {
+        "type": "string"
+      },
+      "description": "Copia de Trip.members, usada por rls. Se mantiene al d\u00eda v\u00eda syncTripMembers()."
+    },
+    "trip_editors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Subconjunto de trip_members que NO es viewer (mas el creador). Usado en rls create/update/delete cuando se active -- ver hallazgo #6. TODAVIA no lo usa el rls a proposito, hace falta backfillTripEditors primero."
     }
   },
   "required": [
@@ -268,9 +277,33 @@
     "split_with"
   ],
   "rls": {
-    "create": { "data.trip_members": { "$in": ["{{user.email}}"] } },
-    "read": { "data.trip_members": { "$in": ["{{user.email}}"] } },
-    "update": { "data.trip_members": { "$in": ["{{user.email}}"] } },
-    "delete": { "data.trip_members": { "$in": ["{{user.email}}"] } }
+    "create": {
+      "data.trip_members": {
+        "$in": [
+          "{{user.email}}"
+        ]
+      }
+    },
+    "read": {
+      "data.trip_members": {
+        "$in": [
+          "{{user.email}}"
+        ]
+      }
+    },
+    "update": {
+      "data.trip_members": {
+        "$in": [
+          "{{user.email}}"
+        ]
+      }
+    },
+    "delete": {
+      "data.trip_members": {
+        "$in": [
+          "{{user.email}}"
+        ]
+      }
+    }
   }
 }
