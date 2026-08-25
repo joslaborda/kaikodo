@@ -31,6 +31,24 @@
                                                         <data android:scheme="com.kaikodo.app" />
                                     </intent-filter>
 
+                                    <!--
+                                      App Link verificado (RFC 8252 / cierre completo del hallazgo #3 de
+                                      la auditoría de seguridad): con autoVerify="true" y
+                                      public/.well-known/assetlinks.json sirviendo el SHA256 real del
+                                      certificado de firma, Android abre la app directamente al pulsar un
+                                      enlace https://kaikodo.app/auth-callback; sin diálogo de "elegir
+                                      app" y sin depender del custom scheme sin verificar de arriba (que
+                                      cualquier otra app podría reclamar). El intent-filter de arriba se
+                                      deja como respaldo por si la verificación fallara en algún
+                                      dispositivo.
+                                    -->
+                                    <intent-filter android:autoVerify="true">
+                                                        <action android:name="android.intent.action.VIEW" />
+                                                        <category android:name="android.intent.category.DEFAULT" />
+                                                        <category android:name="android.intent.category.BROWSABLE" />
+                                                        <data android:scheme="https" android:host="kaikodo.app" android:pathPrefix="/auth-callback" />
+                                    </intent-filter>
+
                     </activity>
 
                     <provider
