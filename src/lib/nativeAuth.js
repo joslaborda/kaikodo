@@ -5,6 +5,14 @@ import { appParams } from '@/lib/app-params';
 import { base44 } from '@/api/base44Client';
 
 const CALLBACK_URL = 'com.kaikodo.app://auth-callback';
+// Fix (24-ago-2026, cierre completo del hallazgo #3): con Android App Links
+// / iOS Universal Links configurados (AndroidManifest.xml,
+// App.entitlements, public/.well-known/*), navegar a esta URL https hace
+// que el sistema operativo abra la app nativa DIRECTAMENTE, sin pasar por
+// ningún navegador ni mostrar ningún botón de "vuelve a la app" — eso solo
+// se ve como respaldo (ver src/pages/AuthCallback.jsx) si la verificación
+// del dominio todavía no está activa en ese dispositivo.
+const HTTPS_CALLBACK_PATH = '/auth-callback';
 
 // Fix (24-ago-2026, hallazgo crítico #3 de la auditoría 19-ago): antes este
 // scheme llevaba el access_token real en texto plano
@@ -77,49 +85,8 @@ export async function openProviderLogin(provider = 'google') {
         } catch {}
 }
 
-function buildCallbackUrl(code) {
-        return `${CALLBACK_URL}?code=${encodeURIComponent(code)}`;
-}
-
-function showReturnToAppScreen(callbackUrl, onFallback) {
-        const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:#faf7f2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:24px;text-align:center;';
-
-const title = document.createElement('div');
-        title.textContent = 'kaikodo';
-        title.style.cssText = 'font-size:30px;font-weight:600;color:#181818;letter-spacing:-0.02em;';
-
-const msg = document.createElement('div');
-        msg.textContent = 'Sesion iniciada. Toca el boton para volver a la app.';
-        msg.style.cssText = 'font-size:15px;color:#555;max-width:280px;';
-
-const btn = document.createElement('button');
-        btn.textContent = 'Volver a la app';
-        btn.style.cssText = 'background:#c1541f;color:#fff;border:none;border-radius:999px;padding:14px 30px;font-size:16px;font-weight:600;';
-
-let finished = false;
-        const finish = () => {
-                    if (finished) return;
-                    finished = true;
-                    if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-                    if (onFallback) onFallback();
-        };
-
-btn.onclick = () => {
-        window.location.href = callbackUrl;
-        setTimeout(finish, 1500);
-};
-
-overlay.appendChild(title);
-        overlay.appendChild(msg);
-        overlay.appendChild(btn);
-        document.body.appendChild(overlay);
-
-// Intento automático de volver a la app, con el botón como respaldo si el
-// navegador bloquea la redirección automática al custom scheme.
-try { window.location.href = callbackUrl; } catch {}
-
-setTimeout(finish, 15000);
+function buildHttpsCallbackUrl(code) {
+        return `${appParams.appBaseUrl}${HTTPS_CALLBACK_PATH}?code=${encodeURIComponent(code)}`;
 }
 
 function showBrokenRelayScreen(onFallback) {
@@ -186,12 +153,16 @@ export function relayNativeLoginIfNeeded(onFallback) {
         }
 
         if (!challenge) {
-                    // Sin challenge no hay forma segura de completar el relay — antes
-                    // esto habría mandado el token completo por el scheme sin
-                    // verificar. Preferible abortar y pedir reintentar login que volver
-                    // a ese comportamiento inseguro.
-                    showBrokenRelayScreen(onFallback);
-                    return true;
+                    // Sin challenge no significa "el login nativo falló" -- significa
+                    // "esto no es un login nativo". Cualquier login normal en la propia
+                    // web (p. ej. "Continuar con Google" en kaikodo.app desde un
+                    // navegador de escritorio o móvil normal, sin pasar por la app)
+                    // también deja un access_token fresco en la URL al volver, y antes
+                    // esto disparaba la pantalla de error "no se pudo completar el
+                    // inicio de sesión" sobre un login que en realidad había ido bien
+                    // (bug ya presente antes de esta sesión). No hay nada que relayar
+                    // aquí: se deja continuar el login web con normalidad.
+                    return false;
         }
 
         exchangeChallengeForCode(challenge, token).then((code) => {
@@ -199,7 +170,14 @@ export function relayNativeLoginIfNeeded(onFallback) {
                                 showBrokenRelayScreen(onFallback);
                                 return;
                     }
-                    showReturnToAppScreen(buildCallbackUrl(code), onFallback);
+                    // Navegación real (no un overlay inyectado): si el dispositivo tiene
+                    // el App Link/Universal Link verificado, el sistema operativo
+                    // intercepta esto antes de que llegue a cargar como página y abre
+                    // la app nativa directamente -- onFallback ni se llega a necesitar
+                    // en ese caso. Si no se intercepta, carga de verdad
+                    // /auth-callback (src/pages/AuthCallback.jsx), que muestra el
+                    // mismo botón de respaldo de siempre.
+                    window.location.href = buildHttpsCallbackUrl(code);
         });
 
         return true;
@@ -210,7 +188,14 @@ export function relayNativeLoginIfNeeded(onFallback) {
 export function listenForLoginCallback(onToken) {
         if (!isNative()) return () => {};
         const handlePromise = App.addListener('appUrlOpen', ({ url }) => {
-                    if (!url || !url.startsWith(CALLBACK_URL)) return;
+                    if (!url) return;
+                    // Acepta tanto el custom scheme (com.kaikodo.app://auth-callback,
+                    // respaldo) como el link https real (App Link/Universal Link,
+                    // interceptado directamente por el sistema operativo antes de
+                    // llegar a cargar como página) -- ambos llevan el mismo "code".
+                    const isCustomScheme = url.startsWith(CALLBACK_URL);
+                    const isHttpsCallback = url.startsWith(`${appParams.appBaseUrl}${HTTPS_CALLBACK_PATH}`);
+                    if (!isCustomScheme && !isHttpsCallback) return;
                     try {
                                 const parsed = new URL(url);
                                 const code = parsed.searchParams.get('code');
