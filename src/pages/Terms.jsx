@@ -161,9 +161,9 @@ export default function Terms() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-16">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm text-muted-foreground mb-6 hover:text-foreground transition-colors">
+        <button onClick={() => navigate('/')} className="flex items-center gap-1.5 text-sm text-muted-foreground mb-6 hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" />
-          {lang === 'es' ? 'Volver' : 'Back'}
+          {lang === 'es' ? 'Volver a Kaikōdo' : 'Back to Kaikōdo'}
         </button>
         <h1 className="text-2xl font-semibold text-foreground mb-1">{c.title}</h1>
         <p className="text-xs text-muted-foreground mb-8">{c.updated}</p>

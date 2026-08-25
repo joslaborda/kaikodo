@@ -1,6 +1,9 @@
 export default function DeleteAccount() {
   return (
     <div style={{ maxWidth: 680, margin: '0 auto', padding: '48px 24px', fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif', color: '#181818', lineHeight: 1.6 }}>
+      <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, color: '#666', textDecoration: 'none', marginBottom: 24 }}>
+        ← Volver a Kaikōdo
+      </a>
       <h1 style={{ fontSize: 28, fontWeight: 600, marginBottom: 4 }}>Eliminar tu cuenta de Kaikōdo</h1>
       <p style={{ color: '#666', marginBottom: 32 }}>Última actualización: 25 de agosto de 2026</p>
 
