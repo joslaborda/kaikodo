@@ -14,6 +14,9 @@ import TripsList from './pages/TripsList';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AuthCallback from './pages/AuthCallback';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
+import DeleteAccount from './pages/DeleteAccount';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import i18n from '@/i18n/index.js';
 
@@ -105,6 +108,21 @@ const AuthenticatedApp = () => {
     // src/lib/nativeAuth.js) — llega sin sesión, igual que las dos de arriba.
     if (path === '/auth-callback') {
       return <AuthCallback />;
+    }
+    // Privacy/Terms/DeleteAccount tienen que ser públicas de verdad -- Google
+    // Play (Data safety) y el App Store exigen que la política de privacidad
+    // y las instrucciones de borrado de cuenta sean visibles SIN sesión
+    // iniciada. Antes de este fix cualquiera de las tres caía en el gate de
+    // auth de más abajo igual que el resto de páginas -- "funcionaban" en
+    // esta sesión solo porque el navegador ya tenía sesión iniciada.
+    if (path === '/privacy') {
+      return <Privacy />;
+    }
+    if (path === '/terms') {
+      return <Terms />;
+    }
+    if (path === '/delete-account' || path === '/deleteaccount') {
+      return <DeleteAccount />;
     }
 
     if (isLoadingPublicSettings || isLoadingAuth) {
