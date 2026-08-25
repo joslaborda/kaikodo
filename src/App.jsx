@@ -13,6 +13,7 @@ import { base44 } from '@/api/base44Client';
 import TripsList from './pages/TripsList';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import AuthCallback from './pages/AuthCallback';
 import { I18nextProvider, useTranslation } from 'react-i18next';
 import i18n from '@/i18n/index.js';
 
@@ -98,6 +99,12 @@ const AuthenticatedApp = () => {
     }
     if (path === '/reset-password' || path === '/resetpassword') {
       return <ResetPassword />;
+    }
+    // Fallback del login nativo cuando el Universal Link / App Link no se
+    // intercepta a tiempo (ver src/pages/AuthCallback.jsx y
+    // src/lib/nativeAuth.js) — llega sin sesión, igual que las dos de arriba.
+    if (path === '/auth-callback') {
+      return <AuthCallback />;
     }
 
     if (isLoadingPublicSettings || isLoadingAuth) {
