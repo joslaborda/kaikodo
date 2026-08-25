@@ -4,5 +4,17 @@
 <dict>
 	<key>aps-environment</key>
 	<string>production</string>
+	<!--
+	  Universal Link (cierre completo del hallazgo #3 de la auditoría de
+	  seguridad): con esto y public/.well-known/apple-app-site-association
+	  sirviendo el Team ID real, iOS abre la app directamente al pulsar un
+	  enlace https://kaikodo.app/auth-callback; sin pasar por Safari y sin
+	  depender del custom scheme sin verificar (com.kaikodo.app://), que
+	  cualquier otra app podría reclamar.
+	-->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:kaikodo.app</string>
+	</array>
 </dict>
 </plist>
