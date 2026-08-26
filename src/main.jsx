@@ -4,11 +4,17 @@ import App from '@/App.jsx'
 import '@/index.css'
 import '@/i18n/index.js' // Initialize i18n before anything renders
 import { initPushNotifications, clearDeliveredNotifications } from '@/lib/pushNotifications'
+import { initNotificationTapHandler } from '@/lib/localReminders'
 import { relayNativeLoginIfNeeded } from '@/lib/nativeAuth'
 
 // No-op en web (PWA en navegador) - solo pide permiso y arranca OneSignal
 // dentro del shell nativo de Capacitor. Ver src/lib/pushNotifications.js.
 initPushNotifications()
+
+// Deep-link al documento exacto al tocar un recordatorio de vuelo/tren/
+// evento (ver src/lib/localReminders.js). Registrado aqui, antes de montar
+// React, para no perder el toque cuando la app estaba completamente cerrada.
+initNotificationTapHandler()
 
 // Limpia notificaciones entregadas + badge del icono al arrancar (cubre el
 // caso de que la app estuviera cerrada del todo cuando llegaron) y cada vez
