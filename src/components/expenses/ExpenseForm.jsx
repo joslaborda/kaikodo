@@ -352,7 +352,7 @@ export default function ExpenseForm({
               válido (p. ej. algo comprado con antelación). */}
           <input type="date" value={form.date} onChange={e => set('date', e.target.value)}
             min={minDate || undefined} max={maxDate || undefined}
-            className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-card text-foreground" />
+            className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-card text-foreground appearance-none [-webkit-appearance:none]" />
         </div>
         {cities.length > 0 && (
           <div>
