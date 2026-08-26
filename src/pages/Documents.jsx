@@ -199,6 +199,7 @@ export default function Documents() {
   const dateLocale = i18n.language === 'en' ? undefined : es;
   const { toast } = useToast();
   const tripId = new URLSearchParams(window.location.search).get('trip_id');
+  const deepLinkDocId = new URLSearchParams(window.location.search).get('doc_id');
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
   // normalizeEmail() en ambos lados de cualquier comparación de email — el
@@ -219,6 +220,21 @@ export default function Documents() {
     queryFn: () => base44.entities.Ticket.filter({ trip_id: tripId }, '-date'),
     enabled: !!tripId, staleTime: 0,  // always fresh so new members see docs immediately
   });
+
+  // Deep-link desde una notificación (bell in-app, o recordatorio local de
+  // vuelo/tren/evento) con ?doc_id=... en la URL: abre directamente ese
+  // documento en cuanto llega en `tickets`, en vez de dejar al usuario en la
+  // lista general. Se limpia el parámetro de la URL nada más abrirlo (mismo
+  // motivo que app-params.js con access_token) para que un refresh o un
+  // "atrás" no lo vuelva a abrir solo.
+  useEffect(() => {
+    if (!deepLinkDocId || !tickets.length) return;
+    const target = tickets.find(t => t.id === deepLinkDocId);
+    if (target) setEditDoc(target);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('doc_id');
+    window.history.replaceState({}, '', url);
+  }, [deepLinkDocId, tickets]);
   const { data: cities = [] } = useQuery({
     queryKey: ['cities', tripId],
     queryFn: () => base44.entities.City.filter({ trip_id: tripId }, 'order'), // misma queryKey ['cities', tripId] que otras pantallas — unificado para no compartir caché con fetches distintos
@@ -303,7 +319,7 @@ export default function Documents() {
       queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
       setAddOpen(false);
-      scheduleTicketReminder({ ...data, id: newDoc?.id });
+      scheduleTicketReminder({ ...data, id: newDoc?.id, trip_id: tripId });
       // Notify members about new doc
       if (data.visibility !== 'personal') {
         const sharedWith = data.visibility === 'selected_users'
@@ -335,7 +351,7 @@ export default function Documents() {
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
       setEditDoc(null);
       cancelTicketReminder(oldDoc?.id);
-      scheduleTicketReminder({ ...data, id: oldDoc?.id });
+      scheduleTicketReminder({ ...data, id: oldDoc?.id, trip_id: tripId });
       // Antes editar la hora de un ticket (vuelo/tren/etc.) no avisaba a
       // nadie — solo se notificaba al CREAR el documento. Mismo criterio de
       // destinatarios que doc_added (respeta visibility), pero disparado
