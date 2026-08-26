@@ -13,6 +13,7 @@ const MINUTES_BEFORE = {
   flight: 240,
   train: 240,
   bus: 240,
+  event: 90,
   default: 120,
 };
 
@@ -73,9 +74,11 @@ async function cancelId(id) {
   } catch {}
 }
 
-// Vuelos / trenes / bus (entidad Ticket, category flight|train|bus)
+// Vuelos / trenes / bus / eventos con hora (entidad Ticket, category
+// flight|train|bus|event). No incluye 'hotel' (el aviso "4h antes del
+// check-in" no aporta nada) ni 'personal'/'other' (no siempre llevan hora).
 export async function scheduleTicketReminder(ticket) {
-  if (!ticket?.id || !['flight', 'train', 'bus'].includes(ticket.category)) return;
+  if (!ticket?.id || !['flight', 'train', 'bus', 'event'].includes(ticket.category)) return;
   const dt = parseDateTime(ticket.date, ticket.time);
   if (!dt) return;
   const minutesBefore = MINUTES_BEFORE[ticket.category] ?? MINUTES_BEFORE.default;
