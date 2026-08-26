@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import i18n from '@/i18n';
+import { createPageUrl } from '@/utils';
 
 // Recordatorios locales en el propio dispositivo para vuelos, trenes, bus y
 // actividades con hora asignada. A diferencia de las notificaciones push
@@ -57,13 +58,13 @@ function parseDateTime(date, time) {
   return d;
 }
 
-async function scheduleAt({ id, title, body, at }) {
+async function scheduleAt({ id, title, body, at, extra }) {
   if (!Capacitor.isNativePlatform()) return;
   if (!(at instanceof Date) || at.getTime() <= Date.now()) return;
   const ok = await ensurePermission();
   if (!ok) return;
   try {
-    await LocalNotifications.schedule({ notifications: [{ id, title, body, schedule: { at } }] });
+    await LocalNotifications.schedule({ notifications: [{ id, title, body, schedule: { at }, extra }] });
   } catch {}
 }
 
@@ -77,8 +78,11 @@ async function cancelId(id) {
 // Vuelos / trenes / bus / eventos con hora (entidad Ticket, category
 // flight|train|bus|event). No incluye 'hotel' (el aviso "4h antes del
 // check-in" no aporta nada) ni 'personal'/'other' (no siempre llevan hora).
+// `ticket.trip_id` es obligatorio para poder abrir el documento exacto al
+// tocar la notificacion (ver handleNotificationTap en main.jsx) -- mismo
+// destino que ya usa NotificationBell.jsx: Documents?trip_id=...&doc_id=...
 export async function scheduleTicketReminder(ticket) {
-  if (!ticket?.id || !['flight', 'train', 'bus', 'event'].includes(ticket.category)) return;
+  if (!ticket?.id || !ticket?.trip_id || !['flight', 'train', 'bus', 'event'].includes(ticket.category)) return;
   const dt = parseDateTime(ticket.date, ticket.time);
   if (!dt) return;
   const minutesBefore = MINUTES_BEFORE[ticket.category] ?? MINUTES_BEFORE.default;
@@ -91,6 +95,7 @@ export async function scheduleTicketReminder(ticket) {
     title: i18n.t('reminders.ticketTitle', { label, time: hoursLabel }),
     body: `${route} - ${ticket.time}`,
     at,
+    extra: { kind: 'doc', tripId: ticket.trip_id, docId: ticket.id },
   });
 }
 
@@ -117,4 +122,23 @@ export async function scheduleSpotReminder(spot) {
 export async function cancelSpotReminder(spotId) {
   if (!spotId) return;
   await cancelId(idFromString(`spot-${spotId}`));
+}
+
+// Al tocar un recordatorio local de vuelo/tren/evento, abrir directamente el
+// documento en vez de dejar caer al usuario en la pantalla de inicio. Mismo
+// destino y misma convencion de query params que ya usa NotificationBell.jsx
+// para las notificaciones in-app (?trip_id=...&doc_id=...) -- un solo
+// esquema de deep-link en toda la app, no dos. Cubre tanto el toque con la
+// app en segundo plano como con la app completamente cerrada (Capacitor
+// entrega la accion pendiente en cuanto este listener queda registrado, que
+// es justo lo que hace initPushNotifications/clearDeliveredNotifications ya
+// en el arranque de main.jsx).
+export function initNotificationTapHandler() {
+  if (!Capacitor.isNativePlatform()) return;
+  LocalNotifications.addListener('localNotificationActionPerformed', ({ notification }) => {
+    const extra = notification?.extra;
+    if (extra?.kind === 'doc' && extra?.tripId && extra?.docId) {
+      window.location.href = `${createPageUrl('Documents')}?trip_id=${encodeURIComponent(extra.tripId)}&doc_id=${encodeURIComponent(extra.docId)}`;
+    }
+  }).catch(() => {});
 }
