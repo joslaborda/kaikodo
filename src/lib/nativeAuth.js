@@ -13,6 +13,18 @@ const CALLBACK_URL = 'com.kaikodo.app://auth-callback';
 // se ve como respaldo (ver src/pages/AuthCallback.jsx) si la verificación
 // del dominio todavía no está activa en ese dispositivo.
 const HTTPS_CALLBACK_PATH = '/auth-callback';
+// Fix (26-ago-2026): este link tiene que apuntar SIEMPRE al dominio propio
+// verificado para Universal Links/App Links (kaikodo.app) -- nunca a
+// appParams.appBaseUrl. Ese valor depende de donde se ejecute este mismo
+// código: cuando relayNativeLoginIfNeeded() corre en el navegador externo
+// tras volver de Google, puede estar cargando la copia de la web en el
+// dominio temporal de Base44 (kodo-jc.base44.app), donde
+// VITE_BASE44_APP_BASE_URL no está disponible -- appBaseUrl sale `null` y
+// el link roto queda literalmente "null/auth-callback" (bug real visto en
+// producción). Aunque esa variable sí tuviera valor, el sistema operativo
+// solo intercepta este link como Universal Link en el dominio exacto que
+// configuramos (kaikodo.app), así que hay que fijarlo aquí sí o sí.
+const CUSTOM_DOMAIN = 'https://kaikodo.app';
 
 // Fix (24-ago-2026, hallazgo crítico #3 de la auditoría 19-ago): antes este
 // scheme llevaba el access_token real en texto plano
@@ -86,7 +98,7 @@ export async function openProviderLogin(provider = 'google') {
 }
 
 function buildHttpsCallbackUrl(code) {
-        return `${appParams.appBaseUrl}${HTTPS_CALLBACK_PATH}?code=${encodeURIComponent(code)}`;
+        return `${CUSTOM_DOMAIN}${HTTPS_CALLBACK_PATH}?code=${encodeURIComponent(code)}`;
 }
 
 function showBrokenRelayScreen(onFallback) {
@@ -194,7 +206,7 @@ export function listenForLoginCallback(onToken) {
                     // interceptado directamente por el sistema operativo antes de
                     // llegar a cargar como página) -- ambos llevan el mismo "code".
                     const isCustomScheme = url.startsWith(CALLBACK_URL);
-                    const isHttpsCallback = url.startsWith(`${appParams.appBaseUrl}${HTTPS_CALLBACK_PATH}`);
+                    const isHttpsCallback = url.startsWith(`${CUSTOM_DOMAIN}${HTTPS_CALLBACK_PATH}`);
                     if (!isCustomScheme && !isHttpsCallback) return;
                     try {
                                 const parsed = new URL(url);
