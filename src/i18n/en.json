@@ -1782,7 +1782,8 @@
     "category": {
       "flight": "Flight",
       "train": "Train",
-      "bus": "Bus"
+      "bus": "Bus",
+      "event": "Event"
     },
     "hoursShort_one": "{{count}} h",
     "hoursShort_other": "{{count}} h",
