@@ -28,7 +28,11 @@ android {
     }
     buildTypes {
         release {
-            minifyEnabled false
+            // Activado el 27-ago-2026, junto con las reglas de keep que se
+            // añadieron a proguard-rules.pro en el mismo commit -- no
+            // activar minifyEnabled sin esas reglas, ver el comentario ahí.
+            minifyEnabled true
+            shrinkResources true
             signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

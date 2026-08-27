@@ -12,6 +12,21 @@
 #   public *;
 #}
 
+# --- Capacitor / plugins (añadido al activar minifyEnabled, 27-ago-2026) ---
+# Capacitor 3.2.3+ trae sus propias reglas base para el bridge, pero hay un
+# bug conocido y bien documentado (ionic-team/capacitor#5741) donde el
+# release build igualmente falla en runtime con "Could not find class by
+# class path: ...Plugin" si no se refuerza explícitamente. Sin esto, R8
+# puede recortar/renombrar clases de plugin accedidas por reflexión desde el
+# bridge JS<->nativo -- y como solo pasa en release (nunca en debug), es
+# justo el tipo de rotura que no se ve hasta que ya está en Play Store.
+-keep public class * extends com.getcapacitor.Plugin
+-keep class com.getcapacitor.** { *; }
+-dontwarn com.google.android.gms.**
+# OneSignal (push) trae sus propias consumer-rules en el AAR, pero se
+# refuerza igual como red de seguridad -- mismo motivo que arriba.
+-keep class com.onesignal.** { *; }
+
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
 #-keepattributes SourceFile,LineNumberTable
