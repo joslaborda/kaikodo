@@ -497,7 +497,9 @@ export default function DocumentForm({
           )}
           {hasField('time') && (
             <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('documents.form.fields.time')}</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+                {hasField('end_time') ? t('documents.form.fields.time') : t('common.time')}
+              </p>
               <Input type="time" value={fields.time} onChange={e => setField('time', e.target.value)} className="h-10 text-sm" />
             </div>
           )}
