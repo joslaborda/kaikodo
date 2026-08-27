@@ -1111,7 +1111,7 @@ export default function Restaurants() {
           price_level: details?.priceLevel || undefined,
       });
       setLastSavedId(created?.id);
-            setOsmResults([]); setSearchQuery(''); setNearbyFilter([]);
+            setOsmResults([]); setSearchQuery('');
       showToastFor({ title: place.name }, city);
       if (created?.id) setAssignDateSpot(created);
       notifyMembers('spot_added', '', place.name, { spotId: created?.id, spotDate: created?.assigned_date });
