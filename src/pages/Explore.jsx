@@ -4,12 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import { searchUserProfiles } from '@/lib/userProfiles';
 import { Link } from 'react-router-dom';
-import { Search, MapPin, Heart, Bookmark, Users, Compass, Globe, UserPlus, UserCheck, X, Star, Utensils, Landmark, Zap, ShoppingBag, Train, Sparkles, Map } from 'lucide-react';
+import { Search, MapPin, Heart, Bookmark, Users, Compass, Globe, UserPlus, UserCheck, X, Star, Utensils, Landmark, Zap, ShoppingBag, Train, Sparkles } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import TemplateCard from '@/components/explore/TemplateCard';
 import CommunitySearch from '@/components/social/CommunitySearch';
 import { createPageUrl } from '@/utils';
 import { useTranslation } from 'react-i18next';
@@ -248,11 +247,16 @@ export default function Explore() {
     staleTime: 3 * 60 * 1000,
   });
 
-  const { data: publicTemplates = [], isLoading: loadingTemplates } = useQuery({
-    queryKey: ['templatesPublic'],
-    queryFn: () => base44.entities.ItineraryTemplate.filter({ visibility: 'public' }, '-created_date'),
-    staleTime: 10 * 60 * 1000,
-  });
+  // Plantillas/itinerarios públicos eliminados del todo (27-ago-2026): la
+  // vista de detalle (TemplateDetail.jsx) llevaba rota desde la auditoría del
+  // 19-ago (pedía la entidad Trip en vez de ItineraryTemplate), nunca se
+  // arregló, y José decidió quitar la función en vez de arreglarla. Se quitó
+  // toda la UI (esta query, TemplateCard, la sección "Itinerarios" de este
+  // tab y la de "Siguiendo") y el publicador (PublishSection.jsx, que ya
+  // estaba muerto -- no se llamaba desde ningún sitio). Las entidades
+  // ItineraryTemplate/Collection se dejaron sin tocar en base44/entities/
+  // (huérfanas, sin RLS activo desde el cliente) para no arriesgar nada del
+  // lado de Base44 sin poder probarlo en vivo.
 
   // UserProfile.read se cerró en el rls (exponía email/nationality de todo
   // el mundo) — este es el caso real de "descubrimiento abierto" (explorar
@@ -318,10 +322,6 @@ export default function Explore() {
   const siguiendoSpots = useMemo(() =>
     publicSpots.filter(s => followedUserIds.includes(s.created_by_user_id)),
     [publicSpots, followedUserIds]
-  );
-  const siguiendoTemplates = useMemo(() =>
-    publicTemplates.filter(t => followedUserIds.includes(t.created_by_user_id)),
-    [publicTemplates, followedUserIds]
   );
 
   const filteredProfiles = useMemo(() => {
@@ -440,7 +440,7 @@ export default function Explore() {
             </div>
 
             {/* Spots */}
-            <div className="mb-8">
+            <div>
               <div className="flex items-center gap-2 mb-4">
                 <Compass className="w-4 h-4 text-primary"/>
                 <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide">{t('spots.title')}</h2>
@@ -459,61 +459,29 @@ export default function Explore() {
                 </div>
               )}
             </div>
-
-            {/* Itinerarios */}
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Globe className="w-4 h-4 text-primary"/>
-                <h2 className="font-semibold text-foreground text-sm uppercase tracking-wide">{t('explore.search.itineraries')}</h2>
-                <Badge variant="secondary" className="ml-auto">{publicTemplates.length}</Badge>
-              </div>
-              {loadingTemplates ? (
-                <div className="grid grid-cols-2 gap-3">{[1,2].map(i => <div key={i} className="h-48 bg-card rounded-2xl border border-border animate-pulse"/>)}</div>
-              ) : publicTemplates.length === 0 ? (
-                <EmptyFeed Icon={Map} title={t('explore.empty.noItinerariesTitle')} subtitle={t('explore.empty.noItinerariesSub')}/>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {publicTemplates.slice(0,6).map(t => <TemplateCard key={t.id} template={t} currentUser={currentUser}/>)}
-                </div>
-              )}
-            </div>
           </TabsContent>
 
           {/* ── SIGUIENDO ─────────────────────────────────────────────────── */}
           <TabsContent value="siguiendo">
             {followedUserIds.length === 0 ? (
               <EmptyFeed Icon={Users} title={t('explore.empty.noFollowsTitle')} subtitle={t('explore.empty.noFollowsSub')}/>
-            ) : (siguiendoSpots.length + siguiendoTemplates.length) === 0 ? (
+            ) : siguiendoSpots.length === 0 ? (
               <EmptyFeed Icon={Sparkles} title={t('explore.empty.noContentTitle')} subtitle={t('explore.empty.noContentSub')}/>
             ) : (
               <div className="space-y-8">
-                {siguiendoSpots.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-4">
-                      <Compass className="w-4 h-4 text-primary"/>
-                      <h2 className="font-semibold text-sm uppercase tracking-wide text-foreground">{t('spots.title')}</h2>
-                      <Badge variant="secondary" className="ml-auto">{siguiendoSpots.length}</Badge>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {siguiendoSpots.map(spot => (
-                        <FeedSpotCard key={spot.id} spot={spot} profile={profileMap[spot.created_by_user_id]}
-                          currentUser={currentUser} onSave={handleSaveSpot} saving={savingSpotId===spot.id}/>
-                      ))}
-                    </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Compass className="w-4 h-4 text-primary"/>
+                    <h2 className="font-semibold text-sm uppercase tracking-wide text-foreground">{t('spots.title')}</h2>
+                    <Badge variant="secondary" className="ml-auto">{siguiendoSpots.length}</Badge>
                   </div>
-                )}
-                {siguiendoTemplates.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-4">
-                      <Globe className="w-4 h-4 text-primary"/>
-                      <h2 className="font-semibold text-sm uppercase tracking-wide text-foreground">{t('explore.search.itineraries')}</h2>
-                      <Badge variant="secondary" className="ml-auto">{siguiendoTemplates.length}</Badge>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {siguiendoTemplates.map(t => <TemplateCard key={t.id} template={t} currentUser={currentUser}/>)}
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {siguiendoSpots.map(spot => (
+                      <FeedSpotCard key={spot.id} spot={spot} profile={profileMap[spot.created_by_user_id]}
+                        currentUser={currentUser} onSave={handleSaveSpot} saving={savingSpotId===spot.id}/>
+                    ))}
                   </div>
-                )}
+                </div>
               </div>
             )}
           </TabsContent>
