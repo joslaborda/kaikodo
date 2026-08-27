@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadLeaflet } from '@/components/spots/spotsHelpers';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from '@/components/spots/mapTiles';
-import { loadGoogleMaps, isGoogleMapsConfigured, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
+import { loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
 
 // Mini-mapa de la ruta del dia: hotel (si hay uno guardado como spot type
 // 'hotel' para esta ciudad) + los items del dia con coordenadas, numerados
 // en el mismo orden en que aparecen en el timeline de abajo.
 //
-// Renderiza con Google Maps cuando hay API key configurada (ver
-// isGoogleMapsConfigured en src/lib/googleMaps.js) -- necesario porque en
+// Renderiza con Google Maps cuando hay API key configurada (comprobado vía
+// getGoogleMapsApiKey(), que la pide al backend) -- necesario porque en
 // cuanto DocumentForm/Restaurants empiecen a guardar coordenadas que vienen
 // de Google Places, los terminos de Google exigen mostrar esos datos sobre
 // un mapa de Google, no sobre Leaflet/CARTO. Sin key configurada se sigue
