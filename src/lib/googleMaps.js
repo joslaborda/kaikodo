@@ -9,8 +9,16 @@ import { base44 } from '@/api/base44Client';
 //
 // Requiere VITE_GOOGLE_MAPS_API_KEY como variable de entorno (se pone en
 // Base44 -> Configuracion -> Secretos, NUNCA hardcodeada aqui). Sin ella,
-// isGoogleMapsConfigured() devuelve false y cualquier componente que la use
-// debe mostrar su propio estado de "no disponible" en vez de romper la app.
+// getGoogleMapsApiKey() (abajo) resuelve a '' y cualquier componente que la
+// use debe mostrar su propio estado de "no disponible" en vez de romper la
+// app.
+//
+// Nota (24-ago-2026): existía aquí isGoogleMapsConfigured(), que leía
+// import.meta.env.VITE_GOOGLE_MAPS_API_KEY directamente en el cliente --
+// siempre vacío en producción (Base44 no inyecta Secretos en el bundle del
+// frontend), así que nunca devolvía true. TodayRouteMap.jsx y
+// SpotsMapView.jsx la importaban pero no la llamaban (confirmado antes de
+// borrarla). Eliminada como código muerto; usar getGoogleMapsApiKey().
 let loadPromise = null;
 let apiKeyPromise = null;
 
@@ -37,10 +45,6 @@ export function getGoogleMapsApiKey() {
         })
         .catch(() => { apiKeyPromise = null; return ''; });
     return apiKeyPromise;
-}
-
-export function isGoogleMapsConfigured() {
-    return typeof import.meta !== 'undefined' && !!import.meta.env?.VITE_GOOGLE_MAPS_API_KEY;
 }
 
 export function loadGoogleMaps() {
