@@ -1,4 +1,4 @@
 {
-  "name": "manageTripMember",
+  "name": "migrateTripMembers",
   "entry": "entry.ts"
 }
