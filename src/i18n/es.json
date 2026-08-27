@@ -648,9 +648,11 @@
       "firstTransport": "Tu primer transporte",
       "firstDocument": "Primer documento",
       "departsIn": "Sale {{countdown}}",
+      "startsIn": "Empieza {{countdown}}",
       "inMinutes": "en {{count}} min",
       "inHours": "en {{hours}}h {{minutes}}",
       "departureTime": "Salida {{time}}",
+      "startTime": "A las {{time}}",
       "noTime": "Sin hora",
       "viewTicket": "Ver billete",
       "packedReady": "{{packed}} de {{total}} listos"
@@ -1360,7 +1362,8 @@
     "needOneAdmin": "Debe haber al menos un admin en el viaje.",
     "removeError": "No se pudo expulsar al miembro",
     "roleChangeError": "No se pudo cambiar el rol",
-    "pendingInvites": "Invitaciones pendientes"
+    "pendingInvites": "Invitaciones pendientes",
+    "inviteExpired": "Caducada"
   },
   "utilities": {
     "title": "Utilidades",

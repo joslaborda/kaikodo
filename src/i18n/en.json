@@ -648,9 +648,11 @@
       "firstTransport": "Your first transport",
       "firstDocument": "First document",
       "departsIn": "Departs {{countdown}}",
+      "startsIn": "Starts {{countdown}}",
       "inMinutes": "in {{count}} min",
       "inHours": "in {{hours}}h {{minutes}}",
       "departureTime": "Departs {{time}}",
+      "startTime": "At {{time}}",
       "noTime": "No time",
       "viewTicket": "View ticket",
       "packedReady": "{{packed}} of {{total}} ready"
@@ -1360,7 +1362,8 @@
     "needOneAdmin": "There must be at least one admin on the trip.",
     "removeError": "Couldn't remove the member",
     "roleChangeError": "Couldn't change the role",
-    "pendingInvites": "Pending invites"
+    "pendingInvites": "Pending invites",
+    "inviteExpired": "Expired"
   },
   "utilities": {
     "title": "Utilities",
