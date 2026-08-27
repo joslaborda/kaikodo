@@ -58,13 +58,27 @@ function parseDateTime(date, time) {
   return d;
 }
 
-async function scheduleAt({ id, title, body, at, extra }) {
+async function scheduleAt({ id, title, body, at, eventAt, extra }) {
   if (!Capacitor.isNativePlatform()) return;
-  if (!(at instanceof Date) || at.getTime() <= Date.now()) return;
+  if (!(at instanceof Date)) return;
+  const now = Date.now();
+  let fireAt = at;
+  if (fireAt.getTime() <= now) {
+    // El margen de aviso (90min para evento, 4h para transporte...) ya ha
+    // pasado en el momento de guardar/editar el documento -- p.ej. una
+    // actividad añadida con menos antelación de la que pide su categoría
+    // (probado en vivo: evento a 7 min, margen de 90 min -> la hora de
+    // aviso calculada ya estaba en el pasado y no saltaba nada). Mientras
+    // el propio evento no haya pasado TODAVÍA, mejor avisar ya (con margen
+    // reducido a unos segundos) que no avisar nunca. Si el evento en sí ya
+    // pasó también, ahí sí no tiene sentido notificar nada.
+    if (!(eventAt instanceof Date) || eventAt.getTime() <= now) return;
+    fireAt = new Date(now + 5000);
+  }
   const ok = await ensurePermission();
   if (!ok) return;
   try {
-    await LocalNotifications.schedule({ notifications: [{ id, title, body, schedule: { at }, extra }] });
+    await LocalNotifications.schedule({ notifications: [{ id, title, body, schedule: { at: fireAt }, extra }] });
   } catch {}
 }
 
@@ -90,12 +104,20 @@ export async function scheduleTicketReminder(ticket) {
   const label = i18n.t(`reminders.category.${ticket.category}`);
   const route = ticket.origin && ticket.destination ? `${ticket.origin} -> ${ticket.destination}` : (ticket.name || label);
   const hoursLabel = minutesBefore >= 60 ? i18n.t('reminders.hoursShort', { count: Math.round(minutesBefore / 60) }) : i18n.t('reminders.minutesShort', { count: minutesBefore });
+  // Cuánto tiempo se deja la notificación entregada en la bandeja después de
+  // la hora del propio vuelo/tren/evento antes de retirarla sola (estilo
+  // Wallet: la tarjeta desaparece cuando ya no aplica, no hace falta que el
+  // usuario la descarte a mano). 2h para transporte (cubre el trayecto en
+  // sí), 1h para eventos (cubre que la actividad siga en marcha un rato).
+  const graceMs = (ticket.category === 'event' ? 1 : 2) * 60 * 60000;
+  const expiresAt = new Date(dt.getTime() + graceMs).toISOString();
   await scheduleAt({
     id: idFromString(`ticket-${ticket.id}`),
     title: i18n.t('reminders.ticketTitle', { label, time: hoursLabel }),
     body: `${route} - ${ticket.time}`,
     at,
-    extra: { kind: 'doc', tripId: ticket.trip_id, docId: ticket.id },
+    eventAt: dt,
+    extra: { kind: 'doc', tripId: ticket.trip_id, docId: ticket.id, expiresAt },
   });
 }
 
@@ -116,6 +138,7 @@ export async function scheduleSpotReminder(spot) {
     title: i18n.t('reminders.spotTitle', { title: spot.title, minutes: minutesBefore }),
     body: spot.assigned_time || '',
     at,
+    eventAt: dt,
   });
 }
 
@@ -141,4 +164,27 @@ export function initNotificationTapHandler() {
       window.location.href = `${createPageUrl('Documents')}?trip_id=${encodeURIComponent(extra.tripId)}&doc_id=${encodeURIComponent(extra.docId)}`;
     }
   }).catch(() => {});
+}
+
+// Estilo Wallet: una vez pasada la hora del vuelo/tren/evento (+ el margen
+// de expiresAt calculado en scheduleTicketReminder), la notificación ya
+// entregada se retira sola de la bandeja/pantalla de bloqueo -- no hace
+// falta que el usuario la descarte a mano, igual que una tarjeta de embarque
+// desaparece de Wallet sola cuando ya no aplica. Tocarla ya la descarta por
+// sí sola (comportamiento nativo del SO al tocar cualquier notificación),
+// así que esto solo cubre el caso de que nunca se toque: se llama en cada
+// arranque/vuelta a primer plano (ver main.jsx), igual que
+// clearDeliveredNotifications ya hace para las push.
+export async function clearStaleDeliveredNotifications() {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const { notifications } = await LocalNotifications.getDeliveredNotifications();
+    const now = Date.now();
+    const staleIds = (notifications || [])
+      .filter(n => n?.extra?.kind === 'doc' && n?.extra?.expiresAt && new Date(n.extra.expiresAt).getTime() <= now)
+      .map(n => n.id);
+    if (staleIds.length) {
+      await LocalNotifications.removeDeliveredNotificationsById({ ids: staleIds });
+    }
+  } catch {}
 }
