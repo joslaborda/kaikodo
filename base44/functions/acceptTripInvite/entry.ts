@@ -75,7 +75,17 @@ Deno.serve(async (req) => {
     const service = base44.asServiceRole;
 
     const invite = await service.entities.TripInvite.get(inviteId);
-    if (!invite || invite.invite_token !== inviteToken || invite.status !== "pending") {
+
+    // Invitaciones caducan a las 2 semanas de creadas (created_date lo pone
+    // Base44 automáticamente en toda entidad, no hace falta declararlo en
+    // TripInvite.jsonc ni backfillear nada — se calcula aquí en el momento
+    // de aceptar). Antes no caducaban nunca; decisión revisada por José.
+    const INVITE_EXPIRY_MS = 14 * 24 * 60 * 60 * 1000;
+    const isExpired = invite?.created_date
+      ? (Date.now() - new Date(invite.created_date).getTime()) > INVITE_EXPIRY_MS
+      : false;
+
+    if (!invite || invite.invite_token !== inviteToken || invite.status !== "pending" || isExpired) {
       return Response.json({ error: "Invitación inválida o expirada" }, { status: 400 });
     }
 
@@ -157,7 +167,12 @@ Deno.serve(async (req) => {
     const editors = computeEditors(finalTrip.members || [], finalTrip.created_by, finalTrip.roles || {});
     for (const entityName of SYNCED_ENTITIES) {
       try {
-        const records = await service.entities[entityName].filter({ trip_id: tripId });
+        // filter() sin límite explícito se corta en 50 resultados por
+        // defecto (confirmado en la documentación del SDK de Base44) — sin
+        // esto, un viaje con más de 50 gastos/mensajes/etc. dejaba contenido
+        // sin sincronizar tras aceptar la invitación. Mismo límite alto que
+        // ya usa backfillSpotPlaces.
+        const records = await service.entities[entityName].filter({ trip_id: tripId }, "-created_date", 2000);
         const patch = ROLE_AWARE_ENTITIES.includes(entityName)
           ? { trip_members: finalTrip.members, trip_editors: editors }
           : { trip_members: finalTrip.members };
