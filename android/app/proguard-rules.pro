@@ -26,6 +26,11 @@
 # OneSignal (push) trae sus propias consumer-rules en el AAR, pero se
 # refuerza igual como red de seguridad -- mismo motivo que arriba.
 -keep class com.onesignal.** { *; }
+# El proyecto usa onesignal-cordova-plugin (confirmado en package.json,
+# via capacitor-cordova-android-plugins) -- NO extiende com.getcapacitor.
+# Plugin como los plugins nativos de Capacitor, extiende
+# org.apache.cordova.CordovaPlugin, así que necesita su propia regla.
+-keep class org.apache.cordova.** { *; }
 
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
