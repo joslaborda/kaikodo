@@ -103,7 +103,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
                 ? (firstDoc.category === 'flight' ? t('home.inicio.firstFlight') : firstDoc.category === 'train' ? t('home.inicio.firstTrain') : t('home.inicio.firstTransport'))
                 : t('home.inicio.firstDocument')}
             </p>
-            {countdown && <span className="text-xs font-medium text-primary">{t('home.inicio.departsIn', { countdown })}</span>}
+            {countdown && <span className="text-xs font-medium text-primary">{t(TRANSPORT_TYPES.includes(firstDoc.category) ? 'home.inicio.departsIn' : 'home.inicio.startsIn', { countdown })}</span>}
           </div>
           <div className="flex items-center gap-3 px-4 py-3">
             <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-xl flex-shrink-0">
@@ -111,7 +111,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground truncate">{firstDoc.title || firstDoc.name}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{firstDoc.time ? t('home.inicio.departureTime', { time: firstDoc.time }) : t('home.inicio.noTime')}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{firstDoc.time ? t(TRANSPORT_TYPES.includes(firstDoc.category) ? 'home.inicio.departureTime' : 'home.inicio.startTime', { time: firstDoc.time }) : t('home.inicio.noTime')}</p>
             </div>
             {firstDoc.time && <p className="text-base font-semibold text-foreground flex-shrink-0">{firstDoc.time}</p>}
           </div>
@@ -148,6 +148,8 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
         </div>
         <MemberAvatarRow trip={trip} profiles={profiles} onInvite={onInvite} currentUserEmail={currentUserEmail} />
       </div>
+
+      <PDFViewer fileUrl={viewFile} onClose={() => setViewFile(null)} />
     </div>
   );
 }
