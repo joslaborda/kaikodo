@@ -264,7 +264,13 @@ export default function MembersPanel({
       {isAdmin && pendingInvites.length > 0 && (
         <div className="pt-3 border-t border-border space-y-2">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('membersPanel.pendingInvites')}</p>
-          {pendingInvites.map(inv => (
+          {pendingInvites.map(inv => {
+            // Mismo umbral que acceptTripInvite/entry.ts (14 días) — aquí
+            // solo es indicativo, la aplicación real vive en el backend.
+            const isExpired = inv?.created_date
+              ? (Date.now() - new Date(inv.created_date).getTime()) > 14 * 24 * 60 * 60 * 1000
+              : false;
+            return (
             <div key={inv.id} className="flex items-center justify-between p-3 bg-card rounded-xl border border-border">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
@@ -272,7 +278,9 @@ export default function MembersPanel({
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">{inv.email}</p>
-                  <span className="text-xs text-muted-foreground">{t('common.pending')}</span>
+                  <span className={`text-xs ${isExpired ? 'text-red-500' : 'text-muted-foreground'}`}>
+                    {isExpired ? t('membersPanel.inviteExpired') : t('common.pending')}
+                  </span>
                 </div>
               </div>
               <button
@@ -283,7 +291,8 @@ export default function MembersPanel({
                 {cancelling === inv.id ? '…' : t('common.cancel')}
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
