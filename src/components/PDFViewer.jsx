@@ -2,6 +2,27 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { FileText, X, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+// pdfjs-dist 4.x+ ya no publica un build UMD/script clásico (pdf.min.js) —
+// solo ES modules (.mjs). Confirmado descargando el paquete real de npm y
+// comparando build/: 3.11.174 trae pdf.min.js, 4.7.76 (y cualquier 4.x,
+// incluso el primero) solo trae pdf.min.mjs. Por eso hace falta import()
+// dinámico en vez de <script> + variable global como se hacía con la 3.x.
+// El worker cross-origin (cdnjs, no kaikodo.app) lo resuelve el propio
+// pdf.js 4.x internamente (envuelve el workerSrc en un blob si detecta
+// distinto origen) — no hace falta ningún workaround propio para eso.
+const PDFJS_VERSION = '4.7.76'; // GHSA-wgrm-67xf-hhpq: ejecución arbitraria de JS, corregida antes de esta versión
+let pdfjsLibPromise = null;
+function loadPdfJsLib() {
+  if (!pdfjsLibPromise) {
+    // /* @vite-ignore */: le dice al análisis de imports de Vite que no
+    // intente resolver/empaquetar esta URL absoluta en build time — es un
+    // import remoto en runtime, no un módulo del propio proyecto.
+    pdfjsLibPromise = import(/* @vite-ignore */ `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.mjs`)
+      .catch(err => { pdfjsLibPromise = null; throw err; }); // no cachear un fallo — reintentar la próxima vez (p.ej. tras recuperar red)
+  }
+  return pdfjsLibPromise;
+}
+
 export default function PDFViewer({ fileUrl, onClose }) {
   const { t } = useTranslation();
   const containerRef = useRef(null);
@@ -40,15 +61,8 @@ export default function PDFViewer({ fileUrl, onClose }) {
     const load = async () => {
       try {
         setLoading(true); setError(null);
-        let lib = window['pdfjs-dist/build/pdf'];
-        if (!lib) {
-          const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-          document.head.appendChild(s);
-          await new Promise((res, rej) => { s.onload = res; s.onerror = rej; });
-          lib = window['pdfjs-dist/build/pdf'];
-        }
-        lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        const lib = await loadPdfJsLib();
+        lib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.mjs`;
         const pdf = await lib.getDocument(fileUrl).promise;
         if (cancelled) { pdf.destroy(); return; }
         localPdf = pdf;
