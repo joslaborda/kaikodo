@@ -62,7 +62,6 @@ import VerifyEmail from './pages/VerifyEmail';
 import Invites from './pages/Invites';
 import Photos from './pages/Photos';
 import Explore from './pages/Explore';
-import TemplateDetail from './pages/TemplateDetail';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import ForgotPassword from './pages/ForgotPassword';
@@ -86,7 +85,6 @@ export const PAGES = {
     "Invites": Invites,
     "Photos": Photos,
     "Explore": Explore,
-    "TemplateDetail": TemplateDetail,
     "Terms": Terms,
     "Privacy": Privacy,
     "ForgotPassword": ForgotPassword,
