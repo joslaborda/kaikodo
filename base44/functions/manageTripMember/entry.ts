@@ -80,7 +80,11 @@ async function computeTargetBalance(service: any, tripId: string, targetEmail: s
   // ya que Expense.jsonc exige ser miembro actual para tocar sus gastos).
   let targetBalance = 0;
   try {
-    const expenses = await service.entities.Expense.filter({ trip_id: tripId });
+    // Mismo motivo que en acceptTripInvite/entry.ts: sin limit explícito,
+    // filter() se corta en 50 -- un viaje con más gastos calcularía el saldo
+    // pendiente mal (incompleto) y podría dejar expulsar a alguien con
+    // deuda real fuera de esos primeros 50.
+    const expenses = await service.entities.Expense.filter({ trip_id: tripId }, "-created_date", 2000);
     for (const expense of expenses) {
       const amount = Math.max(0, parseFloat(expense.amount_base || expense.amount) || 0);
       const paidBy = norm(expense.paid_by);
@@ -279,10 +283,8 @@ Deno.serve(async (req) => {
     if (action === "remove") {
       for (const entityName of SYNCED_ENTITIES) {
         try {
-          const records = await service.entities[entityName].filter({ trip_id: tripId });
-          const patch = ROLE_AWARE_ENTITIES.includes(entityName)
-            ? { trip_members: newMembers, trip_editors: editors }
-            : { trip_members: newMembers };
+          // Mismo límite alto que en acceptTripInvite/entry.ts -- ver ahí el porqué.
+          const records = await service.entities[entityName].filter({ trip_id: tripId }, "-created_date", 2000);
           for (const record of records) {
             await service.entities[entityName].update(record.id, patch);
           }
@@ -294,10 +296,8 @@ Deno.serve(async (req) => {
       // action === "setRole" -- trip_members no cambia, solo trip_editors.
       for (const entityName of ROLE_AWARE_ENTITIES) {
         try {
-          const records = await service.entities[entityName].filter({ trip_id: tripId });
-          for (const record of records) {
-            await service.entities[entityName].update(record.id, { trip_editors: editors });
-          }
+          // Mismo límite alto que en acceptTripInvite/entry.ts -- ver ahí el porqué.
+          const records = await service.entities[entityName].filter({ trip_id: tripId }, "-created_date", 2000);
         } catch (e) {
           syncFailed.push({ entity: entityName, error: (e as Error).message });
         }
