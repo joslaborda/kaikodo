@@ -113,9 +113,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Mismo límite alto que en acceptTripInvite/entry.ts -- aquí es aún más
+    // importante: sin esto, ejecutar la reparación sobre TODOS los viajes
+    // (sin tripId) solo tocaría los primeros 50 de toda la app.
     const trips = tripId
       ? [await service.entities.Trip.get(tripId)].filter(Boolean)
-      : await service.entities.Trip.filter({});
+      : await service.entities.Trip.filter({}, "-created_date", 2000);
 
     const report: any[] = [];
 
@@ -146,7 +149,8 @@ Deno.serve(async (req) => {
 
       for (const entityName of SYNCED_ENTITIES) {
         try {
-          const records = await withRetry(() => service.entities[entityName].filter({ trip_id: trip.id }));
+          // Mismo límite alto que en acceptTripInvite/entry.ts -- ver ahí el porqué.
+          const records = await withRetry(() => service.entities[entityName].filter({ trip_id: trip.id }, "-created_date", 2000));
           let fixed = 0;
           for (const record of records) {
             const current = JSON.stringify((record.trip_members || []).slice().sort());
