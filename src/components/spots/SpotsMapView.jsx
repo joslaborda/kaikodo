@@ -4,7 +4,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { loadLeaflet } from './spotsHelpers';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from './mapTiles';
-import { loadGoogleMaps, isGoogleMapsConfigured, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
+import { loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
 import { spotTypeIconSvg } from './spotTypeIcon';
 
 // Antes cada día usaba uno de los 5 --chart-1..5, todos tonos naranja/marrón
