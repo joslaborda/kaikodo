@@ -14,6 +14,7 @@ import CreateProfileModal from '@/components/social/CreateProfileModal';
 import { createPageUrl } from '@/utils';
 import { normalizeCountry } from '@/lib/countryConfig';
 import { normalizeEmail } from '@/lib/utils';
+import { computeEditors } from '@/lib/syncTripMembers';
 import { useTranslation } from 'react-i18next';
 
 function getGreeting(t) {
@@ -168,6 +169,7 @@ export default function TripsList() {
           order: i,
           start_date: dates.start_date, end_date: dates.end_date,
           trip_members: trip.members || [],
+          trip_editors: computeEditors(trip.members || [], trip),
         });
       }
       return trip;
