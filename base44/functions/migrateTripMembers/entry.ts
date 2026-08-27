@@ -74,7 +74,8 @@ async function computeNewMembersAndRoles(
     // (p. ej. Splitwise) al intentar salir de un grupo con balance abierto.
     let targetBalance = 0;
     try {
-      const expenses = await service.entities.Expense.filter({ trip_id: tripId });
+      // Mismo límite alto que en acceptTripInvite/entry.ts -- ver ahí el porqué.
+      const expenses = await service.entities.Expense.filter({ trip_id: tripId }, "-created_date", 2000);
       for (const expense of expenses) {
         const amount = Math.max(0, parseFloat(expense.amount_base || expense.amount) || 0);
         const paidBy = (expense.paid_by || "").trim().toLowerCase();
@@ -295,10 +296,8 @@ Deno.serve(async (req) => {
     if (action === "remove") {
       for (const entityName of SYNCED_ENTITIES) {
         try {
-          const records = await service.entities[entityName].filter({ trip_id: tripId });
-          for (const record of records) {
-            await service.entities[entityName].update(record.id, { trip_members: newMembers });
-          }
+          // Mismo límite alto que en acceptTripInvite/entry.ts -- ver ahí el porqué.
+          const records = await service.entities[entityName].filter({ trip_id: tripId }, "-created_date", 2000);
         } catch (e) {
           syncFailed.push({ entity: entityName, error: e.message });
         }
