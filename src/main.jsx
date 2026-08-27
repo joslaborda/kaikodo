@@ -4,7 +4,7 @@ import App from '@/App.jsx'
 import '@/index.css'
 import '@/i18n/index.js' // Initialize i18n before anything renders
 import { initPushNotifications, clearDeliveredNotifications } from '@/lib/pushNotifications'
-import { initNotificationTapHandler } from '@/lib/localReminders'
+import { initNotificationTapHandler, clearStaleDeliveredNotifications } from '@/lib/localReminders'
 import { relayNativeLoginIfNeeded } from '@/lib/nativeAuth'
 
 // No-op en web (PWA en navegador) - solo pide permiso y arranca OneSignal
@@ -24,10 +24,11 @@ initNotificationTapHandler()
 // esto no hace nada. El import dinamico evita cargar @capacitor/app (y
 // romper el build de Base44, que no lo tiene instalado) fuera del shell nativo.
 clearDeliveredNotifications()
+clearStaleDeliveredNotifications()
 if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
         import('@capacitor/app').then(({ App: CapacitorApp }) => {
                     CapacitorApp.addListener('appStateChange', ({ isActive }) => {
-                                    if (isActive) clearDeliveredNotifications()
+                                    if (isActive) { clearDeliveredNotifications(); clearStaleDeliveredNotifications() }
                     })
         })
 }
