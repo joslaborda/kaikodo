@@ -7,6 +7,7 @@ import { getTripCoverImage } from '@/lib/tripImage';
 import { daysUntil } from '@/lib/tripDays';
 import MemberAvatarRow from './MemberAvatarRow';
 import PDFViewer from '@/components/PDFViewer';
+import { resolveDocViewUrl } from '@/lib/privateFiles';
 import { useTranslation } from 'react-i18next';
 
 export default function InicioTab({ trip, cities, documents, packingItems, profiles, tripId, onInvite, currentUserEmail }) {
@@ -67,6 +68,15 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
   const destName   = sortedCities.length > 0 ? sortedCities.map(c => c.name).join(' · ') : trip?.destination || '';
   const firstCity  = sortedCities[0];
   const countryMeta = getCountryMeta(firstCity?.country || trip?.country || '');
+  // Con un solo destino, el titular muestra la ciudad -- "España te espera"
+  // no tiene sentido cuando el destino ya es un único sitio conocido (y
+  // menos si el viajero es de ese propio país). Con varias ciudades se
+  // mantiene el país, porque listarlas todas en el titular no cabe bien.
+  const isSingleCity = sortedCities.length === 1;
+  const heroHeadline = isSingleCity
+    ? (firstCity?.name || firstCity?.country || trip?.destination || trip?.name)
+    : (firstCity?.country || trip?.destination || trip?.name);
+  const heroSubtitle = isSingleCity ? (firstCity?.country || '') : destName;
 
   const coverImage = getTripCoverImage(trip, cities);
 
@@ -89,9 +99,9 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
             {isDeparture ? t('home.departure.today') : t('home.departure.tomorrow')}
           </p>
           <p style={{ fontSize: 22, fontWeight: 500, color: 'white', lineHeight: 1.2, marginBottom: 6 }}>
-            {firstCity?.country || trip?.destination || trip?.name}<br/>{t('home.inicio.awaits')}
+            {heroHeadline}<br/>{t('home.inicio.awaits')}
           </p>
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,.55)' }}>{destName}</p>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,.55)' }}>{heroSubtitle}</p>
         </div>
       </div>
 
@@ -118,7 +128,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
           {(firstDoc.file_url || firstDoc.file_uri) && (
             <div className="px-4 pb-3">
               <button type="button"
-                onClick={() => setViewFile(firstDoc.file_url || firstDoc.file_uri)}
+                onClick={async () => { const url = await resolveDocViewUrl(firstDoc); if (url) setViewFile(url); }}
                 className="block w-full py-2.5 bg-primary text-white text-sm font-medium text-center rounded-full">
                 {t('home.inicio.viewTicket')}
               </button>

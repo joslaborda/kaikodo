@@ -14,6 +14,7 @@ import { DOC_ICONS, SPOT_ICONS, SPOT_COLORS, WMO_ICON } from './constants';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/components/ui/use-toast';
 import { cancelTicketReminder } from '@/lib/localReminders';
+import { resolveDocViewUrl } from '@/lib/privateFiles';
 
 export default function DayCard({ label, city, docs, spots, itineraryDays, tripId, defaultOpen, onReorderSpots, dateStr, onUpdateItemTime, hotelSpot, trip, currentUserEmail, profiles }) {
   const { t, i18n } = useTranslation();
@@ -370,7 +371,13 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
               const isDragOver  = dragOverId === item.id && draggingId !== item.id;
 
               return (
-                <button key={item.id || idx} onClick={() => setSelected(item)}
+                <button key={item.id || idx} onClick={async () => {
+                    if (isDoc && (item.file_url || item.file_uri)) {
+                      const url = await resolveDocViewUrl(item);
+                      if (url) { setViewFile(url); return; }
+                    }
+                    setSelected(item);
+                  }}
                   data-item-id={item.id}
                   draggable
                   onDragStart={(e) => { e.stopPropagation(); setDraggingId(item.id); e.dataTransfer.effectAllowed = 'move'; }}
