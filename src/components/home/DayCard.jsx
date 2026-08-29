@@ -34,7 +34,7 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
   const [open, setOpen]         = useState(defaultOpen);
   const [viewFile, setViewFile] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [, setTick] = useState(0);
+  const [tick, setTick] = useState(0);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -125,6 +125,41 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
   }, [docs, spots, itineraryDays, city?.id, dateStr]);
 
   const hasContent = timeline.length > 0;
+
+  // Documento destacado del día -- mismo criterio ya validado en InicioTab:
+  // un doc (con archivo) "entra en ventana" 30min antes de su hora y sigue
+  // activo hasta que pasa su margen de gracia (2h transporte, 1h el resto).
+  // Si varios están en ventana a la vez, gana el de hora más reciente --
+  // así un tren de hace rato no tapa la entrada de un museo que ya empezó.
+  // Solo aplica a "Hoy" (isToday_) -- en "Mañana" nada está aún en ventana
+  // de verdad, así que ahí todo se queda en fila pequeña, sin destacado.
+  const featuredDoc = useMemo(() => {
+    if (!isToday_) return null;
+    const graceOf = (cat) => ['flight', 'train', 'bus'].includes(cat) ? 120 : 60;
+    const toMin = (time) => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const candidates = timeline.filter(i => i._kind === 'doc' && i.time && (i.file_url || i.file_uri));
+    const active = candidates.filter(c => {
+      const start = toMin(c.time);
+      return nowMin >= start - 30 && nowMin < start + graceOf(c.category || c.type);
+    });
+    if (active.length) return active.reduce((a, b) => toMin(b.time) > toMin(a.time) ? b : a);
+    return candidates.filter(c => toMin(c.time) > nowMin).sort((a, b) => toMin(a.time) - toMin(b.time))[0] || null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeline, isToday_, tick]);
+
+  const [featuredViewLoading, setFeaturedViewLoading] = useState(false);
+  const handleViewFeatured = async () => {
+    if (!featuredDoc || featuredViewLoading) return;
+    setFeaturedViewLoading(true);
+    try {
+      const url = await resolveDocViewUrl(featuredDoc);
+      if (url) setViewFile(url);
+    } finally {
+      setFeaturedViewLoading(false);
+    }
+  };
 
   // El mini-mapa dibuja los spots y, ahora, también los documentos de
   // transporte con una ubicación guardada (aeropuerto/estación buscados en
@@ -333,6 +368,32 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
         );
       })()}
 
+      {featuredDoc && (() => {
+        const FeaturedIcon = DOC_ICONS[featuredDoc.category] || DOC_ICONS[featuredDoc.type] || DOC_ICONS.other;
+        return (
+          <div className="border-t border-border px-4 py-3">
+            <div className="bg-orange-50/60 dark:bg-orange-950/20 rounded-2xl border border-orange-200/60 dark:border-orange-900/30 overflow-hidden">
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="w-10 h-10 rounded-xl bg-white dark:bg-background flex items-center justify-center shrink-0">
+                  {FeaturedIcon && <FeaturedIcon size={18} className="text-primary" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{featuredDoc.title || featuredDoc.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{featuredDoc.time}</p>
+                </div>
+                <p className="text-base font-semibold text-foreground shrink-0">{featuredDoc.time}</p>
+              </div>
+              <div className="px-4 pb-3">
+                <button type="button" onClick={handleViewFeatured} disabled={featuredViewLoading}
+                  className="block w-full py-2.5 bg-primary text-white text-sm font-medium text-center rounded-full disabled:opacity-60">
+                  {t('home.inicio.viewTicket')}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {open && (
         <div>
           {((hotelSpot?.lat && hotelSpot?.lng) || mapItems.length > 0 || !hotelSpot) ? (
@@ -356,14 +417,23 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
             </div>
           ) : null}
           {hasContent ? (
-            timeline.map((item, idx) => {
+            timeline.filter(item => item.id !== featuredDoc?.id).map((item, idx, arr) => {
               const isDoc   = item._kind === 'doc';
               const isNote  = item._kind === 'note';
               const DocIcon = isDoc ? (DOC_ICONS[item.category] || DOC_ICONS[item.type] || DOC_ICONS.other) : null;
               const SpotIcon = (!isDoc && !isNote) ? (SPOT_ICONS[item.type] || CirclePlus) : null;
               const spotColor = (!isDoc && !isNote) ? (SPOT_COLORS[item.type] || SPOT_COLORS.custom) : '';
-              const isLast  = idx === timeline.length - 1;
+              const isLast  = idx === arr.length - 1;
               const hasTime = !!item.time;
+              // Un doc con hora ya se apaga en la fila una vez pasa su propio
+              // margen de gracia (mismo criterio que el destacado de arriba)
+              // -- deja de competir visualmente con lo que sí toca ahora.
+              const isPastDoc = isToday_ && isDoc && item.time && (() => {
+                const [h, m] = item.time.split(':').map(Number);
+                const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+                const grace = ['flight', 'train', 'bus'].includes(item.category || item.type) ? 120 : 60;
+                return nowMin >= (h * 60 + m) + grace;
+              })();
               // Todo — docs, notas y spots — se puede arrastrar entre sí,
               // tenga hora o no: así cualquiera se puede colar entre otros
               // dos que sí la tienen.
@@ -388,7 +458,7 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
                   onTouchMove={handleTouchMove}
                   onTouchEnd={handleTouchEnd}
                   className={`w-full flex items-center gap-2 px-4 py-3 border-t border-border transition-colors text-left ${
-                    isDragging ? 'opacity-40' : ''
+                    isDragging ? 'opacity-40' : isPastDoc ? 'opacity-50' : ''
                   } ${
                     isDragOver ? 'bg-primary/5 border-t-primary/40' : ''
                   } ${

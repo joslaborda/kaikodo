@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Users, Car, FileText, Hotel, TrainFront } from 'lucide-react';
 import { BusFront, PlaneIcon } from '@/lib/icons';
+import { ChevronRight } from 'lucide-react';
 import { getCountryMeta } from '@/lib/countryConfig';
 import { getTripCoverImage } from '@/lib/tripImage';
 import { daysUntil } from '@/lib/tripDays';
@@ -13,10 +14,20 @@ import { useTranslation } from 'react-i18next';
 export default function InicioTab({ trip, cities, documents, packingItems, profiles, tripId, onInvite, currentUserEmail }) {
   const { t } = useTranslation();
   const [viewFile, setViewFile] = useState(null);
+  const [resolvingId, setResolvingId] = useState(null);
   const todayStr  = format(new Date(), 'yyyy-MM-dd');
   const tripStart = trip?.start_date || '';
   const daysLeft  = tripStart ? daysUntil(tripStart) : null;
   const isDeparture = daysLeft === 0;
+
+  // Recalcula qué documento está destacado cada minuto -- si no, un doc
+  // podía quedarse destacado (o dejar de estarlo) hasta el próximo refetch,
+  // en vez de en el minuto exacto en que entra o sale de su ventana.
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const sortedCities = useMemo(() =>
     [...cities].sort((a, b) => (a.start_date || '').localeCompare(b.start_date || '')),
@@ -39,7 +50,30 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
     return (a.time || '').localeCompare(b.time || '');
   });
 
-  const firstDoc = todayDocs[0] || null;
+  // Destacado del día: entra en ventana 30min antes de su hora, sigue
+  // activo hasta que pasa su margen de gracia (2h transporte, 1h el resto).
+  // Si varios están en ventana a la vez, gana el más reciente -- así un
+  // tren de hace rato no tapa una entrada que ya ha empezado. Mismo
+  // criterio que DayCard.jsx (Hoy/Mañana), aplicado aquí solo a documentos
+  // (esta pestaña no mezcla spots/notas).
+  const featuredDoc = useMemo(() => {
+    const graceOf = (cat) => TRANSPORT_TYPES.includes(cat) ? 120 : 60;
+    const toMin = (time) => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const candidates = todayDocs.filter(d => d.time);
+    const active = candidates.filter(c => {
+      const start = toMin(c.time);
+      return nowMin >= start - 30 && nowMin < start + graceOf(c.category);
+    });
+    if (active.length) return active.reduce((a, b) => toMin(b.time) > toMin(a.time) ? b : a);
+    return candidates.filter(c => toMin(c.time) > nowMin).sort((a, b) => toMin(a.time) - toMin(b.time))[0] || todayDocs[0] || null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayDocs, tick]);
+
+  const restDocs = todayDocs.filter(d => d.id !== featuredDoc?.id);
+
+  const firstDoc = featuredDoc;
   const isTransportDoc = firstDoc && TRANSPORT_TYPES.includes(firstDoc.category);
 
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
@@ -139,6 +173,33 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
               </button>
             </div>
           )}
+          {restDocs.map((doc, idx) => {
+            const DocRowIcon = DOC_ICON[doc.category] || DOC_ICON.other;
+            const hasFile = !!(doc.file_url || doc.file_uri);
+            const isPastDoc = doc.time && (() => {
+              const [h, m] = doc.time.split(':').map(Number);
+              const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+              const grace = TRANSPORT_TYPES.includes(doc.category) ? 120 : 60;
+              return nowMin >= (h * 60 + m) + grace;
+            })();
+            return (
+              <button key={doc.id || idx} type="button" disabled={!hasFile || resolvingId === doc.id}
+                onClick={async () => {
+                  if (!hasFile) return;
+                  setResolvingId(doc.id);
+                  try { const url = await resolveDocViewUrl(doc); if (url) setViewFile(url); }
+                  finally { setResolvingId(null); }
+                }}
+                className={`w-full flex items-center gap-2.5 px-4 py-2.5 border-t border-border text-left transition-colors ${hasFile ? 'hover:bg-secondary/20' : ''} ${isPastDoc ? 'opacity-50' : ''}`}>
+                <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
+                  <DocRowIcon className="text-primary" style={{ width: 14, height: 14 }} />
+                </div>
+                <p className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{doc.title || doc.name}</p>
+                {doc.time && <span className="text-xs font-medium text-muted-foreground shrink-0">{doc.time}</span>}
+                {hasFile && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+              </button>
+            );
+          })}
         </div>
       )}
 
