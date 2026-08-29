@@ -48,7 +48,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
     if (diff > 0 && diff <= 480) {
       countdown = diff <= 60
         ? t('home.inicio.inMinutes', { count: diff })
-        : t('home.inicio.inHours', { hours: Math.round(diff / 60), minutes: diff % 60 > 0 ? (diff % 60) + 'min' : '' }).trim();
+        : t('home.inicio.inHours', { hours: Math.floor(diff / 60), minutes: diff % 60 > 0 ? (diff % 60) + 'min' : '' }).trim();
     }
   }
 
