@@ -46,12 +46,12 @@ const VISIBILITY_OPTS = [
 
 const SHOW_FIELDS = {
   flight:   ['name','origin','destination','location','airline','date','time','end_time','notes','note_time'],
-  hotel:    ['name','city','date','time','end_date','notes','note_time'],
+  hotel:    ['name','date','time','end_date','notes','note_time'],
   train:    ['name','origin','destination','location','date','time','end_time','notes','note_time'],
   bus:      ['name','origin','destination','location','date','time','end_time','notes','note_time'],
-  event:    ['name','city','date','time','notes','note_time'],
+  event:    ['name','date','time','notes','note_time'],
   personal: ['name','date','end_date','notes','note_time'],
-  other:    ['name','city','date','time','notes','note_time'],
+  other:    ['name','date','time','notes','note_time'],
 };
 
 // Buscador de ubicacion (aeropuerto/estacion) para vuelos y trenes. Usa
@@ -315,6 +315,12 @@ export default function DocumentForm({
     // sin ubicación buscada. Los omitimos del payload si no son números.
     const { location_lat, location_lng, ...rest } = fields;
     const payload = { ...rest };
+    // El campo "Ciudad" (texto libre) se quitó del formulario -- era
+    // redundante con la fecha, que ya lleva la ciudad del día embebida
+    // (fields.city_id, elegido en el desplegable de FECHA). Se resuelve
+    // aquí para que ticket.city (usado en DocumentCard.jsx/Documents.jsx
+    // para mostrar la ciudad) siga rellenándose igual que antes.
+    payload.city = (cities || []).find(c => c.id === fields.city_id)?.name || '';
     if (typeof location_lat === 'number' || (location_lat && !isNaN(Number(location_lat)))) {
       payload.location_lat = location_lat;
       payload.location_lng = location_lng;
@@ -458,15 +464,6 @@ export default function DocumentForm({
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('documents.form.fields.airline')}</p>
           <Input value={fields.airline} onChange={e => setField('airline', e.target.value)}
             placeholder={FIELD_PLACEHOLDERS.airline} className="h-10 text-sm" />
-        </div>
-      )}
-
-      {/* City */}
-      {hasField('city') && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('documents.form.fields.city')}</p>
-          <Input value={fields.city} onChange={e => setField('city', e.target.value)}
-            placeholder={FIELD_PLACEHOLDERS.city} className="h-10 text-sm" />
         </div>
       )}
 
