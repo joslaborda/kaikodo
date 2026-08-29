@@ -9,6 +9,7 @@ import MemberAvatarRow from './MemberAvatarRow';
 import { useTranslation } from 'react-i18next';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
+import { scheduleTicketReminder, cancelTicketReminder, scheduleSpotReminder } from '@/lib/localReminders';
 
 export default function TodayTab({ trip, cities, tripId, profiles, onInvite, currentUserEmail }) {
   const { t } = useTranslation();
@@ -85,6 +86,12 @@ const handleUpdateItemTime = async (item, time) => {
               const oldTime = item.time || '';
               await base44.entities.Ticket.update(item.id, { time, ...(timeIsChanging ? { day_order: null } : {}) });
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+      // Mismo hueco que en Documents.jsx/Cities.jsx: el recordatorio local
+      // del propio dispositivo tampoco se reprogramaba desde aquí.
+      if (timeIsChanging) {
+        cancelTicketReminder(item.id);
+        scheduleTicketReminder({ ...item, time, trip_id: item.trip_id || tripId });
+      }
       // Edición rápida de hora desde la fila del día (Hoy/Mañana) — mismo
       // hueco que Documents.jsx y Cities.jsx: antes no avisaba a nadie.
       if ((time || '') !== oldTime && time && item.visibility !== 'personal') {
@@ -106,6 +113,11 @@ const handleUpdateItemTime = async (item, time) => {
     } else if (item._kind === 'spot') {
       await base44.entities.Spot.update(item.id, { assigned_time: time, ...(timeIsChanging ? { day_order: null } : {}) });
       queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
+      // Mismo hueco que arriba para documentos, aplicado a spots: cambiar la
+      // hora desde aquí no reprogramaba el recordatorio local del spot.
+      if (timeIsChanging) {
+        scheduleSpotReminder({ ...item, assigned_time: time });
+      }
     }
   };
 

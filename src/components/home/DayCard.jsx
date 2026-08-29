@@ -13,6 +13,7 @@ import TodayRouteMap from './TodayRouteMap';
 import { DOC_ICONS, SPOT_ICONS, SPOT_COLORS, WMO_ICON } from './constants';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/components/ui/use-toast';
+import { cancelTicketReminder } from '@/lib/localReminders';
 
 export default function DayCard({ label, city, docs, spots, itineraryDays, tripId, defaultOpen, onReorderSpots, dateStr, onUpdateItemTime, hotelSpot, trip, currentUserEmail, profiles }) {
   const { t, i18n } = useTranslation();
@@ -281,6 +282,7 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
     try {
       if (item._kind === 'doc') {
         await base44.entities.Ticket.delete(item.id);
+        cancelTicketReminder(item.id);
         queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
       } else if (item._kind === 'note') {
         const lastDash = item.id.lastIndexOf('-');
