@@ -26,6 +26,7 @@ import SettingsDialog from '@/components/home/SettingsDialog';
 import DeleteTripModal from '@/components/trip/DeleteTripModal';
 import LeaveTripModal from '@/components/trip/LeaveTripModal';
 import { enrichTicketDataWithAutoLinks } from '@/lib/autoLinkTickets';
+import { scheduleTicketReminder, cancelTicketReminder } from '@/lib/localReminders';
 import { daysUntil } from '@/lib/tripDays';
 import { useTranslation } from 'react-i18next';
 
@@ -362,6 +363,10 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
       queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
       queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
       setEditingDoc(null);
+      // Mismo hueco que en Documents.jsx: editar un documento desde Ruta
+      // nunca reprogramaba el recordatorio local del propio dispositivo.
+      cancelTicketReminder(oldDoc?.id);
+      scheduleTicketReminder({ ...enriched, id: oldDoc?.id, trip_id: tripId });
       // Mismo hueco que se cerró en Documents.jsx: editar la hora de un
       // ticket (vuelo/tren/etc.) desde Ruta tampoco avisaba a nadie.
       const timeChanged = (data.time || '') !== (oldDoc?.time || '') || (data.end_time || '') !== (oldDoc?.end_time || '');
@@ -400,6 +405,7 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
     setDeletingDoc(true);
     try {
     await base44.entities.Ticket.delete(deleteDoc.id);
+    cancelTicketReminder(deleteDoc.id);
     queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
     queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
     setDeleteDoc(null);
@@ -417,10 +423,15 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
     setSavingNewDoc(true);
     try {
       const enriched = enrichTicketDataWithAutoLinks(data, itineraryDays || [], data.city_id);
-      await base44.entities.Ticket.create({ ...enriched, trip_id: tripId, user_id: userId, date: enriched.date || dayDate, trip_members: trip.members });
+      const payload = { ...enriched, trip_id: tripId, user_id: userId, date: enriched.date || dayDate, trip_members: trip.members };
+      const newDoc = await base44.entities.Ticket.create(payload);
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
       queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
       setAddingDoc(false);
+      // Mismo hueco que ya se cerró en Documents.jsx: crear un vuelo/tren/
+      // evento desde aquí (Ruta) nunca programaba el recordatorio local del
+      // propio dispositivo -- solo la vía de Documents.jsx lo hacía.
+      scheduleTicketReminder({ ...payload, id: newDoc?.id });
     } finally { setSavingNewDoc(false); }
   };
 
