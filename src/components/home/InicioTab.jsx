@@ -40,6 +40,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
   });
 
   const firstDoc = todayDocs[0] || null;
+  const isTransportDoc = firstDoc && TRANSPORT_TYPES.includes(firstDoc.category);
 
   const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
   let countdown = null;
@@ -47,9 +48,13 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
     const [h, m] = firstDoc.time.split(':').map(Number);
     const diff = (h * 60 + m) - nowMinutes;
     if (diff > 0 && diff <= 480) {
-      countdown = diff <= 60
-        ? t('home.inicio.inMinutes', { count: diff })
-        : t('home.inicio.inHours', { hours: Math.floor(diff / 60), minutes: diff % 60 > 0 ? (diff % 60) + 'min' : '' }).trim();
+      // Transporte usa el fragmento en minúscula porque va detrás de "Sale"
+      // ("Sale en 25min"). El resto (entradas, eventos...) no "sale" de
+      // ningún sitio -- antes decía "Empieza en 25min", pero "empieza" no
+      // pega con todas las categorías (un seguro no "empieza"); se deja en
+      // el fragmento solo, capitalizado ("En 25min"), sin verbo.
+      const key = diff <= 60 ? 'inMinutes' : 'inHours';
+      countdown = t(`home.inicio.${isTransportDoc ? key : key + 'Cap'}`, { count: diff, hours: Math.floor(diff / 60), minutes: diff % 60 > 0 ? (diff % 60) + 'min' : '' }).trim();
     }
   }
 
