@@ -1781,7 +1781,11 @@
     "invalidTitle": "Invalid reset link",
     "invalidSubtitle": "This password reset link is missing or invalid",
     "invalidBody": "The link you used appears to be incomplete. Please request a new password reset email.",
-    "requestNewLink": "Request a new link"
+    "requestNewLink": "Request a new link",
+    "successTitle": "Password updated",
+    "successSubtitle": "Your password has been changed successfully",
+    "successWarning": "Please wait a few seconds before signing in with your new password.",
+    "continueButton": "Go to login"
   },
   "reminders": {
     "category": {

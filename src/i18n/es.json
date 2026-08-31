@@ -1781,7 +1781,11 @@
     "invalidTitle": "Enlace de restablecimiento inválido",
     "invalidSubtitle": "Este enlace de restablecimiento falta o no es válido",
     "invalidBody": "El enlace que has usado parece estar incompleto. Solicita un nuevo email para restablecer la contraseña.",
-    "requestNewLink": "Solicitar un enlace nuevo"
+    "requestNewLink": "Solicitar un enlace nuevo",
+    "successTitle": "Contraseña actualizada",
+    "successSubtitle": "Tu contraseña se ha cambiado correctamente",
+    "successWarning": "Espera unos segundos antes de iniciar sesión con la contraseña nueva.",
+    "continueButton": "Ir a iniciar sesión"
   },
   "reminders": {
     "category": {
