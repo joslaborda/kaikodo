@@ -89,7 +89,16 @@ export async function openProviderLogin(provider = 'google') {
         // redirigir de vuelta tras el login, así que sobrevive el viaje de ida
         // y vuelta por el navegador externo sin que Base44 necesite soporte
         // especial para él.
-        const returnUrl = `${appParams.appBaseUrl}/?native_pkce_challenge=${encodeURIComponent(challenge)}`;
+        // Fix (3-sep-2026): este from_url tiene que ser un dominio que Base44
+        // tenga registrado/permitido para hacer el redirect de vuelta tras el
+        // login con Google -- si no, su propio backend responde con
+        // "Invalid redirect domain" antes de llegar siquiera a la pantalla de
+        // Google (error visto en producción, solo en el flujo nativo).
+        // appParams.appBaseUrl es el host que el SDK usa como servidor de API
+        // (VITE_BASE44_APP_BASE_URL), no el dominio publicado de la app, así
+        // que no está en esa lista. Mismo fix que ya se aplicó el 26-ago para
+        // buildHttpsCallbackUrl: usar siempre CUSTOM_DOMAIN aquí.
+        const returnUrl = `${CUSTOM_DOMAIN}/?native_pkce_challenge=${encodeURIComponent(challenge)}`;
         const providerPath = provider === 'google' ? '' : `/${provider}`;
         const loginUrl = `${appParams.appBaseUrl}/api/apps/auth${providerPath}/login?app_id=${appParams.appId}&from_url=${encodeURIComponent(returnUrl)}`;
         try {
