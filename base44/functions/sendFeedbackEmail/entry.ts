@@ -18,9 +18,19 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  * (RLS ya lo permite: create solo exige coincidir con el propio usuario) —
  * esta función solo se encarga del aviso por email, que es la parte que
  * necesitaba una integración sensible.
+ *
+ * Límite: aunque exige sesión, una cuenta (comprometida, o simplemente un
+ * script) podía llamar a esto en bucle y mandar cientos de avisos,
+ * gastando créditos de SendEmail sin ningún tope. Se cuenta sobre los
+ * propios registros de Feedback ya creados por ese email (no hace falta
+ * ninguna entidad nueva): máximo 5 avisos cada 10 minutos por persona,
+ * de sobra para un uso legítimo -- nadie manda feedback repetidamente en
+ * ráfaga.
  */
 
 const FEEDBACK_INBOX = "hello@kaikodo.app";
+const RATE_WINDOW_MS = 10 * 60 * 1000;
+const RATE_MAX_PER_WINDOW = 5;
 
 const TYPE_LABEL: Record<string, string> = {
   bug: "Bug",
@@ -34,6 +44,14 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me().catch(() => null);
     if (!user?.email) {
       return Response.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    const service = base44.asServiceRole;
+    const windowStartIso = new Date(Date.now() - RATE_WINDOW_MS).toISOString();
+    const recent = await service.entities.Feedback.filter({ user_email: user.email });
+    const recentCount = recent.filter((f: any) => f.created_date && f.created_date >= windowStartIso).length;
+    if (recentCount >= RATE_MAX_PER_WINDOW) {
+      return Response.json({ error: "Demasiados envíos seguidos, inténtalo en unos minutos" }, { status: 429 });
     }
 
     const { feedbackType, message, userEmail, userName, appLanguage } = await req.json();
