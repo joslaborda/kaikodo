@@ -137,7 +137,10 @@ export default function ExpenseForm({
     setUploadingReceipt(true);
     try {
       const uploadFile = await convertHeicIfNeeded(file);
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: uploadFile });
+      const result = await base44.functions.invoke('uploadPublicFile', { file: uploadFile });
+      const data = result?.data ?? result;
+      if (data?.error) throw new Error(data.error);
+      const { file_url } = data;
       setReceipts(p => [...p, file_url]);
     } catch (e) {
       // Antes era try/finally sin catch: si fallaba, el error se perdía y el
