@@ -17,15 +17,11 @@ import { toast } from '@/components/ui/use-toast';
 import { normalizeEmail } from '@/lib/utils';
 import { checkUpload, convertHeicIfNeeded } from '@/lib/uploadLimits';
 
-// ── Language Switcher ──────────────────────────────────────────────────────────
 function LanguageSwitcher() {
   const { t, i18n } = useTranslation();
   const current = getLanguage();
 
   const handleChange = (lang) => {
-    // i18n.changeLanguage() ya es reactivo: react-i18next re-renderiza los
-    // componentes que usan t(). No hace falta recargar (en Capacitor un reload
-    // deja la pantalla en blanco y pierde el estado de navegación).
     setLanguage(lang);
   };
 
@@ -57,22 +53,11 @@ function LanguageSwitcher() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Data
-// ─────────────────────────────────────────────────────────────────────────────
-// Build full country list from countryConfig KNOWN_META
-// La lista de países se construye desde countryConfig en el idioma activo:
-// `name` es el canónico español (lo que se guarda en BD) y `label` el nombre
-// traducido (lo que ve el usuario). Ver buildCountries() dentro de Settings.
-
 const CURRENCIES = ['EUR','USD','MXN','COP','ARS','CLP','GBP','JPY','BRL','PEN','CHF','AUD','CAD'].map(name => {
   const meta = getCountryMeta(name);
-  return { name, flag: meta.flag || '🌍', currency: meta.currency || 'USD' };
+  return { name, flag: meta.flag || '\ud83c\udf0d', currency: meta.currency || 'USD' };
 }).sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Toggle switch
-// ─────────────────────────────────────────────────────────────────────────────
 function Toggle({ value, onChange }) {
   return (
     <button
@@ -84,9 +69,6 @@ function Toggle({ value, onChange }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Row components
-// ─────────────────────────────────────────────────────────────────────────────
 function SettingRow({ label, sublabel, right, onClick, isLast = false }) {
   const inner = (
     <div className={`flex items-center justify-between px-4 py-3.5 ${!isLast ? 'border-b border-border' : ''} ${onClick ? 'hover:bg-secondary/30 transition-colors cursor-pointer' : ''}`}
@@ -101,9 +83,6 @@ function SettingRow({ label, sublabel, right, onClick, isLast = false }) {
   return inner;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Password section
-// ─────────────────────────────────────────────────────────────────────────────
 function PasswordSection({ user }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -143,7 +122,7 @@ function PasswordSection({ user }) {
           return (
             <div key={label}>
               <p className="text-xs text-muted-foreground mb-1">{label}</p>
-              <input type="password" value={val} onChange={e => setVal(e.target.value)} aria-label={t('settings.pwd.new')} placeholder="••••••••"
+              <input type="password" value={val} onChange={e => setVal(e.target.value)} aria-label={t('settings.pwd.new')} placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
                 className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary" />
             </div>
           );
@@ -156,44 +135,13 @@ function PasswordSection({ user }) {
             {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('common.save')}
           </button>
         </div>
-
-
       </div>
-
-
-
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Delete account confirmation
-//
-// Antes este botón decía "esta acción es permanente e irreversible" y luego
-// solo hacía logout — no borraba nada, así que la promesa era falsa y la
-// cuenta seguía intacta.
-//
-// Alcance del borrado real (decidido explícitamente, no todo lo que "borrar
-// cuenta" podría implicar):
-//   - Se saca al usuario de `members`/`roles` en todos los viajes donde
-//     participa (deja de tener acceso).
-//   - Se borra su UserProfile.
-//   - Se borran sus SavedSpot (favoritos guardados, son 100% privados suyos).
-//   - Se cierra sesión.
-// A propósito NO se borran Spot / Expense / Ticket / TripMessage que haya
-// creado dentro de viajes compartidos: son datos que el resto del grupo sigue
-// usando (itinerario, balances de gastos, documentos, chat) y borrarlos de
-// golpe rompería esos viajes para las demás personas. Esos registros quedan
-// con su `created_by`/`user_id` original, huérfanos de perfil pero intactos.
-// ─────────────────────────────────────────────────────────────────────────────
 function DeleteAccountRow({ user, profile }) {
   const { t } = useTranslation();
-  // Antes esta fila llamaba a base44.auth.logout() directo, que solo borra
-  // el token y redirige — no limpia la caché de react-query en localStorage
-  // (viajes, gastos, mensajes...). En un dispositivo compartido, esos datos
-  // podían seguir visibles brevemente para la siguiente persona que
-  // iniciara sesión. logout() del contexto sí limpia esa caché antes de
-  // redirigir (ver AuthContext.jsx).
   const { logout } = useAuth();
   const [confirm, setConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -208,43 +156,14 @@ function DeleteAccountRow({ user, profile }) {
     setDeleting(true);
     setError('');
     try {
-      // Derecho al olvido (RGPD art. 17): antes esto solo sacaba al usuario
-      // de trip.members y borraba su perfil y favoritos — pero su email
-      // seguía en crudo en cada Expense (paid_by/split_with/amounts_by_user),
-      // Spot (created_by + creator_username/creator_avatar, que son una
-      // COPIA guardada en el momento de crear, no un lookup en vivo al
-      // perfil) y TripMessage (user_email/display_name/avatar_url, también
-      // copiados). Borrar el perfil no limpiaba nada de eso.
-      //
-      // No todo se puede borrar sin más: un Expense compartido es cálculo de
-      // grupo — borrar uno que pagó esta persona rompería el balance de
-      // todos los demás. La solución estándar (la misma que usan apps de
-      // grupo como Slack o WhatsApp) es ANONIMIZAR la identidad en los
-      // registros compartidos en vez de borrarlos, y solo borrar del todo lo
-      // que es puramente suyo y no afecta a nadie más.
-      //
-      // anonEmail es estable por usuario: si la misma persona aparece como
-      // paid_by Y en split_with del mismo gasto, las dos referencias quedan
-      // con el mismo valor anonimizado — el cálculo de balances sigue
-      // cuadrando, solo que ya no apunta a su email real. userMap ya cae a
-      // t('common.member') cuando no encuentra perfil, así que se ve como
-      // "Miembro" en vez de mostrar nada raro.
       const anonEmail = `deleted-${user.id}@kodo.invalid`;
-      // trip.members/paid_by/etc. están normalizados en minúsculas, pero
-      // user.email (tal cual viene del proveedor de auth) no siempre lo
-      // está — sin esto, un email con mayúsculas distintas hacía que este
-      // filtro no encontrara ningún viaje y el resto de la limpieza se
-      // saltara en silencio, aunque el perfil se borrara igualmente.
       const myEmail = normalizeEmail(user.email);
 
-      // 1. Todavía como miembro del viaje (con permisos RLS intactos):
-      //    anonimizar su identidad en lo que se comparte con el grupo.
       const trips = await base44.entities.Trip.filter({ members: { $elemMatch: { $eq: myEmail } } });
 
       await Promise.all(trips.map(async trip => {
         const tripId = trip.id;
 
-        // Gastos donde pagó o participó
         const expenses = await base44.entities.Expense.filter({ trip_id: tripId });
         await Promise.all(expenses.map(async e => {
           const touchesUser = normalizeEmail(e.paid_by) === myEmail
@@ -264,9 +183,6 @@ function DeleteAccountRow({ user, profile }) {
           await base44.entities.Expense.update(e.id, patch);
         }));
 
-        // Spots: si son personales (solo él los veía) no le sirven a nadie
-        // más — se borran. Si son del grupo (trip_members/selected_users/
-        // public) se conservan pero se anonimiza quién los creó.
         const spots = await base44.entities.Spot.filter({ trip_id: tripId, created_by: myEmail });
         await Promise.all(spots.map(async s => {
           if (s.visibility === 'personal') {
@@ -281,9 +197,6 @@ function DeleteAccountRow({ user, profile }) {
           }
         }));
 
-        // Mensajes de chat: se conserva el contenido (contexto de la
-        // conversación para el resto del grupo) pero se anonimiza quién lo
-        // escribió — igual que "Usuario eliminado" en Slack/WhatsApp.
         const messages = await base44.entities.TripMessage.filter({ trip_id: tripId, user_id: user.id });
         await Promise.all(messages.map(m => base44.entities.TripMessage.update(m.id, {
           user_email: anonEmail,
@@ -291,9 +204,6 @@ function DeleteAccountRow({ user, profile }) {
           avatar_url: null,
         })));
 
-        // Documentos/tickets propios: si son personales se borran (nadie más
-        // los necesita); si están compartidos con el grupo se anonimiza el
-        // propietario en vez de borrar el archivo de otros.
         const tickets = await base44.entities.Ticket.filter({ trip_id: tripId, user_id: user.id });
         await Promise.all(tickets.map(async doc => {
           if ((doc.visibility || 'personal') === 'personal') {
@@ -303,12 +213,10 @@ function DeleteAccountRow({ user, profile }) {
           }
         }));
 
-        // Maleta: es una checklist individual, no afecta a nadie más — se borra.
         const packing = await base44.entities.PackingItem.filter({ trip_id: tripId, user_id: user.id });
         await Promise.all(packing.map(p => base44.entities.PackingItem.delete(p.id)));
       }));
 
-      // 2. Datos puramente suyos, sin relación con el grupo — se borran enteros.
       const [saved, notifications, likes, comments] = await Promise.all([
         base44.entities.SavedSpot.filter({ user_id: user.id }),
         base44.entities.Notification.filter({ user_id: user.id }),
@@ -322,33 +230,15 @@ function DeleteAccountRow({ user, profile }) {
         ...comments.map(c => base44.entities.SpotComment.delete(c.id)),
       ]);
 
-      // 3. Ahora sí, salir de los viajes — esto revoca el acceso (RLS) a
-      //    todo lo anterior, por eso tiene que ir DESPUÉS de anonimizar/
-      //    borrar arriba y no antes.
-      // Este auditoría cerró Trip.update a "solo admin" (ver el comentario
-      // largo en base44/entities/Trip.jsonc: cualquier miembro podía tocar
-      // members/roles a su gusto). Salir de un viaje al borrar la cuenta
-      // pasa ahora por leaveTrip (backend, permisos de servicio) en vez de
-      // Trip.update() directo — que ya no funcionaría aquí para nadie que no
-      // sea admin del viaje.
       await Promise.all(trips.map(async trip => {
         const updated = await leaveTrip(trip.id);
         await syncTripMembers(trip.id, updated?.members || []);
       }));
 
-      // 4. Borrar el perfil.
       if (profile?.id) {
         await base44.entities.UserProfile.delete(profile.id);
       }
 
-      // 5. Cerrar sesión. base44 no expone borrado de la cuenta de auth desde
-      // el cliente — lo que sí queda garantizado es que ya no aparece en
-      // ningún viaje, no tiene perfil, y su identidad ya no está en claro en
-      // ningún registro al que otros miembros sigan teniendo acceso. Nota:
-      // base44 mantiene internamente un campo "created_by" de sistema en
-      // cada registro (metadato de auditoría de la plataforma, no editable
-      // desde el cliente) — eso queda fuera del alcance de lo que se puede
-      // borrar/anonimizar vía la API de entidades.
       logout();
     } catch (e) {
       setDeleting(false);
@@ -370,32 +260,27 @@ function DeleteAccountRow({ user, profile }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN
-// ─────────────────────────────────────────────────────────────────────────────
 export default function Settings() {
   const { t, i18n } = useTranslation();
-  // value = canónico español (se guarda), label = traducido (se muestra)
   const COUNTRIES = useMemo(() => getOriginCountryOptions(i18n.language).map(o => {
     const m = getCountryMeta(o.value) || {};
-    return { name: o.value, label: o.label, flag: m.flag || '🌍', currency: m.currency || 'USD' };
+    return { name: o.value, label: o.label, flag: m.flag || '\ud83c\udf0d', currency: m.currency || 'USD' };
   }), [i18n.language]);
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
 
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername]       = useState('');
-  const [homeCountry, setHomeCountry] = useState('España');
+  const [homeCountry, setHomeCountry] = useState('Espa\u00f1a');
   const [homeCurrency, setHomeCurrency] = useState('EUR');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState(null);
   const [usernameAvailable, setUsernameAvailable] = useState(null);
 
-  // Notifications prefs (stored in profile)
   const [secondNationality, setSecondNationality] = useState('');
   const [secondNatQuery, setSecondNatQuery] = useState('');
   const [showSecondNatList, setShowSecondNatList] = useState(false);
-const [notifEnabled, setNotifEnabled] = useState(true);
+  const [notifEnabled, setNotifEnabled] = useState(true);
   const [spotsPublic,   setSpotsPublic]   = useState(false);
 
   const avatarInputRef = useRef(null);
@@ -415,15 +300,14 @@ const [notifEnabled, setNotifEnabled] = useState(true);
     if (profile) {
       setDisplayName(profile.display_name || '');
       setUsername(profile.username || '');
-      setHomeCountry(profile.home_country || 'España');
+      setHomeCountry(profile.home_country || 'Espa\u00f1a');
       setSecondNationality(profile.second_nationality || '');
       setHomeCurrency(profile.home_currency || 'EUR');
-setNotifEnabled(profile.notif_enabled !== false);
+      setNotifEnabled(profile.notif_enabled !== false);
       setSpotsPublic(profile.spots_public_default === true);
     }
   }, [profile]);
 
-  // Username availability check
   useEffect(() => {
     if (!username || username === profile?.username) { setUsernameAvailable(null); return; }
     const err = validateUsername(username);
@@ -438,10 +322,6 @@ setNotifEnabled(profile.notif_enabled !== false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const handleAvatarUpload = async (file) => {
     if (!file || !profile || uploadingAvatar) return;
-    // Antes esto subía cualquier archivo sin comprobar tamaño/tipo — una
-    // foto de galería moderna (o un vídeo elegido por error) podía quedarse
-    // subiendo un buen rato sin que el límite declarado en uploadLimits.js
-    // se aplicara realmente aquí.
     const chk = checkUpload(file);
     if (!chk.ok) {
       toast({
@@ -454,13 +334,13 @@ setNotifEnabled(profile.notif_enabled !== false);
     setUploadingAvatar(true);
     try {
       const uploadFile = await convertHeicIfNeeded(file);
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: uploadFile });
+      const result = await base44.functions.invoke('uploadPublicFile', { file: uploadFile });
+      const data = result?.data ?? result;
+      if (data?.error) throw new Error(data.error);
+      const { file_url } = data;
       await base44.entities.UserProfile.update(profile.id, { avatar_url: file_url });
       queryClient.invalidateQueries({ queryKey: ['myProfile', user?.id] });
     } catch {
-      // Antes un fallo aquí (subida o guardado) no dejaba ningún rastro: sin
-      // toast, sin reset visible — pulsar "cambiar foto" y que fallara se
-      // veía exactamente igual que no haber pasado nada.
       toast({ title: t('common.error'), description: t('common.tryAgain'), variant: 'destructive' });
     } finally {
       setUploadingAvatar(false);
@@ -469,18 +349,8 @@ setNotifEnabled(profile.notif_enabled !== false);
 
   const handleSave = async () => {
     if (!displayName.trim()) { setSaveMsg({ type:'error', text:t('settings.errors.nameEmpty') }); return; }
-    // Antes `username && validateUsername(...)` se saltaba la validación entera
-    // cuando el campo estaba vacío (username='' es falsy), así que se podía
-    // guardar un perfil sin username pese a que validateUsername('') dice
-    // explícitamente que no puede estar vacío — y el username es obligatorio
-    // desde el alta (CreateProfileModal no deja avanzar sin uno).
     const usernameErr = validateUsername(username);
     if (usernameErr) { setSaveMsg({ type:'error', text: t(`common.usernameErrors.${usernameErr}`) }); return; }
-    // El check de disponibilidad en pantalla es un debounce de 600ms: si el
-    // usuario escribe y pulsa "Guardar" antes de que resuelva (o mientras
-    // sigue en null tras un cambio reciente), `usernameAvailable` puede no
-    // reflejar el username actual todavía y el chequeo de abajo no lo pilla.
-    // Se revalida en el momento del guardado si el username cambió.
     if (username !== profile?.username) {
       const stillAvailable = await checkUsernameAvailability(username, user?.id);
       if (!stillAvailable) {
@@ -492,10 +362,6 @@ setNotifEnabled(profile.notif_enabled !== false);
     setSaving(true);
     try {
       await base44.entities.UserProfile.update(profile.id, {
-        // Otros flujos (invites.js, NotificationBell, Invites.jsx) comparan y
-        // filtran por email en minúsculas; guardarlo tal cual venga de
-        // base44.auth podía dejar un email con mayúsculas que no cuadrara con
-        // esas comparaciones.
         email: (user.email || '').toLowerCase(),
         display_name: displayName.trim(),
         username,
@@ -503,7 +369,7 @@ setNotifEnabled(profile.notif_enabled !== false);
         home_country: homeCountry,
         second_nationality: secondNationality || null,
         home_currency: homeCurrency,
-notif_enabled: notifEnabled,
+        notif_enabled: notifEnabled,
         spots_public_default: spotsPublic,
       });
       queryClient.invalidateQueries({ queryKey: ['myProfile', user?.id] });
@@ -527,7 +393,6 @@ notif_enabled: notifEnabled,
   return (
     <div className="bg-background min-h-screen">
 
-      {/* ── Header ── */}
       <div className="bg-background sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-0">
           <div className="flex items-center justify-between mb-4">
@@ -545,11 +410,9 @@ notif_enabled: notifEnabled,
 
       <div className="max-w-3xl mx-auto px-5 py-5 pb-24 space-y-5">
 
-        {/* ── PERFIL ── */}
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">{t('settings.sectionProfile')}</p>
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
 
-          {/* Avatar */}
           <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
             <div className="relative flex-shrink-0">
               <div className="w-14 h-14 rounded-full overflow-hidden border border-border flex items-center justify-center bg-primary text-white text-lg font-medium">
@@ -576,14 +439,12 @@ notif_enabled: notifEnabled,
               onChange={e => e.target.files?.[0] && handleAvatarUpload(e.target.files[0])} />
           </div>
 
-          {/* Name */}
           <div className="px-4 py-3 border-b border-border">
             <p className="text-xs text-muted-foreground mb-1.5">{t('settings.name')}</p>
             <input value={displayName} onChange={e => setDisplayName(e.target.value)} aria-label={t('settings.nameAria')} placeholder={t('settings.namePlaceholder')}
               className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary" />
           </div>
 
-          {/* Username */}
           <div className="px-4 py-3 border-b border-border">
             <p className="text-xs text-muted-foreground mb-1.5">{t('settings.username')}</p>
             <div className="relative">
@@ -600,7 +461,6 @@ notif_enabled: notifEnabled,
 
         </div>
 
-        {/* ── APARIENCIA ── */}
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">{t('settings.appearance')}</p>
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between px-4 py-4 border-b border-border">
@@ -613,7 +473,6 @@ notif_enabled: notifEnabled,
           <LanguageSwitcher />
         </div>
 
-        {/* ── PREFERENCIAS ── */}
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">{t('settings.preferences')}</p>
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-border">
@@ -627,7 +486,6 @@ notif_enabled: notifEnabled,
           </div>
           <div className="px-4 py-3 border-b border-border">
             <p className="text-xs text-muted-foreground mb-1.5">{t('settings.secondNat')} <span className="text-muted-foreground/60">{t('settings.secondNatSub')}</span></p>
-            {/* Searchable second nationality */}
             <div className="relative">
               <input
                 type="text"
@@ -653,7 +511,6 @@ notif_enabled: notifEnabled,
                   {COUNTRIES.filter(c => {
                     if (!secondNatQuery) return true;
                     const q = secondNatQuery.toLowerCase();
-                    // se busca por nombre traducido y por canónico español
                     return c.label.toLowerCase().includes(q) || c.name.toLowerCase().includes(q);
                   }).map(c => (
                     <button key={c.name}
@@ -678,18 +535,16 @@ notif_enabled: notifEnabled,
           </div>
         </div>
 
-        {/* ── NOTIFICACIONES ── */}
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">{t('settings.notifications')}</p>
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
-<SettingRow
-  label={t('settings.notifEnabled')}
-  sublabel={t('settings.notifEnabledSub')}
-  right={<Toggle value={notifEnabled} onChange={setNotifEnabled} />}
-  isLast
-  />
+          <SettingRow
+            label={t('settings.notifEnabled')}
+            sublabel={t('settings.notifEnabledSub')}
+            right={<Toggle value={notifEnabled} onChange={setNotifEnabled} />}
+            isLast
+          />
         </div>
 
-        {/* ── PRIVACIDAD ── */}
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">{t('settings.privacy')}</p>
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <SettingRow
@@ -700,7 +555,6 @@ notif_enabled: notifEnabled,
           />
         </div>
 
-        {/* ── CUENTA ── */}
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">{t('settings.account')}</p>
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <SettingRow
@@ -717,7 +571,6 @@ notif_enabled: notifEnabled,
           </div>
         </div>
 
-        {/* ── AYUDA ── */}
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">{t('settings.help')}</p>
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <SettingRow
@@ -735,7 +588,6 @@ notif_enabled: notifEnabled,
         </div>
 
       </div>
-      {/* Guardar */}
       <div className="px-4 pt-2 pb-8">
         {saveMsg && (
           <p className={`text-xs text-center mb-2 ${saveMsg.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>{saveMsg.text}</p>
