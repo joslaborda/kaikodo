@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
@@ -13,6 +13,7 @@ import { es } from 'date-fns/locale';
 import { useTranslation } from 'react-i18next';
 import { getCountryLabel } from '@/lib/countryConfig';
 import { normalizeEmail } from '@/lib/utils';
+import CreateProfileModal from '@/components/social/CreateProfileModal';
 
 export default function Invites() {
   const { t, i18n } = useTranslation();
@@ -24,6 +25,32 @@ export default function Invites() {
 
   const { user: currentUser, navigateToLogin } = useAuth();
   const [processing, setProcessing] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+
+  // Aceptar una invitación sin haber pasado nunca por el onboarding
+  // (usuario/país/RGPD) dejaba a la persona dentro del viaje sin nombre de
+  // usuario ni consentimiento RGPD registrado — CreateProfileModal solo se
+  // disparaba en Mis Viajes/Ajustes/Utilidades, ninguno de los cuales toca
+  // este flujo. Mismo patrón que TripsList.jsx: se exige aquí también,
+  // bloqueando el contenido de la invitación hasta completarlo.
+  const { data: myProfile, isLoading: profileLoading } = useQuery({
+    queryKey: ['myProfile', currentUser?.id],
+    queryFn: async () => {
+      const r = await base44.entities.UserProfile.filter({ user_id: currentUser.id });
+      return r[0] || null;
+    },
+    enabled: !!currentUser?.id && currentUser?.is_verified === true,
+    staleTime: 60000,
+  });
+  const needsOnboarding = currentUser?.is_verified === true && !profileLoading && myProfile === null;
+  // Mismo "latch" que TripsList.jsx: CreateProfileModal crea el perfil a
+  // mitad de su propio tour (antes de sus 4 slides de introducción), así
+  // que needsOnboarding pasaría a false a mitad de camino si no se retiene
+  // aquí que hizo falta mostrarlo — el modal desaparecería solo sin que la
+  // persona llegara a ver el resto del tour.
+  const onboardingStartedRef = useRef(false);
+  if (needsOnboarding) onboardingStartedRef.current = true;
+  const showOnboarding = onboardingStartedRef.current && !onboardingDismissed;
 
   // ── Con token: aceptar desde email ─────────────────────────────────────────
   const { data: invite, isLoading: inviteLoading } = useQuery({
@@ -279,6 +306,14 @@ export default function Invites() {
       );
     }
 
+    // Invitación válida y pendiente de verdad -- antes de dejar aceptar,
+    // exigir el onboarding (usuario/país/RGPD) si todavía no lo hizo. Sin
+    // esto, alguien podía unirse a un viaje entero sin nombre de usuario ni
+    // consentimiento RGPD registrado.
+    if (showOnboarding) {
+      return <CreateProfileModal user={currentUser} open={true} onComplete={() => setOnboardingDismissed(true)} />;
+    }
+
     return (
       <div className="min-h-screen bg-background flex flex-col">
         {/* Header Kōdo */}
@@ -356,6 +391,10 @@ export default function Invites() {
   }
 
   // ── Render: lista sin token ──────────────────────────────────────────────────
+  if (showOnboarding) {
+    return <CreateProfileModal user={currentUser} open={true} onComplete={() => setOnboardingDismissed(true)} />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
