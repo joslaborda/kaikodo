@@ -78,6 +78,16 @@
     "fsq_id": {
       "type": "string",
       "description": "ID de Foursquare si viene de b\u00fasqueda"
+    },
+    "google_place_id": {
+      "type": "string",
+      // Se usa para detectar "ya lo tienes" en el buscador del perfil
+      // comparando por ID estable de Google en vez de por texto del título:
+      // Autocomplete (New) y Place Details (New) no garantizan devolver el
+      // mismo texto de nombre para el mismo sitio real (uno da el nombre
+      // corto de sugerencia, el otro el nombre "oficial" completo), así que
+      // comparar títulos daba falsos negativos.
+      "description": "Place ID de Google si el spot viene de una b\u00fasqueda ah\u00ed"
     }
   },
   "required": [
