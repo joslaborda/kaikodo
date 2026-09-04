@@ -46,14 +46,20 @@ function isSafeFileUrl(url) {
 }
 
 /**
- * Sube un archivo de documento a storage privado.
+ * Sube un archivo de documento a storage privado — vía la función de
+ * backend uploadPrivateDocument, no llamando a UploadPrivateFile
+ * directamente (ver esa función para el motivo: esa integración estaba
+ * expuesta en el navegador sin ningún control).
  * Devuelve { file_uri, previewUrl } — file_uri es lo que hay que guardar en
  * el Ticket; previewUrl es una URL firmada de corta duración, solo para
  * previsualizar dentro del propio formulario mientras se edita (no se
  * persiste).
  */
 export async function uploadDocFile(file) {
-  const { file_uri } = await base44.integrations.Core.UploadPrivateFile({ file });
+  const result = await base44.functions.invoke('uploadPrivateDocument', { file });
+  const data = result?.data ?? result;
+  if (data?.error) throw new Error(data.error);
+  const { file_uri } = data;
   const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({
     file_uri,
     expires_in: SIGNED_URL_TTL_SECONDS,
