@@ -51,14 +51,14 @@ function extractErrorMessage(err, fallback) {
  * contraseña, en cambio, es una llamada de API normal (fetch/XHR) y
  * funciona igual en web y en nativo sin ningún tratamiento especial.
  */
-export default function LoginScreen({ onSuccess, inviteToken }) {
+export default function LoginScreen({ onSuccess, invitePreview, startInRegister }) {
   const { t } = useTranslation();
   // 'login' | 'register' | 'otp' | 'forgot'
   // Si venimos de un enlace de invitación, arrancamos ya en "register" --
   // quien toca ese enlace sin cuenta casi siempre quiere crear una, no
   // iniciar sesión con una que no tiene. Sigue pudiendo cambiar de pestaña
   // a mano si ya tiene cuenta.
-  const [mode, setMode] = useState(inviteToken ? 'register' : 'login');
+  const [mode, setMode] = useState(startInRegister ? 'register' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -68,23 +68,15 @@ export default function LoginScreen({ onSuccess, inviteToken }) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
 
-  // ── Vista previa del viaje al que invitan, sin sesión iniciada ───────
-  // Ver base44/functions/getInvitePreview -- "best effort": si falla (token
-  // caducado, red, lo que sea) no se muestra nada, pero el registro/login
-  // normal sigue funcionando igual, sin bloquear a nadie por esto.
-  const [invitePreview, setInvitePreview] = useState(null);
-  useEffect(() => {
-    if (!inviteToken) return;
-    let cancelled = false;
-    base44.functions.invoke('getInvitePreview', { token: inviteToken })
-      .then(result => {
-        if (cancelled) return;
-        const data = result?.data ?? result;
-        if (data && !data.error) setInvitePreview(data);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [inviteToken]);
+  // invitePreview ya llega decodificado desde App.jsx (ver
+  // src/lib/invitePreview.js) -- viaja embebido en el propio enlace de
+  // invitación, así que no hace falta ninguna llamada de red aquí para
+  // mostrar "X te invita a un viaje a Y". Antes esto pedía una función de
+  // backend sin sesión (getInvitePreview); se quitó porque, por necesitar
+  // ser pública, el escáner de seguridad de Base44 la marcaba siempre como
+  // riesgo -- y con razón, aunque el dato en sí no fuera sensible: toda
+  // superficie pública nueva es superficie que hay que defender. Esta
+  // versión no expone ningún endpoint nuevo en absoluto.
 
   // ── Captcha propio de Kaikōdo (ver src/lib/captcha.js) ───────────────
   // Widget solo en registro y "olvidé contraseña" (no en login normal).
@@ -271,12 +263,12 @@ export default function LoginScreen({ onSuccess, inviteToken }) {
           <p className="text-xs text-muted-foreground mt-1.5">{t('auth.tagline')}</p>
         </div>
 
-        {invitePreview?.trip && (
+        {invitePreview && (
           <div className="bg-accent border border-orange-200 dark:border-orange-900/50 rounded-2xl px-4 py-3 mb-5 text-center">
             <p className="text-sm text-accent-foreground font-medium leading-snug">
               {t('auth.invitePreview.line', {
-                inviter: invitePreview.inviterName || invitePreview.inviterEmail || t('auth.invitePreview.someone'),
-                destination: [invitePreview.trip.destination, invitePreview.trip.country].filter(Boolean).join(', ') || invitePreview.trip.name,
+                inviter: invitePreview.inviterName || t('auth.invitePreview.someone'),
+                destination: [invitePreview.destination, invitePreview.country].filter(Boolean).join(', ') || invitePreview.name,
               })}
             </p>
           </div>
