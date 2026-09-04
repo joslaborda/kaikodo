@@ -22,6 +22,20 @@
     },
     "responded_date": {
       "type": "string"
+    },
+    "preview_count": {
+      "type": "number",
+      // Cuántas veces se ha pedido la vista previa SIN sesión (ver
+      // getInvitePreview) en la ventana actual -- getInvitePreview es una
+      // función de backend deliberadamente sin login (tiene que funcionar
+      // para alguien que todavía no tiene cuenta), así que el propio token
+      // es la única protección. Sin este contador, cualquiera con un token
+      // real podría bombardear el endpoint sin límite.
+      "description": "Intentos de vista previa sin sesión en la ventana actual"
+    },
+    "preview_window_start": {
+      "type": "string",
+      "description": "Inicio (ISO) de la ventana de conteo de preview_count"
     }
   },
   "required": [
