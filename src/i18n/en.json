@@ -1048,8 +1048,6 @@
     "searchCta": "Search for a place",
     "emptyHere": "Nothing here",
     "myCollection": "My collection",
-    "viewAsList": "View as list",
-    "viewAsMap": "View as map",
     "unifiedSearchPlaceholder": "Search your collection or anywhere new",
     "searchHint": "Results from your collection and beyond, together — each one labelled by where it's from.",
     "alreadyAdded": "Already added",
@@ -1061,7 +1059,8 @@
     "importBtn": "Import",
     "importSuccess_one": "{{count}} spot imported into your trip to {{trip}}",
     "importSuccess_other": "{{count}} spots imported into your trip to {{trip}}",
-    "mapEmpty": "No spots to show on the map yet"
+    "openInMaps": "Open in Google Maps",
+    "openLink": "Open link"
   },
   "settings": {
     "title": "Settings",

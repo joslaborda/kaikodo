@@ -1048,8 +1048,6 @@
     "searchCta": "Buscar un sitio",
     "emptyHere": "Nada por aquí",
     "myCollection": "Mi colección",
-    "viewAsList": "Ver como lista",
-    "viewAsMap": "Ver como mapa",
     "unifiedSearchPlaceholder": "Buscar en tu colección o cualquier sitio nuevo",
     "searchHint": "Resultados de tu colección y de fuera, juntos — cada uno marcado según de dónde viene.",
     "alreadyAdded": "Ya añadido",
@@ -1061,7 +1059,8 @@
     "importBtn": "Importar",
     "importSuccess_one": "{{count}} spot importado a tu viaje a {{trip}}",
     "importSuccess_other": "{{count}} spots importados a tu viaje a {{trip}}",
-    "mapEmpty": "Aún no tienes spots que mostrar en el mapa"
+    "openInMaps": "Abrir en Google Maps",
+    "openLink": "Abrir enlace"
   },
   "settings": {
     "title": "Ajustes",
