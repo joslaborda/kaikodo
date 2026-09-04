@@ -19,29 +19,21 @@ const TYPE_CONFIG = {
   transport: { tk: 'spots.types.transport',  Icon: Train,      color: 'bg-secondary text-foreground' },
   hotel:     { tk: 'spots.types.hotel',      Icon: Hotel,      color: 'bg-indigo-100 text-indigo-700' },
   nightlife: { tk: 'spots.types.nightlife',  Icon: Moon,       color: 'bg-indigo-100 text-indigo-700' },
-  // 'transport' se queda para spots antiguos ya guardados así — aeropuerto,
-  // tren y bus ahora tienen cada uno su propio icono en vez de compartir
-  // uno genérico (o el "+" de custom, si ni eso resolvía).
   airport:   { tk: 'spots.types.airport',    Icon: PlaneIcon,  color: 'bg-sky-100 text-sky-700' },
   train:     { tk: 'spots.types.train',      Icon: TrainFront, color: 'bg-emerald-100 text-emerald-700' },
   bus:       { tk: 'spots.types.bus',        Icon: BusFront,   color: 'bg-amber-100 text-amber-700' },
   custom:    { tk: 'spots.types.custom',    Icon: Star,       color: 'bg-yellow-100 text-yellow-700' },
 };
 
-// ── Popup de valoración ───────────────────────────────────────────────────────
-// ── Upload helper ─────────────────────────────────────────────────────────────
 async function uploadPhoto(file) {
-  // Devuelve { url } o { error: 'size'|'type'|'failed', maxMb }
   const chk = checkUpload(file);
   if (!chk.ok) return { error: chk.reason, maxMb: chk.maxMb };
   try {
-    // base44.storage no existe en el SDK instalado (@base44/sdk) — la subida
-    // de archivos vive en base44.integrations.Core.UploadFile, que es lo que
-    // usan los otros 5 puntos de subida de la app (documentos, gastos,
-    // perfil, chat, galería). Con el método viejo esto fallaba el 100% de
-    // las veces al adjuntar una foto a una valoración o comentario de spot.
     const uploadFile = await convertHeicIfNeeded(file);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file: uploadFile });
+    const result = await base44.functions.invoke('uploadPublicFile', { file: uploadFile });
+    const data = result?.data ?? result;
+    if (data?.error) throw new Error(data.error);
+    const { file_url } = data;
     return { url: file_url };
   } catch {
     return { error: 'failed' };
@@ -142,7 +134,6 @@ function RatingPopup({ spot, userId, userProfile, onClose }) {
   );
 }
 
-// ── Popup de comentarios ──────────────────────────────────────────────────────
 function CommentsPopup({ spot, userId, userProfile, onClose }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -211,7 +202,7 @@ function CommentsPopup({ spot, userId, userProfile, onClose }) {
                 <div className="bg-secondary rounded-2xl rounded-tl-none px-3 py-2">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-semibold text-foreground">@{c.username || c.user_display_name}</span>
-                    <span className="text-xs text-muted-foreground">{c.thumb === 'up' ? '↑' : '↓'}</span>
+                    <span className="text-xs text-muted-foreground">{c.thumb === 'up' ? '\u2191' : '\u2193'}</span>
                   </div>
                   {c.text && <p className="text-sm text-foreground">{c.text}</p>}
                   {c.image_url && <img src={c.image_url} alt="foto" className="w-full rounded-xl mt-2 object-cover max-h-40" onError={e => e.currentTarget.style.display='none'} />}
@@ -269,7 +260,6 @@ function CommentsPopup({ spot, userId, userProfile, onClose }) {
   );
 }
 
-// ── Popup de confirmación de eliminar ─────────────────────────────────────────
 function DeleteConfirmPopup({ spot, onConfirm, onCancel }) {
   const { t } = useTranslation();
   return (
@@ -287,13 +277,11 @@ function DeleteConfirmPopup({ spot, onConfirm, onCancel }) {
   );
 }
 
-// ── Popup de valoración tras visitar ────────────────────────────────────────
 function VisitedRatingPopup({ spot, userId, userProfile, onClose }) {
   const { toast } = useToast();
   return <RatingPopup spot={spot} userId={userId} userProfile={userProfile} onClose={onClose} />;
 }
 
-// ── SpotCard principal ────────────────────────────────────────────────────────
 export default function SpotCard({ spot, days = [], currentUserEmail, cityId, tripId }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -352,7 +340,6 @@ export default function SpotCard({ spot, days = [], currentUserEmail, cityId, tr
     <>
       <div className={"rounded-2xl border transition-all " + (spot.visited ? 'bg-green-50 dark:bg-green-950/20 border-green-200' : 'bg-card border-border')}>
         <div className="p-4">
-          {/* Header */}
           <div className="flex items-start gap-3">
             {spot.photo_url ? (
               <img src={spot.photo_url} alt="" className="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
@@ -390,9 +377,7 @@ export default function SpotCard({ spot, days = [], currentUserEmail, cityId, tr
           </div>
         </div>
 
-        {/* Action bar — like, comment, visited, maps */}
         <div className="border-t border-inherit px-4 py-3 flex items-center gap-5">
-          {/* Like */}
           <button onClick={toggleLike} className="flex items-center gap-1.5 transition-colors">
             {isLiked
               ? <svg width="18" height="18" viewBox="0 0 24 24" fill="hsl(var(--primary))" stroke="hsl(var(--primary))" strokeWidth="0"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
@@ -403,7 +388,6 @@ export default function SpotCard({ spot, days = [], currentUserEmail, cityId, tr
             </span>
           </button>
 
-          {/* Comment */}
           <button onClick={() => setShowComments(true)} className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <span className="text-sm">{comments.length > 0 ? comments.length : ''}</span>
@@ -411,13 +395,11 @@ export default function SpotCard({ spot, days = [], currentUserEmail, cityId, tr
 
           <div className="flex-1" />
 
-          {/* Maps */}
           <a href={getMapsUrl(spot)} target="_blank" rel="noopener noreferrer"
             className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
             <Navigation className="w-3.5 h-3.5" />{t('spots.cardMaps')}
           </a>
 
-          {/* Visited toggle */}
           <button onClick={handleMarkVisited}
             className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border transition-all ${
               spot.visited ? 'bg-green-100 text-green-700 border-green-200' : 'bg-secondary border-border text-muted-foreground hover:border-green-300'
