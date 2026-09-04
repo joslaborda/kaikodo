@@ -1739,6 +1739,10 @@
   },
   "auth": {
     "tagline": "Travel your way",
+    "invitePreview": {
+      "line": "{{inviter}} te invita a un viaje a {{destination}}",
+      "someone": "Alguien"
+    },
     "tabs": {
       "login": "Iniciar sesión",
       "register": "Crear cuenta"
