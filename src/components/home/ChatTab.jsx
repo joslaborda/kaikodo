@@ -45,19 +45,9 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
     if (!messages.length) return;
     const container = scrollContainerRef.current;
     if (!container) return;
-    // Solo scroll al fondo en primera carga o cuando el último mensaje es mío
     const lastMsg = messages[messages.length - 1];
     const isMine = lastMsg && (lastMsg.user_id === currentUserId || lastMsg.user_email === currentUserEmail);
     if (isFirstLoad.current || (isMine && messages.length > lastMsgCount.current)) {
-      // Antes solo se hacía `container.scrollTop = container.scrollHeight`
-      // una vez, en el mismo tick que este efecto. Al entrar a la pestaña
-      // Chat (p. ej. desde una notificación) el contenedor a veces no tiene
-      // todavía su scrollHeight final en ese instante — la animación de
-      // entrada del tab (kodo-slide-right/left en Home.jsx) y el layout de
-      // los mensajes recién montados pueden tardar un frame más — así que
-      // el scroll se quedaba a medias o directamente arriba. Se repite en
-      // el siguiente frame (y con un pequeño margen extra) para asegurarse
-      // de que llega al fondo de verdad.
       const scrollToBottom = () => { container.scrollTop = container.scrollHeight; };
       scrollToBottom();
       requestAnimationFrame(scrollToBottom);
@@ -79,14 +69,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
 
   const votePoll = async (msg, optionIdx) => {
     try {
-      // Votar ya no escribe TripMessage.update directo desde el cliente:
-      // el rls de esa entidad exige ser el AUTOR del mensaje para poder
-      // actualizarlo (fix de ronda 2, para impedir editar/borrar mensajes
-      // ajenos), lo que sin querer también bloqueaba votar en la encuesta de
-      // cualquiera que no fuera quien la creó. La función backend votePoll
-      // valida membresía del viaje, aplica el voto de forma atómica con
-      // reintento, y solo toca la entrada de quien vota — ver
-      // base44/functions/votePoll/entry.ts.
       const result = await base44.functions.invoke('votePoll', { messageId: msg.id, optionIdx });
       const data = result?.data ?? result;
       if (data?.error) throw new Error(data.error);
@@ -97,12 +79,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
   };
 
   const sendMutation = useMutation({
-    // Antes, si tripMembers (trip?.members del padre) no había cargado
-    // todavía, se guardaba con trip_members: [currentUserEmail] — el
-    // mensaje quedaba invisible para el RESTO del grupo (falla su propia
-    // rls de TripMessage), así que solo quien lo mandó lo veía en su chat.
-    // Igual que Documents.jsx/Utilities.jsx con sus propios registros, se
-    // corta antes de crear algo que el grupo no podría ver.
     mutationFn: (payload) => {
       if (!tripMembers?.length) throw new Error(t('cities.tripNotLoadedRetry'));
       return base44.entities.TripMessage.create({
@@ -118,8 +94,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
     onSuccess: (_data, payload) => {
       setMessage('');
       queryClient.invalidateQueries({ queryKey: ['tripMessages', tripId] });
-              // Avisa al resto de miembros del viaje de un mensaje nuevo en
-              // el chat del grupo -- antes esto no generaba ninguna notificacion.
               const targets = (tripMembers || []).filter(e => normalizeEmail(e) !== normalizeEmail(currentUserEmail));
               if (targets.length) {
                           const preview = payload.content?.trim() || t('notifications.chatAttachmentFallback');
@@ -139,9 +113,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
 
   const handleUpload = async (file) => {
     if (!file) return;
-    // Antes 20*1024*1024 estaba repetido aquí como literal en vez de
-    // importar la constante compartida — si el límite cambiaba en
-    // uploadLimits.js, este archivo se desincronizaba en silencio.
     if (file.size > MAX_FILE_BYTES) { toast({ title: t('chat.fileTooLarge'), description: t('chat.max20mb'), variant: 'destructive' }); return; }
     const isImage = file.type.startsWith('image/');
     const isAudio = file.type.startsWith('audio/');
@@ -149,7 +120,10 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
     setAttachOpen(false);
     try {
       const uploadFile = isImage ? await convertHeicIfNeeded(file) : file;
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: uploadFile });
+      const result = await base44.functions.invoke('uploadPublicFile', { file: uploadFile });
+      const data = result?.data ?? result;
+      if (data?.error) throw new Error(data.error);
+      const { file_url } = data;
       sendMutation.mutate({
         content: isImage || isAudio ? '' : file.name,
         file_url,
@@ -163,7 +137,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
   const openPicker = (type) => {
     setAttachOpen(false);
     if (type === 'camera') {
-      // Use dedicated camera input with capture attribute for mobile
       const camInput = document.getElementById('chat-camera-input');
       if (camInput) camInput.click();
     } else {
@@ -194,7 +167,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
       mediaRecorderRef.current = mr;
       mr.start();
       setRecording(true);
-      // Auto-stop after 60s
       setTimeout(() => { if (mr.state === 'recording') stopRecording(); }, 60000);
     } catch { toast({ title: t('chat.micUnavailable'), description: t('chat.micHint'), variant: 'destructive' }); }
   };
@@ -218,7 +190,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
 
   return (
     <>
-      {/* Attach menu */}
       {attachOpen && (
         <div className="fixed inset-0 z-40" onClick={() => setAttachOpen(false)}>
           <div className="absolute bottom-36 left-4 bg-card border border-border rounded-2xl shadow-xl p-3 flex gap-3"
@@ -242,7 +213,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
       )}
 
       <div className="bg-card rounded-2xl border border-border overflow-hidden flex flex-col mb-4" style={{minHeight:'360px',maxHeight:'500px'}}>
-        {/* Messages */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-2">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
@@ -385,8 +355,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
           <div ref={bottomRef} />
         </div>
 
-        {/* Input bar */}
-        {/* Offline banner — reading works, sending doesn't */}
         {!navigator.onLine && (
           <div className="flex items-center gap-2 mx-3 mb-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl px-3 py-2.5">
             <WifiOff className="w-3.5 h-3.5 text-amber-800 flex-shrink-0" />
@@ -394,10 +362,8 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
           </div>
         )}
         <div className="border-t border-border p-2.5 flex gap-2 items-center">
-          {/* File picker */}
           <input ref={fileInputRef} type="file" className="hidden"
             onChange={e => { handleUpload(e.target.files?.[0]); e.target.value=''; }} />
-          {/* Camera - capture="environment" opens camera directly on mobile */}
           <input
             ref={el => { if (el) el._isCameraInput = true; }}
             id="chat-camera-input"
@@ -408,7 +374,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
             onChange={e => { handleUpload(e.target.files?.[0]); e.target.value=''; }}
           />
 
-          {/* + button */}
           <button onClick={() => setAttachOpen(o => !o)}
             disabled={uploading || recording}
             className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors font-bold text-lg ${attachOpen ? 'bg-primary text-white' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}>
@@ -423,7 +388,6 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
             className="flex-1 text-sm bg-background border-border rounded-full px-4"
             disabled={sendMutation.isPending || recording} />
 
-          {/* Mic button - toggle record */}
           {!message.trim() && (
             <button
               onClick={recording ? stopRecording : startRecording}
