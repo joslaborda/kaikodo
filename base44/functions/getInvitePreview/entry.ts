@@ -22,7 +22,18 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  * subconjunto de datos que se expone aquí es MÁS reducido que
  * getTripPreview: nada de la lista de miembros (emails), solo nombre del
  * viaje, destino, fechas, y el nombre (no el email) de quien invita.
+ *
+ * Límite de intentos: el invite_token es un crypto.randomUUID() (ver
+ * createTripInvite) -- adivinarlo a fuerza bruta no es viable -- pero nada
+ * impedía bombardear repetidamente un token real ya conocido. Se cuenta en
+ * el propio TripInvite (preview_count/preview_window_start) en vez de
+ * montar infraestructura nueva: ventana de 15 minutos, máximo 20 intentos,
+ * generoso para uso legítimo (abrir el email varias veces, recargar la
+ * página) pero inútil para machacar el endpoint en bucle.
  */
+
+const PREVIEW_WINDOW_MS = 15 * 60 * 1000;
+const PREVIEW_MAX_PER_WINDOW = 20;
 
 Deno.serve(async (req) => {
   try {
@@ -38,6 +49,26 @@ Deno.serve(async (req) => {
     const invite = invites[0];
     if (!invite || invite.status !== "pending") {
       return Response.json({ error: "Invitación inválida o expirada" }, { status: 404 });
+    }
+
+    const now = Date.now();
+    const windowStartMs = invite.preview_window_start ? new Date(invite.preview_window_start).getTime() : 0;
+    const windowExpired = !windowStartMs || (now - windowStartMs) > PREVIEW_WINDOW_MS;
+    const currentCount = windowExpired ? 0 : (invite.preview_count || 0);
+
+    if (currentCount >= PREVIEW_MAX_PER_WINDOW) {
+      return Response.json({ error: "Demasiados intentos, inténtalo más tarde" }, { status: 429 });
+    }
+
+    // Best effort: si esto falla, la vista previa se sirve igual -- en el
+    // peor caso, esta llamada concreta no cuenta para el límite.
+    try {
+      await service.entities.TripInvite.update(invite.id, {
+        preview_count: currentCount + 1,
+        preview_window_start: windowExpired ? new Date(now).toISOString() : invite.preview_window_start,
+      });
+    } catch {
+      // No bloquea la respuesta.
     }
 
     const trip = await service.entities.Trip.get(invite.trip_id);
