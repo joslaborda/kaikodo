@@ -58,15 +58,15 @@ export async function sendTripInvite({ tripId, email, targetUserId, role, tripNa
   // URL de aceptación
   const inviteUrl = `${window.location.origin}/Invites?token=${inviteToken}`;
 
-  // Enviar email — Resend primero (HTML de verdad, con un <a href> real y
-  // clicable), vía la función de backend sendInviteEmail. El SendEmail
-  // nativo de base44 solo admite texto plano: probamos ya que aunque la URL
-  // llegue íntegra como texto suelto, ningún cliente la convierte sola en
-  // enlace clicable (Outlook la muestra en texto normal). Si Resend aún no
-  // está configurado (falta RESEND_API_KEY en Secretos, o el dominio no está
-  // verificado), se cae al SendEmail de texto plano como red de seguridad
-  // para no dejar la invitación sin ningún correo mientras se termina de
-  // montar Resend.
+  // Enviar email — vía la función de backend sendInviteEmail, que decide
+  // ella misma cómo (Resend con HTML real, o su propio fallback en texto
+  // plano si Resend no está disponible). Antes, ese fallback se hacía aquí
+  // en el cliente llamando directamente a base44.integrations.Core.SendEmail
+  // — eso dejaba esa integración expuesta en el navegador: cualquiera con
+  // sesión iniciada podía invocarla a mano con cualquier destinatario,
+  // gastando créditos de email de la cuenta de Base44 sin pasar por ninguna
+  // validación. Movido al backend (ver sendInviteEmail/entry.ts) para que el
+  // cliente nunca toque esa integración directamente.
   let emailSent = false;
   try {
     const result = await base44.functions.invoke('sendInviteEmail', {
@@ -87,29 +87,7 @@ export async function sendTripInvite({ tripId, email, targetUserId, role, tripNa
     if (data?.error) throw new Error(data.error);
     emailSent = true;
   } catch (e) {
-    console.warn('[sendTripInvite] Resend falló, usando SendEmail de reserva:', e?.message);
-    try {
-      await base44.integrations.Core.SendEmail({
-        to: targetEmail,
-        subject: `${inviterName || inviterEmail} te invita a "${tripName}" en Kaikōdo ✈️`,
-        body: `Hola,
-
-${inviterName || inviterEmail} te ha invitado a unirte al viaje "${tripName}" en Kaikōdo.
-
-Para aceptar la invitación, abre este enlace:
-
-${inviteUrl}
-
-Si el enlace no se abre solo al tocarlo, cópialo y pégalo en el navegador.
-
-Si aún no tienes cuenta en Kaikōdo, el mismo enlace te lleva a crearla con este email (${targetEmail}) — la invitación aparecerá automáticamente en cuanto entres.
-
-¡Buen viaje! 🧳`
-      });
-      emailSent = true;
-    } catch (e2) {
-      console.warn('[sendTripInvite] Email no enviado (ni Resend ni SendEmail):', e2?.message);
-    }
+    console.warn('[sendTripInvite] Email no enviado:', e?.message);
   }
 
   // Si el usuario ya existe en Kaikōdo, crear notificación in-app

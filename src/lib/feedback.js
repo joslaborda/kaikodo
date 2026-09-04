@@ -4,14 +4,10 @@ import { getLanguage } from '@/i18n/index.js';
 // Dirección donde José recibe el aviso de cada envío — buzón real
 // (hello@kaikodo.app) creado aparte para esto, no relacionado con el
 // remitente de las invitaciones (RESEND_FROM_ADDRESS), que es solo de
-// salida y no admite respuestas.
+// salida y no admite respuestas. El destinatario real vive fijo en la
+// función de backend sendFeedbackEmail, no aquí — esta constante solo se
+// usa para el mensaje de log si el envío falla.
 const FEEDBACK_INBOX = 'hello@kaikodo.app';
-
-const TYPE_LABEL = {
-  bug: 'Bug',
-  suggestion: 'Sugerencia',
-  other: 'Otro',
-};
 
 /**
  * sendFeedback — guarda el mensaje en la entidad Feedback (así queda
@@ -19,10 +15,11 @@ const TYPE_LABEL = {
  * pierda en spam) y, además, manda un aviso por email a FEEDBACK_INBOX para
  * enterarse al momento.
  *
- * El email va con el SendEmail nativo de base44 (texto plano) — a
- * diferencia de las invitaciones, aquí no hace falta HTML ni Resend: es un
- * aviso interno para José, no algo que tenga que verse bonito para un
- * desconocido.
+ * El email se manda vía la función de backend sendFeedbackEmail, no
+ * llamando a base44.integrations.Core.SendEmail directamente desde aquí —
+ * esa integración, expuesta en el cliente, permitía a cualquiera con sesión
+ * iniciada mandar correo arbitrario (cualquier destinatario/asunto/cuerpo)
+ * gastando créditos de email de la cuenta de Base44 sin ningún control.
  */
 export async function sendFeedback({ feedbackType, message, userEmail, userName }) {
   const trimmed = (message || '').trim();
@@ -41,18 +38,17 @@ export async function sendFeedback({ feedbackType, message, userEmail, userName 
   // está verificado del todo), el registro en Feedback ya se guardó, así
   // que no se pierde el mensaje del usuario por un fallo de envío.
   try {
-    await base44.integrations.Core.SendEmail({
-      to: FEEDBACK_INBOX,
-      subject: `[Kaikōdo] ${TYPE_LABEL[feedbackType] || 'Feedback'} de ${userName || userEmail || 'usuario'}`,
-      body: `Tipo: ${TYPE_LABEL[feedbackType] || feedbackType}
-De: ${userName || '(sin nombre)'} <${userEmail || 'sin email'}>
-Idioma app: ${getLanguage()}
-
-Mensaje:
-${trimmed}`,
+    const result = await base44.functions.invoke('sendFeedbackEmail', {
+      feedbackType,
+      message: trimmed,
+      userEmail,
+      userName,
+      appLanguage: getLanguage(),
     });
+    const data = result?.data ?? result;
+    if (data?.error) throw new Error(data.error);
   } catch (e) {
-    console.warn('[sendFeedback] Email de aviso no enviado (el registro sí se guardó):', e?.message);
+    console.warn(`[sendFeedback] Email de aviso a ${FEEDBACK_INBOX} no enviado (el registro sí se guardó):`, e?.message);
   }
 
   return record;
