@@ -156,7 +156,19 @@ const AuthenticatedApp = () => {
       // useAuth()) es lo que hace que, tras un login/registro con éxito, la
       // app vuelva a comprobar el estado de auth y monte el resto con
       // normalidad.
-      return <LoginScreen onSuccess={checkAppState} />;
+      //
+      // inviteToken: si alguien sin cuenta toca un enlace de invitación
+      // (/Invites?token=...), antes veía esta pantalla sin ningún rastro
+      // del viaje al que le están invitando -- un muro de registro genérico
+      // antes de ver nada. Se extrae el token aquí (la URL real del
+      // navegador no cambia por mostrar LoginScreen, solo cambia qué se
+      // renderiza) y se lo pasamos para que pueda pintar el contexto del
+      // viaje (ver getInvitePreview) por encima del formulario.
+      {
+        const isInvitePath = path === '/invites';
+        const inviteToken = isInvitePath ? new URLSearchParams(location.search).get('token') : null;
+        return <LoginScreen onSuccess={checkAppState} inviteToken={inviteToken} />;
+      }
     } else {
       // Antes, cualquier authError.type no contemplado explícitamente arriba
       // (p. ej. 'unknown', o el nuevo 'network_error' que ahora fija
