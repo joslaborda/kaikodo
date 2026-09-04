@@ -3,8 +3,8 @@ import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
 import {
-  Bookmark, CirclePlus, Compass, Hotel, Landmark, List, Loader2,
-  Map as MapIcon, MapPin, Search, ShoppingBag, Sparkles, Star, Ticket, TrainFront,
+  Bookmark, CirclePlus, Compass, ExternalLink, Hotel, Landmark, Loader2,
+  MapPin, Navigation, Search, ShoppingBag, Sparkles, Star, Ticket, TrainFront,
   BusFront, Trash2, Utensils, X,
 } from 'lucide-react';
 import { PlaneIcon } from '@/lib/icons';
@@ -14,7 +14,6 @@ import { getCountryMeta, normalizeCountry, getCountryLabel } from '@/lib/country
 import { getContinent, CONTINENT_ORDER } from '@/lib/continents';
 import { getTripCoverImage } from '@/lib/tripImage';
 import { getTripStatus } from '@/components/trip/TripCard';
-import CollectionMapView from '@/components/spots/CollectionMapView';
 import { searchNewPlaces, fetchPlaceDetails } from '@/components/spots/placesAutocomplete';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
@@ -141,9 +140,70 @@ function EmptyCollection({ onFocusSearch }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Resultados del buscador unificado: colección propia + sitios nuevos (Google)
+// Ficha de detalle de un spot — hasta ahora tocar una fila no hacía nada.
+// Muestra foto, dirección, notas y enlace si los hay, y un acceso directo a
+// Google Maps (por coordenadas si existen, si no por dirección de texto).
 // ─────────────────────────────────────────────────────────────────────────────
-function UnifiedSearchResults({ query, mineMatches, googleResults, googleLoading, allTitles, onDeleteMine, deletingId, onSaveNew, savingPlaceId, findTripName }) {
+function SpotDetailSheet({ spot, onClose }) {
+  const { t } = useTranslation();
+  const SpotTypeIcon = SPOT_ICONS_MAP[spot.type] || MapPin;
+  const coverImg = spot.photo_url || spot.image_url || null;
+
+  const mapsUrl = (spot.lat && spot.lng)
+    ? `https://www.google.com/maps/search/?api=1&query=${spot.lat},${spot.lng}`
+    : (spot.address || spot.city_name)
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([spot.address, spot.city_name, spot.country].filter(Boolean).join(', '))}`
+      : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-card w-full max-w-3xl rounded-t-3xl px-5 pt-3 pb-8 max-h-[85vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="spot-sheet-title">
+        <div className="w-9 h-1 rounded-full bg-border mx-auto mb-4" />
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-center gap-3 min-w-0">
+            {coverImg ? (
+              <img src={coverImg} alt={spot.title} loading="lazy" className="w-14 h-14 rounded-2xl object-cover flex-shrink-0" onError={e => { e.currentTarget.style.display = 'none'; }} />
+            ) : (
+              <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center flex-shrink-0">
+                <SpotTypeIcon size={22} className="text-muted-foreground" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p id="spot-sheet-title" className="text-base font-semibold text-foreground truncate">{spot.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{[spot.city_name, spot.country].filter(Boolean).join(', ')}</p>
+            </div>
+          </div>
+          <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 -m-1 rounded-full flex items-center justify-center text-muted-foreground hover:bg-secondary flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {spot.address && <p className="text-sm text-foreground mb-3">{spot.address}</p>}
+        {spot.notes && (
+          <p className="text-sm text-muted-foreground bg-secondary/60 rounded-xl px-3 py-2.5 mb-3">{spot.notes}</p>
+        )}
+
+        <div className="flex flex-col gap-2 mt-2">
+          {mapsUrl && (
+            <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 bg-primary text-white text-sm font-semibold rounded-full py-3">
+              <Navigation className="w-4 h-4" /> {t('profile.openInMaps')}
+            </a>
+          )}
+          {spot.link && (
+            <a href={spot.link} target="_blank" rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 bg-card border border-border text-foreground text-sm font-semibold rounded-full py-3">
+              <ExternalLink className="w-4 h-4" /> {t('profile.openLink')}
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function UnifiedSearchResults({ query, mineMatches, googleResults, googleLoading, allTitles, savedPlaceIds, onDeleteMine, deletingId, onSaveNew, savingPlaceId, findTripName, onOpenSheet }) {
   const { t } = useTranslation();
   const hasAny = mineMatches.length > 0 || googleResults.length > 0;
 
@@ -163,14 +223,17 @@ function UnifiedSearchResults({ query, mineMatches, googleResults, googleLoading
               tripName={spot.owner === 'mine' ? findTripName(spot.trip_id) : null}
               onDelete={onDeleteMine}
               deleting={deletingId === spot.id}
+              onOpenSheet={onOpenSheet}
             />
           ))}
           {googleResults.map(place => {
-            const dup = allTitles.has(place.title.toLowerCase().trim());
+            const dup = (place._placeId && savedPlaceIds.has(place._placeId))
+              || allTitles.has(place.title.toLowerCase().trim());
+            const PlaceIcon = SPOT_ICONS_MAP[place.type] || MapPin;
             return (
               <div key={place.id} className="flex items-center gap-2.5 px-3 py-2.5">
                 <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
-                  <MapPin className="w-4 h-4 text-muted-foreground" />
+                  <PlaceIcon className="w-4 h-4 text-muted-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">{place.title}</p>
@@ -369,7 +432,7 @@ export default function Profile() {
 
   // ── Colección unificada (guardados + creados) ──
   const [collectionFilter, setCollectionFilter] = useState('all'); // all | saved | mine
-  const [collectionView, setCollectionView] = useState('list'); // list | map
+  const [openSpot, setOpenSpot] = useState(null);
   const [continentFilter, setContinentFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -389,6 +452,15 @@ export default function Profile() {
   const allTitlesLower = useMemo(
     () => new Set(allCollection.map(s => (s.title || '').toLowerCase().trim())),
     [allCollection]
+  );
+  // Prioritario sobre allTitlesLower: Autocomplete (New) y Place Details
+  // (New) no garantizan el mismo texto de nombre para el mismo sitio real,
+  // así que comparar solo por título daba falsos negativos ("ya lo tienes"
+  // no se detectaba aunque el usuario acabara de guardarlo). El place_id de
+  // Google es estable entre los dos endpoints.
+  const savedPlaceIds = useMemo(
+    () => new Set(savedSpotsRaw.map(s => s.google_place_id).filter(Boolean)),
+    [savedSpotsRaw]
   );
 
   // Buscador de Google — debounce 600ms, mínimo 3 caracteres, igual que
@@ -453,6 +525,7 @@ export default function Profile() {
         lat: details?.lat || null,
         lng: details?.lng || null,
         image_url: details?.image_url || null,
+        google_place_id: place._placeId || null,
       });
     },
     onSettled: () => setSavingPlaceId(null),
@@ -592,23 +665,7 @@ export default function Profile() {
 
         {/* ── Mi colección ── */}
         <div>
-          <div className="flex items-center justify-between mb-2.5">
-            <h2 className="text-sm font-bold text-foreground">{t('profile.myCollection')}</h2>
-            <div className="flex bg-secondary rounded-full p-0.5">
-              <button
-                aria-label={t('profile.viewAsList')}
-                onClick={() => setCollectionView('list')}
-                className={`w-9 h-8 rounded-full flex items-center justify-center transition-colors ${collectionView === 'list' ? 'bg-card text-foreground' : 'text-muted-foreground'}`}>
-                <List className="w-3.5 h-3.5" />
-              </button>
-              <button
-                aria-label={t('profile.viewAsMap')}
-                onClick={() => setCollectionView('map')}
-                className={`w-9 h-8 rounded-full flex items-center justify-center transition-colors ${collectionView === 'map' ? 'bg-card text-foreground' : 'text-muted-foreground'}`}>
-                <MapIcon className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+          <h2 className="text-sm font-bold text-foreground mb-2.5">{t('profile.myCollection')}</h2>
 
           {/* Buscador único: colección propia + sitios nuevos de Google, sin distinción de pantalla */}
           <div className="bg-card border border-border rounded-full px-3.5 py-2.5 flex items-center gap-2 mb-3">
@@ -636,11 +693,13 @@ export default function Profile() {
               googleResults={googleResults}
               googleLoading={googleLoading}
               allTitles={allTitlesLower}
+              savedPlaceIds={savedPlaceIds}
               onDeleteMine={spot => deleteMutation.mutate(spot)}
               deletingId={deletingId}
               onSaveNew={place => saveNewPlaceMutation.mutate(place)}
               savingPlaceId={savingPlaceId}
               findTripName={findTripName}
+              onOpenSheet={setOpenSpot}
             />
           ) : allCollection.length === 0 ? (
             <EmptyCollection onFocusSearch={() => searchInputRef.current?.focus()} />
@@ -659,62 +718,61 @@ export default function Profile() {
                 ))}
               </div>
 
-              {collectionView === 'list' ? (
-                <>
-                  {Object.keys(continentGroups).length > 1 && (
-                    <div className="flex gap-1.5 overflow-x-auto pb-1 mb-2">
-                      <button onClick={() => { setContinentFilter('all'); setCountryFilter('all'); }}
-                        className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border ${continentFilter === 'all' ? 'bg-foreground text-white border-foreground' : 'bg-card border-border text-muted-foreground'}`}>
-                        {t('common.all')} · {ownerFiltered.length}
-                      </button>
-                      {CONTINENT_ORDER.filter(c => continentGroups[c]).map(c => (
-                        <button key={c} onClick={() => { setContinentFilter(c); setCountryFilter('all'); }}
-                          className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border ${continentFilter === c ? 'bg-foreground text-white border-foreground' : 'bg-card border-border text-muted-foreground'}`}>
-                          {t(`continents.${c}`)} · {continentGroups[c]}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {continentFilter !== 'all' && Object.keys(countryGroups).length > 1 && (
-                    <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3">
-                      <button onClick={() => setCountryFilter('all')}
-                        className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border ${countryFilter === 'all' ? 'bg-primary text-white border-primary' : 'bg-background border-border text-muted-foreground'}`}>
-                        {t('common.all')} · {Object.values(countryGroups).reduce((a, b) => a + b, 0)}
-                      </button>
-                      {Object.entries(countryGroups).sort((a, b) => b[1] - a[1]).map(([c, n]) => (
-                        <button key={c} onClick={() => setCountryFilter(c)}
-                          className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border ${countryFilter === c ? 'bg-primary text-white border-primary' : 'bg-background border-border text-muted-foreground'}`}>
-                          {countryFlag(c)} {getCountryLabel(c, i18n.language)} · {n}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {finalList.length === 0 ? (
-                    <div className="bg-card border border-border rounded-2xl text-center py-8">
-                      <p className="text-sm text-muted-foreground">{t('profile.emptyHere')}</p>
-                    </div>
-                  ) : (
-                    <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
-                      {finalList.map(spot => (
-                        <CollectionRow
-                          key={`${spot.owner}-${spot.id}`}
-                          spot={spot}
-                          tripName={spot.owner === 'mine' ? findTripName(spot.trip_id) : null}
-                          onDelete={s => deleteMutation.mutate(s)}
-                          deleting={deletingId === spot.id}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </>
+              {Object.keys(continentGroups).length > 1 && (
+                <div className="flex gap-1.5 overflow-x-auto pb-1 mb-2">
+                  <button onClick={() => { setContinentFilter('all'); setCountryFilter('all'); }}
+                    className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border ${continentFilter === 'all' ? 'bg-foreground text-white border-foreground' : 'bg-card border-border text-muted-foreground'}`}>
+                    {t('common.all')} · {ownerFiltered.length}
+                  </button>
+                  {CONTINENT_ORDER.filter(c => continentGroups[c]).map(c => (
+                    <button key={c} onClick={() => { setContinentFilter(c); setCountryFilter('all'); }}
+                      className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border ${continentFilter === c ? 'bg-foreground text-white border-foreground' : 'bg-card border-border text-muted-foreground'}`}>
+                      {t(`continents.${c}`)} · {continentGroups[c]}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {continentFilter !== 'all' && Object.keys(countryGroups).length > 1 && (
+                <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3">
+                  <button onClick={() => setCountryFilter('all')}
+                    className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border ${countryFilter === 'all' ? 'bg-primary text-white border-primary' : 'bg-background border-border text-muted-foreground'}`}>
+                    {t('common.all')} · {Object.values(countryGroups).reduce((a, b) => a + b, 0)}
+                  </button>
+                  {Object.entries(countryGroups).sort((a, b) => b[1] - a[1]).map(([c, n]) => (
+                    <button key={c} onClick={() => setCountryFilter(c)}
+                      className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border ${countryFilter === c ? 'bg-primary text-white border-primary' : 'bg-background border-border text-muted-foreground'}`}>
+                      {countryFlag(c)} {getCountryLabel(c, i18n.language)} · {n}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {finalList.length === 0 ? (
+                <div className="bg-card border border-border rounded-2xl text-center py-8">
+                  <p className="text-sm text-muted-foreground">{t('profile.emptyHere')}</p>
+                </div>
               ) : (
-                <CollectionMapView spots={finalList} height={360} />
+                <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
+                  {finalList.map(spot => (
+                    <CollectionRow
+                      key={`${spot.owner}-${spot.id}`}
+                      spot={spot}
+                      tripName={spot.owner === 'mine' ? findTripName(spot.trip_id) : null}
+                      onDelete={s => deleteMutation.mutate(s)}
+                      deleting={deletingId === spot.id}
+                      onOpenSheet={setOpenSpot}
+                    />
+                  ))}
+                </div>
               )}
             </>
           )}
         </div>
 
       </div>
+
+      {openSpot && (
+        <SpotDetailSheet spot={openSpot} onClose={() => setOpenSpot(null)} />
+      )}
     </div>
   );
 }
