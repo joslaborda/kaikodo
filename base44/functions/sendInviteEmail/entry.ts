@@ -117,16 +117,38 @@ function formatDate(iso: string, lang: string) {
   }
 }
 
+// Fallback en texto plano, server-side — antes esto lo hacía el cliente
+// llamando directamente a base44.integrations.Core.SendEmail (ver
+// src/lib/invites.js), lo que dejaba esa integración expuesta en el
+// navegador: cualquiera con sesión iniciada podía invocarla a mano con
+// cualquier destinatario/asunto/cuerpo, sin pasar por ninguna validación,
+// gastando créditos de email de la cuenta de Base44. Movido aquí para que
+// el cliente nunca toque esa integración directamente — solo puede pedir
+// "manda la invitación a esta persona", y el backend decide cómo (Resend,
+// o este fallback) tras validar que hay una invitación real de por medio.
+async function sendPlainFallback(
+  client: any,
+  { to, inviterName, inviterEmail, tripName, safeInviteUrl, lang }:
+  { to: string; inviterName?: string; inviterEmail?: string; tripName?: string; safeInviteUrl: string; lang: string }
+) {
+  const s = STRINGS[lang];
+  const from = inviterName || inviterEmail || (lang === "en" ? "Someone" : "Alguien");
+  const subject = lang === "en"
+    ? `${from} ${s.subjectVerb} "${tripName || ""}" ${s.inKodo} \u2708\ufe0f`
+    : `${from} ${s.subjectVerb} "${tripName || ""}" ${s.inKodo} \u2708\ufe0f`;
+  const body = lang === "en"
+    ? `Hi,\n\n${from} has invited you to join the trip "${tripName || ""}" on Kaik\u014ddo.\n\nTo accept the invitation, open this link:\n\n${safeInviteUrl}\n\nIf the link doesn't open by tapping it, copy and paste it into your browser.\n\n${s.noAccount}\n\nHave a great trip! \ud83e\uddf3`
+    : `Hola,\n\n${from} te ha invitado a unirte al viaje "${tripName || ""}" en Kaik\u014ddo.\n\nPara aceptar la invitaci\u00f3n, abre este enlace:\n\n${safeInviteUrl}\n\nSi el enlace no se abre solo al tocarlo, c\u00f3pialo y p\u00e9galo en el navegador.\n\n${s.noAccount}\n\n\u00a1Buen viaje! \ud83e\uddf3`;
+
+  await client.integrations.Core.SendEmail({ to, subject, body });
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me().catch(() => null);
     if (!user?.email) {
       return Response.json({ error: "No autenticado" }, { status: 401 });
-    }
-
-    if (!RESEND_API_KEY) {
-      return Response.json({ error: "RESEND_API_KEY no configurada en Secretos" }, { status: 500 });
     }
 
     const {
@@ -282,6 +304,15 @@ ${infoBox}
       ? `${inviterName || inviterEmail || "Someone"} ${s.subjectVerb} "${tripName || ""}" ${s.inKodo} ✈️`
       : `${inviterName || inviterEmail} ${s.subjectVerb} "${tripName}" ${s.inKodo} ✈️`;
 
+    if (!RESEND_API_KEY) {
+      try {
+        await sendPlainFallback(base44, { to, inviterName, inviterEmail, tripName, safeInviteUrl, lang });
+        return Response.json({ ok: true, fallback: true });
+      } catch (fallbackErr) {
+        return Response.json({ error: `Fallback: ${fallbackErr.message}` }, { status: 500 });
+      }
+    }
+
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -298,7 +329,12 @@ ${infoBox}
 
     if (!resendRes.ok) {
       const errText = await resendRes.text().catch(() => "");
-      return Response.json({ error: `Resend: ${errText || resendRes.status}` }, { status: 502 });
+      try {
+        await sendPlainFallback(base44, { to, inviterName, inviterEmail, tripName, safeInviteUrl, lang });
+        return Response.json({ ok: true, fallback: true });
+      } catch (fallbackErr) {
+        return Response.json({ error: `Resend: ${errText || resendRes.status}; Fallback: ${fallbackErr.message}` }, { status: 502 });
+      }
     }
 
     const data = await resendRes.json().catch(() => ({}));
