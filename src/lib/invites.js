@@ -55,8 +55,31 @@ export async function sendTripInvite({ tripId, email, targetUserId, role, tripNa
   // real (enviar el correo, crear la notificación in-app).
   const targetEmail = invite.email;
 
-  // URL de aceptación
-  const inviteUrl = `${window.location.origin}/Invites?token=${inviteToken}`;
+  // URL de aceptación — lleva embebido, en el propio parámetro `preview`,
+  // lo mínimo para poder enseñar "X te invita a un viaje a Y" en la
+  // pantalla de registro ANTES de que esa persona tenga sesión (ver
+  // LoginScreen.jsx). Nada de esto es sensible — es exactamente lo mismo
+  // que ya va en texto plano en el propio email de invitación — así que no
+  // hace falta firmarlo ni verificarlo: si alguien lo manipulase a mano,
+  // lo único que conseguiría es un aviso con texto distinto; la aceptación
+  // real sigue validándose enteramente server-side contra el `token`, que
+  // es la única pieza con permisos de verdad.
+  //
+  // Antes esto se resolvía con una función de backend sin sesión
+  // (getInvitePreview) — funcionaba, pero era una superficie pública nueva
+  // que había que proteger con límite de intentos y que el escáner de
+  // seguridad de Base44 seguía marcando (con razón: no puede saber que el
+  // dato no es sensible). Esta versión no expone ningún endpoint nuevo en
+  // absoluto — la vista previa viaja con el enlace, se decodifica en el
+  // propio cliente, sin ninguna llamada de red adicional.
+  const previewPayload = {
+    n: trip?.name || '',
+    d: trip?.destination || '',
+    c: trip?.country || '',
+    i: inviterName || inviterEmail || '',
+  };
+  const previewBlob = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(previewPayload)))));
+  const inviteUrl = `${window.location.origin}/Invites?token=${inviteToken}&preview=${previewBlob}`;
 
   // Enviar email — vía la función de backend sendInviteEmail, que decide
   // ella misma cómo (Resend con HTML real, o su propio fallback en texto
