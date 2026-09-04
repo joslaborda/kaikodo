@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { base44 } from '@/api/base44Client';
 import { isNative, openProviderLogin } from '@/lib/nativeAuth';
@@ -51,10 +51,14 @@ function extractErrorMessage(err, fallback) {
  * contraseña, en cambio, es una llamada de API normal (fetch/XHR) y
  * funciona igual en web y en nativo sin ningún tratamiento especial.
  */
-export default function LoginScreen({ onSuccess }) {
+export default function LoginScreen({ onSuccess, inviteToken }) {
   const { t } = useTranslation();
   // 'login' | 'register' | 'otp' | 'forgot'
-  const [mode, setMode] = useState('login');
+  // Si venimos de un enlace de invitación, arrancamos ya en "register" --
+  // quien toca ese enlace sin cuenta casi siempre quiere crear una, no
+  // iniciar sesión con una que no tiene. Sigue pudiendo cambiar de pestaña
+  // a mano si ya tiene cuenta.
+  const [mode, setMode] = useState(inviteToken ? 'register' : 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -63,6 +67,24 @@ export default function LoginScreen({ onSuccess }) {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+
+  // ── Vista previa del viaje al que invitan, sin sesión iniciada ───────
+  // Ver base44/functions/getInvitePreview -- "best effort": si falla (token
+  // caducado, red, lo que sea) no se muestra nada, pero el registro/login
+  // normal sigue funcionando igual, sin bloquear a nadie por esto.
+  const [invitePreview, setInvitePreview] = useState(null);
+  useEffect(() => {
+    if (!inviteToken) return;
+    let cancelled = false;
+    base44.functions.invoke('getInvitePreview', { token: inviteToken })
+      .then(result => {
+        if (cancelled) return;
+        const data = result?.data ?? result;
+        if (data && !data.error) setInvitePreview(data);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [inviteToken]);
 
   // ── Captcha propio de Kaikōdo (ver src/lib/captcha.js) ───────────────
   // Widget solo en registro y "olvidé contraseña" (no en login normal).
@@ -248,6 +270,17 @@ export default function LoginScreen({ onSuccess }) {
           </div>
           <p className="text-xs text-muted-foreground mt-1.5">{t('auth.tagline')}</p>
         </div>
+
+        {invitePreview?.trip && (
+          <div className="bg-accent border border-orange-200 dark:border-orange-900/50 rounded-2xl px-4 py-3 mb-5 text-center">
+            <p className="text-sm text-accent-foreground font-medium leading-snug">
+              {t('auth.invitePreview.line', {
+                inviter: invitePreview.inviterName || invitePreview.inviterEmail || t('auth.invitePreview.someone'),
+                destination: [invitePreview.trip.destination, invitePreview.trip.country].filter(Boolean).join(', ') || invitePreview.trip.name,
+              })}
+            </p>
+          </div>
+        )}
 
         {(mode === 'login' || mode === 'register') && (
           <>
