@@ -45,11 +45,6 @@ export default function Photos() {
 
   const { data: messages = [], isLoading: loadingPhotos } = useQuery({
     queryKey: ['tripMessages', tripId],
-    // Con orden ascendente y un límite de 500, un viaje con mucho chat+fotos
-    // se quedaba con los 500 mensajes MÁS ANTIGUOS — las fotos recientes ni
-    // siquiera llegaban a bajarse. Orden descendente para que el límite se
-    // coma lo viejo, no lo nuevo (el reordenado cronológico para mostrar es
-    // aparte, más abajo).
     queryFn: () => base44.entities.TripMessage.filter({ trip_id: tripId }, '-created_date', 500),
     enabled: !!tripId,
     staleTime: 0,
@@ -65,8 +60,6 @@ export default function Photos() {
 
   const groups = groupByDate(photos);
 
-  // Solo quien subió la foto puede borrarla (misma lógica que "isMine" en
-  // ChatTab.jsx). Comparamos user_id y, si falta, el email normalizado.
   const isMine = (photo) =>
     !!photo && !!user && (
       photo.user_id === user.id ||
@@ -78,8 +71,6 @@ export default function Photos() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tripMessages', tripId] });
       setDeletePhoto(null);
-      // Si se borró desde el visor a pantalla completa, ciérralo — el índice
-      // ya no es válido una vez que `photos` pierde un elemento.
       setLbIdx(null);
     },
     onError: () => {
@@ -90,10 +81,6 @@ export default function Photos() {
   const notifyMembers = async (count) => {
     try {
       const members = trip?.members || [];
-      // trip.members está normalizado en minúsculas; user.email tal cual
-      // viene del proveedor de auth no siempre lo está — sin normalizar
-      // aquí, resolveUserIds() no encontraba coincidencia y la notificación
-      // de "foto añadida" simplemente no se creaba, sin ningún error.
       const others = members.filter(e => normalizeEmail(e) !== normalizeEmail(user.email));
       if (!others.length) return;
       const myProfArr = await base44.entities.UserProfile.filter({ email: normalizeEmail(user.email) });
@@ -112,16 +99,8 @@ export default function Photos() {
 
   const uploadMutation = useMutation({
     mutationFn: async (files) => {
-      // Cada foto se sube por separado: si una falla, las demás siguen. Antes el
-      // bucle abortaba en la primera excepción y las ya subidas ni se mostraban.
       const uploaded = [];
       const failed = [];
-      // Si `trip` no ha cargado todavía, antes se guardaba trip_members con
-      // solo quien sube la foto — el resto del grupo no podía leer ese
-      // TripMessage (falla su propia rls) y la foto quedaba invisible para
-      // ellos aunque el que la subió sí la viera. Se corta ANTES de subir
-      // los archivos (no solo antes de crear el TripMessage) para no gastar
-      // subidas que de todas formas habría que rehacer.
       if (!trip?.members?.length) {
         setUploadProgress({ current: files.length, total: files.length });
         return { uploaded, failed: files.map(f => f.name) };
@@ -132,11 +111,12 @@ export default function Photos() {
         try {
           const chk = checkUpload(file);
           if (!chk.ok) { failed.push(file.name); setUploadProgress({ current: i + 1, total: files.length }); continue; }
-          // EXIF se lee del archivo original (antes de convertir HEIC), la
-          // conversión a JPEG no conserva esos metadatos.
           const takenAt = await getExifDate(file);
           const uploadFile = await convertHeicIfNeeded(file);
-          const { file_url } = await base44.integrations.Core.UploadFile({ file: uploadFile });
+          const result = await base44.functions.invoke('uploadPublicFile', { file: uploadFile });
+          const data = result?.data ?? result;
+          if (data?.error) throw new Error(data.error);
+          const { file_url } = data;
           await base44.entities.TripMessage.create({
             trip_id: tripId,
             user_id: user.id,
@@ -159,7 +139,6 @@ export default function Photos() {
       return { uploaded, failed };
     },
     onSuccess: async ({ uploaded, failed }) => {
-      // Se refresca siempre: aunque algunas fallen, las que sí subieron deben verse.
       queryClient.invalidateQueries({ queryKey: ['tripMessages', tripId] });
       if (uploaded.length) await notifyMembers(uploaded.length);
       if (failed.length) {
@@ -196,14 +175,6 @@ export default function Photos() {
 
   const handleDrop = (e) => {
     e.preventDefault();
-    // Antes se filtraba por f.type.startsWith('image/') ANTES de llegar a
-    // checkUpload, que ya tiene su propio fallback por extensión para
-    // cuando file.type viene vacío (típico de HEIC en iOS, ver
-    // uploadLimits.js). Un HEIC arrastrado y soltado desaparecía en
-    // silencio, sin ningún toast — mientras que el mismo archivo elegido con
-    // el selector (handleFiles, sin este filtro) sí se subía. checkUpload ya
-    // es la única fuente de verdad en el bucle de subida; se deja que decida
-    // él, igual que en handleFiles.
     const allFiles = Array.from(e.dataTransfer.files);
     const files = allFiles.slice(0, 10);
     if (!files.length) return;
@@ -214,7 +185,6 @@ export default function Photos() {
     uploadMutation.mutate(files);
   };
 
-  // Keyboard nav for lightbox
   useEffect(() => {
     if (lbIdx === null) return;
     const h = (e) => {
@@ -230,7 +200,6 @@ export default function Photos() {
 
   return (
     <div className="bg-background min-h-screen pb-32">
-      {/* Header */}
       <div className="bg-background sticky top-0 z-20">
         <div className="max-w-3xl mx-auto px-5 pt-[calc(env(safe-area-inset-top,0px)+3rem)] pb-0">
           <div className="flex items-center justify-between mb-4">
@@ -265,8 +234,6 @@ export default function Photos() {
       />
 
       <div className="max-w-3xl mx-auto">
-        {/* Empty state */}
-        {/* Barra de progreso de subida */}
       {uploading && uploadProgress.total > 0 && (
         <div className="max-w-3xl mx-auto px-5 py-3">
           <div className="bg-card border border-border rounded-2xl px-4 py-3">
@@ -310,7 +277,6 @@ export default function Photos() {
 
 
 
-        {/* Grouped grid */}
         {groups.map(({ date, items }) => (
           <div key={date} className="mt-4">
             <div className="px-4 mb-2 flex items-center gap-3">
@@ -357,13 +323,11 @@ export default function Photos() {
         ))}
       </div>
 
-      {/* Lightbox */}
       {currentPhoto && typeof document !== 'undefined' && createPortal(
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => setLbIdx(null)}
         >
-          {/* Top actions */}
           <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8 }}>
             <a
               href={currentPhoto.file_url}
@@ -390,7 +354,6 @@ export default function Photos() {
             </button>
           </div>
 
-          {/* Prev */}
           {lbIdx > 0 && (
             <button
               onClick={e => { e.stopPropagation(); setLbIdx(i => i - 1); }}
@@ -400,7 +363,6 @@ export default function Photos() {
             </button>
           )}
 
-          {/* Image */}
           <img
             src={currentPhoto.file_url}
             alt=""
@@ -408,7 +370,6 @@ export default function Photos() {
             style={{ maxWidth: '95vw', maxHeight: '88vh', objectFit: 'contain', borderRadius: 8, width: '100%' }}
           />
 
-          {/* Next */}
           {lbIdx < photos.length - 1 && (
             <button
               onClick={e => { e.stopPropagation(); setLbIdx(i => i + 1); }}
@@ -418,7 +379,6 @@ export default function Photos() {
             </button>
           )}
 
-          {/* Bottom info */}
           <div style={{ position: 'absolute', bottom: 20, left: 0, right: 0, textAlign: 'center' }}>
             <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: 500 }}>
               {currentPhoto.display_name || currentPhoto.user_email}
@@ -426,11 +386,8 @@ export default function Photos() {
             <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 2 }}>
               {currentPhoto.taken_at || currentPhoto.created_date
                 ? format(
-                    // taken_at lo pone el cliente con toISOString() (trae Z);
-                    // created_date es el timestamp automático de base44, que
-                    // puede no traerlo — de ahí parseServerDate en ese caso.
                     currentPhoto.taken_at ? parseISO(currentPhoto.taken_at) : parseServerDate(currentPhoto.created_date),
-                    "d MMM yyyy · HH:mm",
+                    "d MMM yyyy \u00b7 HH:mm",
                     { locale: i18n?.language === 'en' ? undefined : es }
                   )
                 : ''}
@@ -443,7 +400,6 @@ export default function Photos() {
         document.body
       )}
 
-      {/* Delete confirmation — mismo patrón que Documents.jsx */}
       {!!deletePhoto && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[10000] flex items-end justify-center bg-black/50" onClick={() => setDeletePhoto(null)}>
           <div className="bg-card w-full max-w-lg rounded-t-3xl p-5 pb-8" onClick={e => e.stopPropagation()}>
@@ -508,4 +464,3 @@ async function getExifDate(file) {
   } catch {}
   return null;
 }
-
