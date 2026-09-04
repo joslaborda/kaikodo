@@ -6,6 +6,7 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { decodeInvitePreview } from '@/lib/invitePreview';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import LoginScreen from '@/components/auth/LoginScreen';
 import { useState, useEffect } from 'react';
@@ -157,17 +158,20 @@ const AuthenticatedApp = () => {
       // app vuelva a comprobar el estado de auth y monte el resto con
       // normalidad.
       //
-      // inviteToken: si alguien sin cuenta toca un enlace de invitación
-      // (/Invites?token=...), antes veía esta pantalla sin ningún rastro
-      // del viaje al que le están invitando -- un muro de registro genérico
-      // antes de ver nada. Se extrae el token aquí (la URL real del
-      // navegador no cambia por mostrar LoginScreen, solo cambia qué se
-      // renderiza) y se lo pasamos para que pueda pintar el contexto del
-      // viaje (ver getInvitePreview) por encima del formulario.
+      // invitePreview: si alguien sin cuenta toca un enlace de invitación
+      // (/Invites?token=...&preview=...), antes veía esta pantalla sin
+      // ningún rastro del viaje al que le están invitando -- un muro de
+      // registro genérico antes de ver nada. El propio enlace (ver
+      // sendTripInvite en src/lib/invites.js) ya lleva embebido, en el
+      // parámetro `preview`, lo mínimo para pintar ese contexto ("X te
+      // invita a un viaje a Y") -- se decodifica aquí mismo, sin ninguna
+      // llamada de red, y se le pasa ya listo a LoginScreen.
       {
         const isInvitePath = path === '/invites';
-        const inviteToken = isInvitePath ? new URLSearchParams(location.search).get('token') : null;
-        return <LoginScreen onSuccess={checkAppState} inviteToken={inviteToken} />;
+        const searchParams = new URLSearchParams(location.search);
+        const invitePreview = isInvitePath ? decodeInvitePreview(searchParams.get('preview')) : null;
+        const hasInviteToken = isInvitePath && !!searchParams.get('token');
+        return <LoginScreen onSuccess={checkAppState} invitePreview={invitePreview} startInRegister={hasInviteToken} />;
       }
     } else {
       // Antes, cualquier authError.type no contemplado explícitamente arriba
