@@ -17,7 +17,7 @@ import { getTripStatus } from '@/components/trip/TripCard';
 import { searchNewPlaces, fetchPlaceDetails } from '@/components/spots/placesAutocomplete';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
-import { normalizeEmail } from '@/lib/utils';
+import { normalizeEmail, isSafeHttpUrl } from '@/lib/utils';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -190,7 +190,10 @@ function SpotDetailSheet({ spot, onClose }) {
               <Navigation className="w-4 h-4" /> {t('profile.openInMaps')}
             </a>
           )}
-          {spot.link && (
+          {/* spot.link es texto libre que escribe quien crea el spot — nunca
+              se renderiza como href sin comprobar antes que es http(s), para
+              cerrar el DOM XSS vía esquema URI (ver isSafeHttpUrl). */}
+          {spot.link && isSafeHttpUrl(spot.link) && (
             <a href={spot.link} target="_blank" rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 bg-card border border-border text-foreground text-sm font-semibold rounded-full py-3">
               <ExternalLink className="w-4 h-4" /> {t('profile.openLink')}
