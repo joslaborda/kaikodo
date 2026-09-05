@@ -8,6 +8,29 @@ export function cn(...inputs) {
 
 export const isIframe = window.self !== window.top;
 
+// Hallazgo de seguridad (Base44 Security Scanner, XSS basado en DOM): un
+// campo de texto libre controlado por el usuario (p. ej. Spot.link, un
+// enlace externo opcional que cualquier miembro del viaje puede escribir al
+// crear un spot) se renderizaba directo como `href` de un <a>. Un
+// `javascript:alert(document.cookie)` guardado ahí se ejecutaba en la
+// sesión de quien pinchara el enlace — DOM XSS clásico vía esquema URI.
+// Cualquier `href` que venga de un campo escrito por un usuario (no
+// construido por la propia app, como sí lo son las URLs de Google Maps)
+// debe pasar por aquí antes de usarse. Solo se permiten esquemas http/https
+// — un enlace externo legítimo nunca necesita ser otra cosa.
+export function isSafeHttpUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    // new URL() con base relativa a location resuelve también rutas tipo
+    // "//evil.com" o "\\evil.com" al protocolo real que usaría el
+    // navegador, en vez de fiarse de un regex sobre el string crudo.
+    const parsed = new URL(url, window.location.origin);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 // UserProfile.email se guarda siempre en minúsculas (ver migración silenciosa
 // en App.jsx), pero trip.members / expense.paid_by / invite.email etc. venían
 // tal cual del proveedor de auth o de lo que se tecleara — con mayúsculas
