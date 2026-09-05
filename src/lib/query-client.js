@@ -48,7 +48,24 @@ function handleQueryError(error) {
 export const queryClientInstance = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
+      // Antes en false. Kaikōdo es una app de viajes COMPARTIDOS — varios
+      // viajeros editan el mismo viaje desde dispositivos distintos, sin
+      // ningún mecanismo de tiempo real (websocket/push) que avise a los
+      // demás de un cambio. Con esto en false, la única forma de refrescar
+      // datos de otro viajero era esperar a que venciera el staleTime de
+      // cada query (5 min por defecto) — de ahí el bug real reportado:
+      // Carlos cambia las fechas del viaje, y en el móvil de quien fue
+      // invitado la app seguía mostrando el viaje viejo (fechas y foto de
+      // portada, que se deriva de trip/cities — ver src/lib/tripImage.js)
+      // durante minutos, incluso cerrando y abriendo la app. Con esto en
+      // true, volver a la app (cambiar de pestaña/app y regresar, algo muy
+      // habitual en móvil al recibir una notificación o cambiar de app)
+      // dispara un refetch en segundo plano de cualquier query ya stale —
+      // sigue sin ser tiempo real, pero cierra el hueco más común sin tener
+      // que esperar minutos. Coste: alguna petición de red extra al volver
+      // a primer plano, aceptable frente al bug de datos obsoletos en una
+      // app colaborativa.
+      refetchOnWindowFocus: true,
       retry: 1,
       // Cache data for 24 hours — survives reloads offline
       gcTime: 1000 * 60 * 60 * 24,
