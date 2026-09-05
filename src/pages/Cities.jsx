@@ -22,6 +22,7 @@ import PDFViewer from '@/components/PDFViewer';
 import { resolveDocViewUrl } from '@/lib/privateFiles';
 import SpotDetailModal from '@/components/trip/SpotDetailModal';
 import DaySpotsMap from '@/components/spots/DaySpotsMap';
+import SpotsMapView from '@/components/spots/SpotsMapView';
 import SettingsDialog from '@/components/home/SettingsDialog';
 import DeleteTripModal from '@/components/trip/DeleteTripModal';
 import LeaveTripModal from '@/components/trip/LeaveTripModal';
@@ -165,16 +166,17 @@ function DocViewerModal({ doc, open, onClose, onEdit }) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="bg-card border-border max-w-sm p-0 gap-0">
-        {/* Header */}
+        {/* Header — el propio <DialogContent> ya pinta su X de cerrar por
+            defecto (arriba a la derecha, ver src/components/ui/dialog.jsx);
+            antes este header añadía una segunda X propia justo encima,
+            duplicada. Se quita la de aquí y se deja solo la de la modal —
+            sigue habiendo además el botón "Cerrar" del pie. */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
           <div className={`w-10 h-10 rounded-xl ${bgColor} flex items-center justify-center shrink-0`}><DocIcon size={18} className='text-foreground opacity-70' /></div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">{doc?.name || doc?.title}</p>
             <p className="text-xs text-muted-foreground mt-0.5 capitalize">{type} {doc?.date ? `· ${doc.date}` : ''}</p>
           </div>
-          <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 rounded-full border border-border flex items-center justify-center shrink-0">
-            <X className="w-4 h-4 text-muted-foreground" />
-          </button>
         </div>
 
         {/* File preview / upload zone */}
@@ -731,7 +733,13 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
           className="flex-1 flex items-center justify-center py-3 text-sm font-semibold text-primary hover:bg-accent transition-colors border-r border-border">
           {t('cities.day.addDoc')}
         </button>
-        <Link to={createPageUrl('Restaurants') + '?trip_id=' + tripId}
+        {/* Antes solo mandaba a Spots con el trip_id — el spot se creaba sin
+            día asignado, y había que ir aparte a "asignar fecha" a mano
+            después. Ahora se manda también el día (assign_date) y la ciudad
+            (city_id), para que Restaurants.jsx abra el formulario de crear
+            spot directamente, ya asignado a este día, y vuelva aquí al
+            guardar. Ver Restaurants.jsx (assignDateParam). */}
+        <Link to={createPageUrl('Restaurants') + '?trip_id=' + tripId + '&assign_date=' + dayDate + (cityId ? '&city_id=' + cityId : '')}
           className="flex-1 flex items-center justify-center py-3 text-sm font-semibold text-primary hover:bg-accent transition-colors border-r border-border">
           {t('cities.day.addSpot')}
         </Link>
@@ -832,6 +840,12 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
                 onSave={handleDocCreate}
                 onCancel={() => setAddingDoc(false)}
                 saving={savingNewDoc}
+                // Antes no se pasaba onView aquí — el botón "ver documento"
+                // (y las miniaturas de imagen/PDF clicables) del formulario
+                // no hacían nada, guardado silenciosamente por el `onView &&`
+                // interno de DocumentForm. Mismo patrón que ya funciona en
+                // Documents.jsx: abre el visor sin cerrar este formulario.
+                onView={(url) => { setEditingDoc(null); setTimeout(() => setViewingFile(url), 150); }}
               />
             </div>
           </DialogContent>
@@ -885,6 +899,7 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
                 onCancel={() => setEditingDoc(null)}
                 onDelete={() => setDeleteDoc(editingDoc)}
                 saving={savingDoc}
+                onView={(url) => { setEditingDoc(null); setTimeout(() => setViewingFile(url), 150); }}
               />
             </div>
           </DialogContent>
@@ -1198,6 +1213,22 @@ export default function Cities() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
+  // Mapa de toda la ruta (arriba de la lista de días) — antes el único mapa
+  // era el de cada día por separado, colapsado dentro de ese día concreto;
+  // no había ninguna vista de conjunto como la que ya existe en Spots ("mis
+  // spots" > mapa, con todos los días a la vez). Colapsado por defecto para
+  // no gastar tope de Google Maps hasta que se abra.
+  const [showRouteMap, setShowRouteMap] = useState(false);
+  const [routeMapSpot, setRouteMapSpot] = useState(null);
+  const handleRouteMapSpotRemove = async (spot) => {
+    try {
+      await base44.entities.Spot.update(spot.id, { assigned_date: null, day_order: null, assigned_time: null });
+      queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
+      setRouteMapSpot(null);
+    } catch (e) {
+      toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' });
+    }
+  };
 
   const deleteTripMutation = useMutation({
     mutationFn: () => base44.entities.Trip.delete(tripId),
@@ -1339,6 +1370,26 @@ export default function Cities() {
 
       {/* Content */}
       <div className="max-w-3xl mx-auto px-5 py-5 pb-24">
+        {/* Mapa de toda la ruta — encima de la lista de días, mismo tipo de
+            vista de conjunto que ya existe en Spots (todos los días a la
+            vez), en vez de tener que abrir el mapa día a día. */}
+        {allSpots.some(s => s.lat && s.lng) && (
+          <div className="mb-4">
+            <button onClick={() => setShowRouteMap(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-card rounded-2xl border border-border hover:bg-secondary/20 transition-colors">
+              <span className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Map className="w-4 h-4 text-muted-foreground" />{t('cities.routeMap')}
+              </span>
+              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${showRouteMap ? 'rotate-180' : ''}`} />
+            </button>
+            {showRouteMap && (
+              <div className="mt-2 rounded-2xl overflow-hidden border border-border">
+                <SpotsMapView spots={allSpots} cities={cities} height={280} onSelectSpot={setRouteMapSpot} />
+              </div>
+            )}
+          </div>
+        )}
+
         {loadingCities && sortedCities.length === 0 ? (
           <div className="text-center py-16">
             <Loader2 className="w-6 h-6 text-muted-foreground animate-spin mx-auto" />
@@ -1456,6 +1507,21 @@ export default function Cities() {
         onConfirm={() => leaveMutation.mutate()}
         isPending={leaveMutation.isPending}
       />
+      {/* Spot tocado desde el mapa de toda la ruta (arriba) */}
+      {routeMapSpot && (
+        <SpotDetailModal
+          spot={routeMapSpot}
+          open={!!routeMapSpot}
+          onClose={() => setRouteMapSpot(null)}
+          onSave={() => { queryClient.invalidateQueries({ queryKey: ['spots', tripId] }); setRouteMapSpot(null); }}
+          onRemove={handleRouteMapSpotRemove}
+          queryClient={queryClient}
+          tripId={tripId}
+          trip={trip}
+          currentUserEmail={currentUserEmail}
+          profiles={profiles}
+        />
+      )}
     </div>
   );
 }

@@ -146,10 +146,20 @@ export default function Home() {
     }
   }, [tripId]);
 
+  // Antes sin staleTime propio (heredaba el default global de 5 min) y sin
+  // refetchOnMount — Home es la pantalla de entrada a un viaje compartido:
+  // si otro viajero (p. ej. Carlos) cambia las fechas o la ciudad mientras
+  // tú tenías la app cerrada o en otra pantalla, tu caché local de este
+  // viaje podía seguir "fresca" para react-query hasta 5 minutos aunque
+  // fuera ya incorrecta — de ahí el "quedan 300 días" con fechas viejas y
+  // la foto de portada (derivada de trip/cities, no un campo aparte — ver
+  // src/lib/tripImage.js) sin actualizar. refetchOnMount: 'always' fuerza
+  // comprobar la verdad del servidor cada vez que se entra a un viaje,
+  // sin esperar a que venza el staleTime.
   const { data: trip, isLoading } = useQuery({
     queryKey: ['trip', tripId],
     queryFn: () => tripId ? base44.entities.Trip.get(tripId) : null,
-    enabled: !!tripId,
+    enabled: !!tripId, staleTime: 30000, refetchOnMount: 'always',
 
   });
 

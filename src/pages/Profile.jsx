@@ -508,7 +508,18 @@ export default function Profile() {
     onSuccess: (_, spot) => {
       queryClient.invalidateQueries({ queryKey: [spot.owner === 'mine' ? 'mySpots' : 'savedSpots'] });
     },
-    onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
+    // Mismo fix que en Restaurants.jsx: un "not found" del backend significa
+    // que el registro ya no existe ahí — quitarlo de la caché local en vez
+    // de dejarlo atascado mostrando error cada vez que se intenta borrar.
+    onError: (e, spot) => {
+      const msg = e?.message || '';
+      if (/not found/i.test(msg)) {
+        const key = spot.owner === 'mine' ? 'mySpots' : 'savedSpots';
+        queryClient.setQueryData([key, spot.owner === 'mine' ? user?.email : user?.id], (old) => (Array.isArray(old) ? old.filter(s => s.id !== spot.id) : old));
+        return;
+      }
+      toast({ title: t('common.saveError'), description: msg || t('common.tryAgain'), variant: 'destructive' });
+    },
   });
 
   const saveNewPlaceMutation = useMutation({

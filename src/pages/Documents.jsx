@@ -238,7 +238,7 @@ export default function Documents() {
   const { data: cities = [] } = useQuery({
     queryKey: ['cities', tripId],
     queryFn: () => base44.entities.City.filter({ trip_id: tripId }, 'order'), // misma queryKey ['cities', tripId] que otras pantallas — unificado para no compartir caché con fetches distintos
-    enabled: !!tripId, staleTime: 60000,
+    enabled: !!tripId, staleTime: 30000,
   });
   const { data: itineraryDays = [] } = useQuery({
     queryKey: ['itineraryDays', tripId],
@@ -248,7 +248,7 @@ export default function Documents() {
   const { data: trip } = useQuery({
     queryKey: ['trip', tripId],
     queryFn: () => base44.entities.Trip.get(tripId),
-    enabled: !!tripId, staleTime: 60000,
+    enabled: !!tripId, staleTime: 30000,
   });
   // Perfiles solo de miembros del viaje — sin list() completas
   const tripMembers = trip?.members || [];

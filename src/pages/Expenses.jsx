@@ -1072,7 +1072,7 @@ export default function Expenses() {
   const { data: trip } = useQuery({
     queryKey: ['trip', tripId],
     queryFn: () => base44.entities.Trip.get(tripId),
-    enabled: !!tripId, staleTime: 60000,
+    enabled: !!tripId, staleTime: 30000,
   });
 
   const { cities, activeCity } = useTripContext(tripId);

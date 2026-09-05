@@ -20,12 +20,13 @@ import { useTranslation } from 'react-i18next';
 import { getLanguage } from '@/i18n/index.js';
 import { useToast } from '@/components/ui/use-toast';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
-import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
-// El LeafletMap de aquí abajo es una copia local independiente del
-// componente compartido (src/components/spots/LeafletMap.jsx) — no lo
-// importa, así que arreglar el tile compartido nunca cambió nada en este
-// selector de pin. Se reusa solo el estilo de tiles (CARTO Positron), no el
-// componente entero, para no tocar loadLeaflet/reverseGeocode locales.
+import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey, loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, kodoMarkerIcon } from '@/lib/googleMaps';
+// El selector de pin (SpotPinMap, más abajo) usaba Leaflet siempre, sin
+// intentar Google Maps primero — a diferencia de DaySpotsMap/SpotsMapView/
+// TodayRouteMap, que sí siguen el patrón "Google primero, Leaflet solo como
+// fallback si falla o no hay tope disponible". Corregido (5 sept 2026) para
+// seguir el mismo patrón que esos tres — Leaflet/CARTO se mantiene SOLO como
+// red de seguridad, ya no como mapa por defecto.
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from '@/components/spots/mapTiles';
 
 
@@ -287,19 +288,39 @@ function clearRecentSearches() {
   localStorage.removeItem(RECENT_SEARCHES_KEY);
 }
 
-// ── Leaflet map ───────────────────────────────────────────────────────────────
-function LeafletMap({ lat, lng, onMove }) {
+// ── Selector de pin (Google Maps primero, Leaflet solo como fallback) ────────
+// Mismo patrón que DaySpotsMap.jsx/SpotsMapView.jsx/TodayRouteMap.jsx:
+// canUseGoogleToday('mapLoad') + markGoogleUsed('mapLoad'), y solo si Google
+// falla (sin API key, sin red, tope diario agotado) cae a Leaflet+CARTO.
+// Antes este selector de pin era el único mapa de la app que iba SIEMPRE por
+// Leaflet, sin intentar Google — corregido para que sea consistente con el
+// resto (5 sept 2026).
+function SpotPinMap({ lat, lng, onMove }) {
   const { t } = useTranslation();
   const leafletRef = useRef(null);
+  const googleMapRef = useRef(null);
+  const googleMarkerRef = useRef(null);
   const markerRef = useRef(null);
   const containerRef = useRef(null);
   const [loadError, setLoadError] = useState(false);
+  // null = todavía resolviendo si hay API key/tope disponible (no decidir
+  // aún); true/false = decisión ya tomada. Con un booleano simple, cuando la
+  // key no está disponible setUseGoogle(false) no dispara re-render (ya
+  // valía false por defecto) y el mapa se quedaba sin pintar nada.
+  const [useGoogle, setUseGoogle] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
+    getGoogleMapsApiKey().then(key => {
+      if (!cancelled) setUseGoogle(!!key && canUseGoogleToday('mapLoad'));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  function runLeaflet() {
     injectKodoMapStyles();
     loadLeaflet().then(L => {
-      if (cancelled || !containerRef.current || leafletRef.current) return;
+      if (!containerRef.current || leafletRef.current) return;
       const map = L.map(containerRef.current, { zoomControl: true, attributionControl: true }).setView([lat, lng], 15);
       L.tileLayer(KODO_TILE_URL, { subdomains: KODO_TILE_SUBDOMAINS, attribution: KODO_TILE_ATTRIBUTION, maxZoom: 19 }).addTo(map);
       const icon = L.divIcon({
@@ -322,11 +343,52 @@ function LeafletMap({ lat, lng, onMove }) {
       markerRef.current = marker;
       setTimeout(() => map.invalidateSize(), 100);
     }).catch(() => setLoadError(true));
-    return () => { cancelled = true; if (leafletRef.current) { leafletRef.current.remove(); leafletRef.current = null; } };
-  }, []);
+  }
 
   useEffect(() => {
-    if (markerRef.current && leafletRef.current) {
+    if (useGoogle === null) return; // aún resolviendo la key, no decidir todavía
+    let cancelled = false;
+    if (useGoogle) {
+      loadGoogleMaps().then(google => {
+        if (cancelled || !containerRef.current || googleMapRef.current) return;
+        markGoogleUsed('mapLoad');
+        const map = new google.maps.Map(containerRef.current, {
+          center: { lat, lng }, zoom: 15,
+          styles: KODO_GOOGLE_MAP_STYLE,
+          disableDefaultUI: true, zoomControl: true, gestureHandling: 'greedy',
+        });
+        const marker = new google.maps.Marker({
+          position: { lat, lng }, map, draggable: true, icon: kodoMarkerIcon(google),
+        });
+        marker.addListener('dragend', async () => {
+          const pos = marker.getPosition();
+          const addr = await reverseGeocode(pos.lat(), pos.lng());
+          onMove(pos.lat(), pos.lng(), addr);
+        });
+        map.addListener('click', async e => {
+          const la = e.latLng.lat(), ln = e.latLng.lng();
+          marker.setPosition({ lat: la, lng: ln });
+          const addr = await reverseGeocode(la, ln);
+          onMove(la, ln, addr);
+        });
+        googleMapRef.current = map;
+        googleMarkerRef.current = marker;
+      }).catch((err) => { console.warn('[SpotPinMap] Google Maps falló, cayendo a Leaflet:', err); if (!cancelled) runLeaflet(); });
+    } else {
+      runLeaflet();
+    }
+    return () => {
+      cancelled = true;
+      if (leafletRef.current) { leafletRef.current.remove(); leafletRef.current = null; }
+    };
+     
+  }, [useGoogle]);
+
+  useEffect(() => {
+    if (googleMarkerRef.current && googleMapRef.current) {
+      googleMarkerRef.current.setPosition({ lat, lng });
+      googleMapRef.current.setCenter({ lat, lng });
+    } else if (markerRef.current && leafletRef.current) {
       markerRef.current.setLatLng([lat, lng]);
       leafletRef.current.setView([lat, lng], 15);
     }
@@ -339,7 +401,7 @@ function LeafletMap({ lat, lng, onMove }) {
 }
 
 // ── Create spot bottom sheet ──────────────────────────────────────────────────
-function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, initialLat, initialLng, initialType }) {
+function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, initialLat, initialLng, initialType, dayContextLabel }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [title, setTitle] = useState('');
@@ -433,8 +495,11 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
   };
 
   const handleSave = () => {
-    // B: block if exact duplicate
-    if (duplicate) return;
+    // Antes bloqueaba el guardado si ya existía un spot con el mismo nombre
+    // en la misma ciudad — pero volver a un sitio (un restaurante al que
+    // vuelves, una plaza que visitas dos veces) es un caso de uso real y
+    // válido, no un error. Ahora solo se avisa (banner de abajo), nunca se
+    // bloquea. Corregido 5 sept 2026.
     if (!title.trim()) return;
     // Un hotel es solo tuyo/de tu viaje — no tiene sentido publicarlo en Kaikōdo
     // Community, así que se guarda siempre trip_members, sin depender del
@@ -462,6 +527,16 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
               <X className="w-4 h-4" />
             </button>
           </div>
+          {/* Cuando se llega desde "+ Añadir Spot" de un día concreto en
+              Ruta, dejar claro para qué día es — antes se abría este mismo
+              formulario sin ningún contexto y el día había que asignarlo a
+              mano después, por separado. */}
+          {dayContextLabel && (
+            <p className="text-xs text-primary font-medium mt-2 flex items-center gap-1.5">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              {dayContextLabel}
+            </p>
+          )}
         </div>
 
         {/* Scrollable content */}
@@ -473,7 +548,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
             {/* Map placeholder / real map */}
             <div className="rounded-xl overflow-hidden border border-border mb-2" style={{ height: '180px', background: 'var(--kodo-bg-subtle)', position: 'relative' }}>
               {showMap
-                ? <LeafletMap lat={defaultLat} lng={defaultLng} onMove={(la, ln, addr) => { setPinLat(la); setPinLng(ln); if (addr) { suppressNextSearchRef.current = true; setAddress(addr); } }} />
+                ? <SpotPinMap lat={defaultLat} lng={defaultLng} onMove={(la, ln, addr) => { setPinLat(la); setPinLng(ln); if (addr) { suppressNextSearchRef.current = true; setAddress(addr); } }} />
                 : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
                     <MapPin className="w-8 h-8 text-muted-foreground/40" />
@@ -534,7 +609,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
               <div className="mt-2 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2.5 flex items-start gap-2">
                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
                 <div>
-                  <p className="text-xs font-medium text-amber-800">{t('spots.create.duplicateExists', { city })}</p>
+                  <p className="text-xs font-medium text-amber-800">{t('spots.create.duplicateExistsInfo', { city })}</p>
                   <p className="text-xs text-amber-700 mt-0.5">{t('spots.create.alreadyInListQuoted', { title: duplicate.title })}</p>
                 </div>
               </div>
@@ -597,7 +672,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
           <Button variant="outline" onClick={onClose} className="flex-1">{t('common.cancel')}</Button>
           <Button
             onClick={handleSave}
-            disabled={!title.trim() || saving || !!duplicate}
+            disabled={!title.trim() || saving}
             className="flex-1 bg-primary hover:bg-primary/90 text-white">
             {saving ? t('spots.saving') : t('spots.create.save')}
           </Button>
@@ -607,7 +682,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
   );
 }
 
-// ── OSM result card ───────────────────────────────────────────────────────────
+// ── Google place result card ───────────────────────────────────────────────────────────
 function PlaceResultCard({ place, onSave, saving, isDuplicate }) {
   const { t } = useTranslation();
   const tc = TYPE_CONFIG[place.type] || TYPE_CONFIG.custom;
@@ -805,6 +880,26 @@ export default function Restaurants() {
   // tiene ninguno guardado — mismo patrón que import_saved de arriba.
   const openCreateParam = urlParams.get('open_create');
   const cityIdFromParam = urlParams.get('city_id');
+  // Enlace desde "+ Añadir Spot" en un día concreto de Ruta (Cities.jsx) —
+  // antes solo llegaba trip_id, así que el spot se creaba sin día asignado
+  // y había que abrir aparte el modal de "asignar fecha". Con esto, el
+  // formulario de crear spot se abre directo (mismo patrón que
+  // openCreateParam de arriba) y, al guardar, queda asignado a este día sin
+  // pasos extra — ver saveManualSpot más abajo.
+  const assignDateParam = urlParams.get('assign_date');
+  // Etiqueta legible para el banner de CreateSpotSheet — sin añadir date-fns
+  // aquí (no estaba importado en este archivo), Intl nativo basta para "5
+  // sept" / "Sep 5".
+  const assignDateDayLabel = useMemo(() => {
+    if (!assignDateParam) return null;
+    try {
+      const d = new Date(assignDateParam + 'T00:00:00');
+      if (isNaN(d.getTime())) return null;
+      const locale = getLanguage() === 'en' ? 'en-US' : 'es-ES';
+      const formatted = d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+      return t('spots.create.forDay', { day: formatted });
+    } catch { return null; }
+  }, [assignDateParam, t]);
 
   useEffect(() => {
     if (!tripId || tripId === 'null') {
@@ -860,7 +955,7 @@ export default function Restaurants() {
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState(() => getRecentSearches());
-  const [osmResults, setOsmResults] = useState([]);
+  const [placeResults, setPlaceResults] = useState([]);
   const [enriched, setEnriched] = useState({}); // placeId -> {rating, userRatingCount, photoUrl}
   const enrichedIdsRef = useRef(new Set());
   const enrichObserverRef = useRef(null);
@@ -926,7 +1021,7 @@ export default function Restaurants() {
   const { data: tripCities = [] } = useQuery({
     queryKey: ['cities', tripId],
     queryFn: () => base44.entities.City.filter({ trip_id: tripId }, 'order'), // misma queryKey ['cities', tripId] que otras pantallas — unificado para no compartir caché con fetches distintos
-    enabled: !!tripId, staleTime: 60000,
+    enabled: !!tripId, staleTime: 30000,
   });
 
   // Wishlist personal del usuario — para el panel de importación
@@ -988,6 +1083,18 @@ export default function Restaurants() {
      
   }, [openCreateParam, cityIdFromParam]);
 
+  // Abrir directo el formulario de crear spot cuando se llega desde "+
+  // Añadir Spot" de un día concreto en Ruta (Cities.jsx) — ver
+  // assignDateParam arriba.
+  useEffect(() => {
+    if (assignDateParam) {
+      if (cityIdFromParam) setSelectedCityId(cityIdFromParam);
+      setTab('mis');
+      setShowCreate(true);
+    }
+     
+  }, [assignDateParam, cityIdFromParam]);
+
   // Mutations
   // Si `trip` no había cargado (conexión lenta/intermitente), antes se
   // guardaba con trip_members:[] y el spot quedaba invisible para siempre,
@@ -1010,13 +1117,27 @@ export default function Restaurants() {
   const deleteMutation = useMutation({
     mutationFn: id => base44.entities.Spot.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['spots', tripId] }),
-  
-    onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
+    // Si el backend responde "not found" es que el spot ya no existe ahí
+    // (huérfano en la caché local — se borró en otra sesión, o quedó de un
+    // estado inconsistente antiguo). Antes esto se trataba como un error de
+    // guardado normal y el spot se quedaba pegado en la lista para siempre,
+    // sin poder borrarlo nunca ("entity spot with id xxx not found" en
+    // bucle). Ahora, si el error es justo ese, lo quitamos de la vista
+    // igualmente — el resultado que el usuario quería (que desaparezca) ya
+    // se ha cumplido, solo que lo hizo el servidor antes que nosotros.
+    onError: (e, id) => {
+      const msg = e?.message || '';
+      if (/not found/i.test(msg)) {
+        queryClient.setQueryData(['spots', tripId], (old) => (Array.isArray(old) ? old.filter(s => s.id !== id) : old));
+        return;
+      }
+      toast({ title: t('common.saveError'), description: msg || t('common.tryAgain'), variant: 'destructive' });
+    },
   });
 
-  // OSM search
+  // Búsqueda de lugares (Google Places)
   useEffect(() => {
-    if (!searchQuery.trim() || searchQuery.length < 2) { setOsmResults([]); return; }
+    if (!searchQuery.trim() || searchQuery.length < 2) { setPlaceResults([]); return; }
     clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(async () => {
       if (searchAbortRef.current) searchAbortRef.current.abort();
@@ -1025,8 +1146,8 @@ export default function Restaurants() {
       setSearching(true);
       addRecentSearch(searchQuery.trim());
       setRecentSearches(getRecentSearches());
-      try { setOsmResults(await searchPlaces(searchQuery, selectedCity || city, country, signal)); }
-      catch (e) { if (e?.name !== 'AbortError') setOsmResults([]); }
+      try { setPlaceResults(await searchPlaces(searchQuery, selectedCity || city, country, signal)); }
+      catch (e) { if (e?.name !== 'AbortError') setPlaceResults([]); }
       finally { setSearching(false); }
     }, 700);
     return () => clearTimeout(searchTimer.current);
@@ -1060,8 +1181,8 @@ export default function Restaurants() {
     useEffect(() => {
       enrichedIdsRef.current = new Set();
       setEnriched({});
-      osmResults.slice(0, 5).forEach(enrichPlace);
-    }, [osmResults]);
+      placeResults.slice(0, 5).forEach(enrichPlace);
+    }, [placeResults]);
 
   
   const baseData = extra => ({
@@ -1078,10 +1199,12 @@ export default function Restaurants() {
     toastTimer.current = setTimeout(() => setSavedToast({ visible: false, spot: null }), 3000);
   };
 
-  const saveOsmPlace = async place => {
+  // Antes: si ya existía un spot con el mismo nombre, esto no hacía NADA
+  // salvo un toast — no se creaba el spot, el botón parecía guardar y no
+  // guardaba nada. Volver a un sitio es un caso de uso válido, así que ahora
+  // se crea igual; el toast solo informa si aplica. Corregido 5 sept 2026.
+  const savePlaceResult = async place => {
     if (!tripId) return;
-    const dup = spots.find(s => s.title?.toLowerCase().trim() === place.name?.toLowerCase().trim());
-    if (dup) { showToastFor({ title: t('spots.create.alreadyInListQuoted', { title: place.name }) }, city); return; }
     setSavingId(place.id);
     try {
         const apiKey = await getGoogleMapsApiKey();
@@ -1098,7 +1221,15 @@ export default function Restaurants() {
           city_name: effectiveCityName, country: normalizeCountry(country),
           title: resolved.name, type: resolved.type || 'sight',
           address: resolved.address || '', lat: resolved.lat, lng: resolved.lng,
-          osm_id: resolved.id || null, source: 'osm',
+          // osm_id: el nombre del campo se queda igual a propósito — lo lee
+          // backfillSpotPlaces (backend) para distinguir un Google Place ID
+          // de un id numérico legacy de OSM; renombrarlo exigiría tocar esa
+          // función también, fuera de alcance de este arreglo. Lo que sí se
+          // corrige es el VALOR de `source`: esto viene de Google Places
+          // (searchPlacesGoogle), nunca de OSM — 'osm' era un nombre heredado
+          // de una implementación anterior y no se lee en ningún otro sitio
+          // del código (comprobado), así que renombrarlo es seguro.
+          osm_id: resolved.id || null, source: 'google_places',
           visibility: 'trip_members', visited: false,
           created_by: null, created_by_user_id: null,
           saved_by: [user?.email].filter(Boolean),
@@ -1111,7 +1242,10 @@ export default function Restaurants() {
           price_level: details?.priceLevel || undefined,
       });
       setLastSavedId(created?.id);
-            setOsmResults([]); setSearchQuery('');
+            setPlaceResults([]); setSearchQuery('');
+      // Repetir un spot (volver a un sitio) es un caso válido, así que ya no
+      // se trata como una excepción a avisar — mismo toast de guardado de
+      // siempre, tanto si `dup` es true como si no.
       showToastFor({ title: place.name }, city);
       if (created?.id) setAssignDateSpot(created);
       notifyMembers('spot_added', '', place.name, { spotId: created?.id, spotDate: created?.assigned_date });
@@ -1128,12 +1262,23 @@ export default function Restaurants() {
         title: form.title, type: form.type, notes: form.notes,
         address: form.address, lat: form.lat, lng: form.lng,
         visibility: form.visibility, source: 'manual',
+        // Si se llegó aquí desde "+ Añadir Spot" de un día concreto en Ruta,
+        // el día ya viene decidido — se asigna directamente, sin pasar por
+        // el modal de "asignar fecha" de siempre.
+        ...(assignDateParam ? { assigned_date: assignDateParam } : {}),
       }));
       setLastSavedId(created?.id);
       setShowCreate(false);
       setPinPrefill(null);
       showToastFor({ title: form.title }, city);
-      if (created?.id) setAssignDateSpot(created);
+      if (assignDateParam) {
+        // Vuelve a Ruta en vez de quedarse en Spots — es donde se pidió el
+        // spot, y ya tiene el día asignado, así que no hace falta el modal
+        // manual de asignar fecha.
+        navigate(createPageUrl('Cities') + '?trip_id=' + tripId + (cityIdFromParam ? '&city_id=' + cityIdFromParam : ''));
+      } else if (created?.id) {
+        setAssignDateSpot(created);
+      }
       notifyMembers('spot_added', '', form.title, { spotId: created?.id, spotDate: created?.assigned_date });
     } finally { setSavingId(null); }
   };
@@ -1143,9 +1288,14 @@ export default function Restaurants() {
   // (resuelta en importGroups comparando nombres) — si no hay ninguna ciudad
   // del viaje que coincida (guardado de una ciudad que no está en este
   // itinerario), cae a la ciudad activa como hacía siempre antes.
+  // Antes: si ya había un spot con el mismo nombre en el viaje, esto no
+  // hacía NADA — ni error ni confirmación, el botón "importar" parecía no
+  // responder. Volver a un sitio es válido, así que ahora importa siempre
+  // que se pulse explícitamente. (El filtro de `importGroup`, más abajo, sí
+  // se mantiene: ese es un botón de "importar TODOS los pendientes de
+  // golpe", y sin ese filtro cada pulsación reimportaría toda la wishlist
+  // de nuevo — caso distinto a repetir un spot a propósito.)
   const importSavedSpot = async (savedSpot, targetCity) => {
-    const dup = spots.find(s => s.title?.toLowerCase().trim() === savedSpot.title?.toLowerCase().trim());
-    if (dup) return;
     setSavingId('import_' + savedSpot.id);
     try {
       const created = await createMutation.mutateAsync({
@@ -1183,10 +1333,10 @@ export default function Restaurants() {
     }
   };
 
+  // Mismo criterio que importSavedSpot: repetir un spot es válido, no se
+  // bloquea el guardado por tener ya uno con el mismo nombre.
   const saveCommunitySpot = async spot => {
     if (!tripId) return;
-    const dup = spots.find(s => s.title?.toLowerCase().trim() === spot.title?.toLowerCase().trim());
-    if (dup) return;
     const savingKey = spot.id || spot.title;
     setSavingId(savingKey);
     try {
@@ -1237,7 +1387,7 @@ export default function Restaurants() {
     return () => { cancelled = true; };
   }, [country, selectedCity, city]);
 
-  // Seed spots that match the search query (shown alongside OSM results)
+  // Seed spots that match the search query (shown alongside Google results)
   const seedSearchResults = useMemo(() => {
     if (!searchQuery.trim() || searchQuery.length < 2) return [];
     const q = searchQuery.toLowerCase().replace('#', '');
@@ -1343,7 +1493,7 @@ export default function Restaurants() {
                   className="flex-1 text-sm outline-none bg-transparent text-foreground min-w-0"
                 />
                 {searchQuery && (
-                                <button aria-label={t('spots.clearSearch')} onClick={() => { setSearchQuery(''); setOsmResults([]); }} className="text-muted-foreground flex-shrink-0">
+                                <button aria-label={t('spots.clearSearch')} onClick={() => { setSearchQuery(''); setPlaceResults([]); }} className="text-muted-foreground flex-shrink-0">
                     <X className="w-4 h-4" />
                   </button>
                 )}
@@ -1393,13 +1543,53 @@ export default function Restaurants() {
               </div>
             )}
 
-            {/* Estado vacío */}
-            {!searchQuery && osmResults.length === 0 && !searching && (
-              <div className="text-center py-12">
-                <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-3">
-                  <Compass className="w-6 h-6 text-muted-foreground/50" />
-                </div>
-                <p className="text-sm text-muted-foreground">{t('spots.emptySearchLine1')}<br />{t('spots.emptySearchLine2')}</p>
+            {/* Antes: en cuanto no había texto escrito, esto era un icono y
+                dos líneas de texto y nada más — "página en blanco" hasta
+                que se empezaba a teclear. Ahora se aprovecha lo que ya
+                existía a medias (recentSearches, guardado en localStorage
+                pero nunca pintado en ningún sitio) y los propios spots del
+                viaje (MySpotRow, ya usado en la pestaña "Mis spots") para
+                que este mismo hueco sirva de "unir búsqueda y mis spots" sin
+                tener que rehacer las pestañas: al llegar aquí ya ves algo
+                útil, y en cuanto escribes, busca en Google. */}
+            {!searchQuery && placeResults.length === 0 && !searching && (
+              <div className="space-y-5">
+                {recentSearches.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-1">{t('spots.recentSearches')}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {recentSearches.map(r => (
+                        <button key={r.query} onClick={() => setSearchQuery(r.query)}
+                          className="text-sm px-3 py-1.5 rounded-full border border-border bg-card text-foreground hover:border-primary/40 transition-colors flex items-center gap-1.5">
+                          <Search className="w-3 h-3 text-muted-foreground" />{r.query}
+                        </button>
+                      ))}
+                      <button onClick={() => { clearRecentSearches(); setRecentSearches([]); }}
+                        className="text-xs px-3 py-1.5 rounded-full text-muted-foreground hover:text-foreground transition-colors">
+                        {t('common.clear')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {spots.length > 0 ? (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-1">{t('spots.mySpots')}</p>
+                    <div className="bg-card rounded-2xl border border-border overflow-hidden">
+                      {spots.slice(0, 5).map(spot => (
+                        <MySpotRow key={spot.id} spot={spot} onTap={setSelectedSpot} userId={user?.id} />
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground text-center mt-3">{t('spots.emptySearchLine2')}</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-3">
+                      <Compass className="w-6 h-6 text-muted-foreground/50" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">{t('spots.emptySearchLine1')}<br />{t('spots.emptySearchLine2')}</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1457,17 +1647,17 @@ export default function Restaurants() {
               </div>
             )}
 
-                {/* Resultados OSM */}
+                {/* Resultados */}
                 {searching && <p className="text-sm text-muted-foreground text-center py-4">{t('spots.searching')}</p>}
-                {!searching && osmResults.length > 0 && (
+                {!searching && placeResults.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t('spots.moreResults')}</p>
                     <div className="bg-card border border-border rounded-2xl overflow-hidden">
-                      {osmResults.map((p, i) => {
+                      {placeResults.map((p, i) => {
                         const isDuplicate = spots.some(s => s.title?.toLowerCase().trim() === p.name?.toLowerCase().trim());
                             const enr = enriched[p.id];
                         return (
-                          <div key={p.id} ref={node => observeCard(node, p)} className={`flex items-center gap-3 px-3 py-2.5 ${i < osmResults.length - 1 ? 'border-b border-border' : ''}`}>
+                          <div key={p.id} ref={node => observeCard(node, p)} className={`flex items-center gap-3 px-3 py-2.5 ${i < placeResults.length - 1 ? 'border-b border-border' : ''}`}>
                             {enr?.photoUrl ? (
           <img src={enr.photoUrl} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
                 ) : (
@@ -1485,7 +1675,7 @@ export default function Restaurants() {
           )}
                           </div>
                             {isDuplicate ? <span className="text-xs text-muted-foreground flex-shrink-0">{t('spots.savedBadge')}</span>
-                              : <button onClick={() => saveOsmPlace(p)} disabled={savingId === p.id} className="flex-shrink-0 text-primary hover:text-primary/70 transition-colors">
+                              : <button onClick={() => savePlaceResult(p)} disabled={savingId === p.id} className="flex-shrink-0 text-primary hover:text-primary/70 transition-colors">
                                   <Plus className="w-5 h-5" />
                                 </button>
                             }
@@ -1495,7 +1685,7 @@ export default function Restaurants() {
                     </div>
                   </div>
                 )}
-                {!searching && searchQuery.length >= 2 && osmResults.length === 0 && (
+                {!searching && searchQuery.length >= 2 && placeResults.length === 0 && (
                   <div className="text-center py-8 bg-card border border-border rounded-2xl">
                     <p className="text-sm text-muted-foreground">{t('spots.noResultsFor', { query: searchQuery })}</p>
                     <button onClick={() => setShowCreate(true)}
@@ -1655,7 +1845,7 @@ export default function Restaurants() {
                 </button>
               </div>
             ) : filteredSpots.length === 0 && mySpotSearch.trim().length >= 1 ? (
-              /* No local match — show message + seed/OSM suggestions */
+              /* No local match — show message + seed/Google suggestions */
               <div className="space-y-4">
                 <div className="text-center py-6 bg-card rounded-2xl border border-border">
                   <Search className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
@@ -1665,7 +1855,7 @@ export default function Restaurants() {
                 {/* Show seed matches as suggestions */}
                 {seedSpots.filter(s => s.title?.toLowerCase().includes(mySpotSearch.toLowerCase())).slice(0, 5).map((p, i) => {
                   const isDuplicate = spots.some(s => s.title?.toLowerCase().trim() === p.title?.toLowerCase().trim());
-                  return <PlaceResultCard key={`ms-seed-${i}`} place={{ id: `ms-seed-${i}`, name: p.title, type: p.type, address: p.address || '' }} onSave={saveOsmPlace} saving={savingId===`ms-seed-${i}`} isDuplicate={isDuplicate} />;
+                  return <PlaceResultCard key={`ms-seed-${i}`} place={{ id: `ms-seed-${i}`, name: p.title, type: p.type, address: p.address || '' }} onSave={savePlaceResult} saving={savingId===`ms-seed-${i}`} isDuplicate={isDuplicate} />;
                 })}
                 <button onClick={() => { setTab('buscar'); setSearchQuery(mySpotSearch); }}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-card border border-dashed border-border rounded-2xl text-sm text-primary font-medium hover:bg-orange-50 transition-colors">
@@ -1705,6 +1895,7 @@ export default function Restaurants() {
         initialLat={pinPrefill?.lat}
         initialLng={pinPrefill?.lng}
         initialType={openCreateParam === 'hotel' ? 'hotel' : undefined}
+        dayContextLabel={assignDateDayLabel}
       />
 
       {/* Spot detail sheet */}

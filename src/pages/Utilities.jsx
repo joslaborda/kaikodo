@@ -2,7 +2,7 @@ import { useState, useEffect, useRef} from 'react';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
-import { Plus, Trash2, ExternalLink, Loader2, AlertTriangle, Landmark, MapPin, Phone, Mail, Clock, User, Shirt, Droplets, Smartphone, Pill, MoreHorizontal, Building2, Check, ArrowRight } from 'lucide-react';
+import { Plus, Minus, Trash2, ExternalLink, Loader2, AlertTriangle, Landmark, MapPin, Phone, Mail, Clock, User, Shirt, Droplets, Smartphone, Pill, MoreHorizontal, Building2, Check, ArrowRight } from 'lucide-react';
 import WeatherCard from '@/components/WeatherCard';
 import { getCountryMeta, getCountryLabel, getCountryIso, normalizeCountry } from '@/lib/countryConfig';
 import { ShieldCheck, ShieldX, ShieldAlert, Zap, Syringe, Coins, Info, ChevronDown, ChevronUp, Shield, Cross, Flame } from 'lucide-react';
@@ -25,6 +25,28 @@ const PACKING_CATEGORIES = [
   { value:'otros',      tk:'utilities.packing.cat.otros',      Icon: MoreHorizontal },
 ];
 
+// Stepper de cantidad — comparte estilo con el resto de botones redondos
+// pequeños (essential toggle, etc). min 1: no tiene sentido un artículo con
+// 0 unidades (para "no lo llevo", ya está borrar).
+function QuantityStepper({ value, onChange }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex items-center gap-3">
+      <button type="button" onClick={() => onChange(Math.max(1, (value || 1) - 1))}
+        className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors disabled:opacity-30"
+        disabled={(value || 1) <= 1} aria-label={t('utilities.packing.quantityDecrease')}>
+        <Minus className="w-3.5 h-3.5" />
+      </button>
+      <span className="text-sm font-medium text-foreground w-6 text-center">{value || 1}</span>
+      <button type="button" onClick={() => onChange((value || 1) + 1)}
+        className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+        aria-label={t('utilities.packing.quantityIncrease')}>
+        <Plus className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Add packing item sheet
 // ─────────────────────────────────────────────────────────────────────────────
@@ -34,9 +56,10 @@ function AddPackingSheet({ open, onClose, defaultCategory = 'personal', onSave, 
   const [name, setName] = useState('');
   const [category, setCategory] = useState(defaultCategory);
   const [essential, setEssential] = useState(false);
+  const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
-    if (open) { setName(''); setCategory(defaultCategory); setEssential(false); }
+    if (open) { setName(''); setCategory(defaultCategory); setEssential(false); setQuantity(1); }
   }, [open, defaultCategory]);
 
   const handleSave = () => {
@@ -47,7 +70,7 @@ function AddPackingSheet({ open, onClose, defaultCategory = 'personal', onSave, 
     // también, no solo en el `disabled` del botón.
     if (saving) return;
     if (!name.trim()) return;
-    onSave({ name: name.trim(), category, essential, packed: false });
+    onSave({ name: name.trim(), category, essential, quantity, packed: false });
   };
 
   if (!open) return null;
@@ -60,6 +83,10 @@ function AddPackingSheet({ open, onClose, defaultCategory = 'personal', onSave, 
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSave()}
           className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none" />
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">{t('utilities.packing.quantity')}</p>
+          <QuantityStepper value={quantity} onChange={setQuantity} />
+        </div>
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-2">{t('utilities.packing.category')}</p>
           <div className="grid grid-cols-2 gap-2">
@@ -86,6 +113,105 @@ function AddPackingSheet({ open, onClose, defaultCategory = 'personal', onSave, 
             {saving ? t('utilities.packing.adding') : t('utilities.packing.add')}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Edit packing item sheet — nuevo (5 sept 2026): antes no había forma de
+// editar un artículo ya creado (ni el nombre, ni la cantidad, ni pasarlo de
+// esencial a normal para poder borrarlo) salvo borrarlo y crearlo de cero.
+// Se abre pinchando la fila del artículo (ver PackingTab).
+// ─────────────────────────────────────────────────────────────────────────────
+function EditPackingItemSheet({ item, onClose, onSave, onDelete, saving, deleting }) {
+  const { t } = useTranslation();
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('personal');
+  const [essential, setEssential] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  useEffect(() => {
+    if (item) {
+      setName(item.name || '');
+      setCategory(item.category || 'personal');
+      setEssential(!!item.essential);
+      setQuantity(item.quantity || 1);
+      setConfirmingDelete(false);
+    }
+  }, [item]);
+
+  if (!item) return null;
+  const isSouvenir = item.category === 'souvenir';
+
+  const handleSave = () => {
+    if (saving) return;
+    if (!name.trim()) return;
+    onSave(item.id, { name: name.trim(), category, essential, quantity });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/50" onClick={onClose}>
+      <div className="bg-card w-full max-w-lg rounded-t-3xl p-5 pb-8 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="w-9 h-1 bg-border rounded-full mx-auto" />
+        <p className="text-sm font-medium text-foreground">{t('utilities.packing.editItem')}</p>
+        <input autoFocus aria-label={t('utilities.packing.itemNameAria')} value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSave()}
+          className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none" />
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">{t('utilities.packing.quantity')}</p>
+          <QuantityStepper value={quantity} onChange={setQuantity} />
+        </div>
+        {!isSouvenir && (
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-2">{t('utilities.packing.category')}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {PACKING_CATEGORIES.map(cat => (
+                <button key={cat.value} onClick={() => setCategory(cat.value)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${category === cat.value ? 'border-primary bg-orange-50' : 'border-border'}`}>
+                  <cat.Icon size={14} color={category === cat.value ? 'hsl(var(--primary))' : '#888'} />
+                  <span className={`text-xs font-medium ${category === cat.value ? 'text-primary' : 'text-muted-foreground'}`}>{t(cat.tk)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {!isSouvenir && (
+          <button onClick={() => setEssential(v => !v)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-colors ${essential ? 'border-primary bg-orange-50' : 'border-border'}`}>
+            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${essential ? 'border-primary bg-primary' : 'border-border'}`}>
+              {essential && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
+            </div>
+            <span className={`text-sm ${essential ? 'text-primary font-medium' : 'text-muted-foreground'}`}>{t('utilities.packing.markEssential')}</span>
+          </button>
+        )}
+
+        {confirmingDelete ? (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-3 space-y-2">
+            <p className="text-xs text-red-800">{t('utilities.packing.confirmDelete', { name: item.name })}</p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmingDelete(false)} className="flex-1 py-2 rounded-full border border-border text-xs text-muted-foreground">{t('common.cancel')}</button>
+              <button onClick={() => onDelete(item.id)} disabled={deleting}
+                className="flex-1 py-2 rounded-full bg-red-600 text-white text-xs font-medium disabled:opacity-50">
+                {t('common.delete')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-3">
+            <button onClick={() => setConfirmingDelete(true)}
+              className="w-11 h-11 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors flex-shrink-0">
+              <Trash2 className="w-4 h-4" />
+            </button>
+            <button onClick={onClose} className="flex-1 py-3 rounded-full border border-border text-sm text-muted-foreground">{t('common.cancel')}</button>
+            <button onClick={handleSave} disabled={!name.trim() || saving}
+              className="flex-[2] py-3 rounded-full bg-primary text-white text-sm font-medium disabled:opacity-40">
+              {saving ? t('utilities.packing.saving') : t('common.save')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -336,26 +462,37 @@ function RequirementsTab({ reqs, country, homeCountry, meta, skipVaccines = [], 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared checkbox — cuadrado, borde naranja pendiente, relleno naranja + check al marcar
 // ─────────────────────────────────────────────────────────────────────────────
+// El botón visual se mantiene en 20x20 (mismo diseño), pero el área
+// realmente clicable ahora es 32x32 — antes coincidían y en móvil era fácil
+// fallar el toque por unos pocos píxeles ("el tick es muy sensible").
+// stopPropagation porque la fila entera del artículo ahora también es
+// clicable (abre "editar") — sin esto, tocar el tick abriría además el
+// editor por encima.
 function KodoCheck({ checked, onChange, essential = false }) {
   return (
     <button
-      onClick={() => onChange(!checked)}
-      style={{
-        width: 20, height: 20, borderRadius: 5, flexShrink: 0,
-        border: checked ? 'none' : `1.5px solid ${essential ? 'hsl(var(--primary))' : '#d4cfc8'}`,
-        background: checked ? 'hsl(var(--primary))' : essential ? 'hsl(var(--accent))' : 'hsl(var(--card))',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'all 0.15s',
-      }}
+      onClick={e => { e.stopPropagation(); onChange(!checked); }}
+      aria-pressed={checked}
+      style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
     >
-      {checked && (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-      )}
-      {!checked && essential && (
-        <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--primary))' }} />
-      )}
+      <div
+        style={{
+          width: 20, height: 20, borderRadius: 5,
+          border: checked ? 'none' : `1.5px solid ${essential ? 'hsl(var(--primary))' : '#d4cfc8'}`,
+          background: checked ? 'hsl(var(--primary))' : essential ? 'hsl(var(--accent))' : 'hsl(var(--card))',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'all 0.15s',
+        }}
+      >
+        {checked && (
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        )}
+        {!checked && essential && (
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--primary))' }} />
+        )}
+      </div>
     </button>
   );
 }
@@ -414,6 +551,21 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
     onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
   });
 
+  // Nuevo: editar un artículo ya creado (nombre, cantidad, categoría,
+  // esencial) — antes solo se podía marcar/desmarcar o borrar, no cambiar
+  // nada más sin borrar y volver a crearlo.
+  const [editingItem, setEditingItem] = useState(null);
+  const updateItemMutation = useMutation({
+    mutationFn: ({ id, data }) => base44.entities.PackingItem.update(id, data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['packingItems', tripId] }); setEditingItem(null); },
+    onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
+  });
+  const deleteFromEditMutation = useMutation({
+    mutationFn: id => base44.entities.PackingItem.delete(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['packingItems', tripId] }); setEditingItem(null); },
+    onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
+  });
+
   const packingItems  = items.filter(i => i.category !== 'souvenir');
   const souvenirItems = items.filter(i => i.category === 'souvenir');
 
@@ -433,6 +585,15 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
     setTimeout(() => addInputRef.current?.focus(), 80);
   };
 
+  // Antes, al añadir un artículo, la página se quedaba donde estuviera (o
+  // incluso más abajo — el teclado del móvil al cerrarse no siempre
+  // devuelve el scroll a donde estaba), lejos del botón "+" de arriba del
+  // todo. Ahora siempre vuelve arriba tras guardar, que es donde vive ese
+  // botón, para poder seguir añadiendo sin buscarlo.
+  const scrollToTopAfterAdd = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const commitAdd = async () => {
     // Guard aquí (no solo en el botón "+"): el atajo de Enter en el input
     // no pasaba por el `disabled` del botón, así que un doble Enter rápido
@@ -447,6 +608,7 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
     setNewName('');
     setNewEssential(false);
     setAdding(null);
+    scrollToTopAfterAdd();
   };
 
   // Recibe el estado "actual visible" (ya resuelto con el fallback a
@@ -558,8 +720,10 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
                           <p className="text-xs text-muted-foreground text-center py-4 border-t border-border">{t('utilities.packing.noItems')}</p>
                         )}
                         {catItems.map(item => (
-                          <div key={item.id}
-                            className={`flex items-center gap-3 px-4 py-2.5 border-t border-border group transition-colors ${item.packed ? 'opacity-55' : 'hover:bg-secondary/20'}`}>
+                          <div key={item.id} role="button" tabIndex={0}
+                            onClick={() => setEditingItem(item)}
+                            onKeyDown={e => { if (e.key === 'Enter') setEditingItem(item); }}
+                            className={`flex items-center gap-3 px-4 py-2.5 border-t border-border group transition-colors cursor-pointer ${item.packed ? 'opacity-55' : 'hover:bg-secondary/20'}`}>
                             <KodoCheck
                               checked={item.packed}
                               onChange={v => toggleMutation.mutate({ id: item.id, packed: v })}
@@ -567,9 +731,10 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
                             />
                             <p className={`flex-1 text-sm truncate ${item.packed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                               {item.name}
+                              {item.quantity > 1 && <span className="text-muted-foreground font-normal"> ×{item.quantity}</span>}
                             </p>
                             {!item.essential && (
-                              <button onClick={() => deleteMutation.mutate(item.id)} disabled={deleteMutation.isPending}
+                              <button onClick={e => { e.stopPropagation(); deleteMutation.mutate(item.id); }} disabled={deleteMutation.isPending}
                                 className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0 disabled:opacity-30">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -624,16 +789,19 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
             )}
 
             {souvenirItems.map((item, i) => (
-              <div key={item.id}
-                className={`flex items-center gap-3 px-4 py-3 group transition-colors ${i > 0 ? 'border-t border-border' : ''} ${item.packed ? 'opacity-55' : 'hover:bg-secondary/20'}`}>
+              <div key={item.id} role="button" tabIndex={0}
+                onClick={() => setEditingItem(item)}
+                onKeyDown={e => { if (e.key === 'Enter') setEditingItem(item); }}
+                className={`flex items-center gap-3 px-4 py-3 group transition-colors cursor-pointer ${i > 0 ? 'border-t border-border' : ''} ${item.packed ? 'opacity-55' : 'hover:bg-secondary/20'}`}>
                 <KodoCheck
                   checked={item.packed}
                   onChange={v => toggleMutation.mutate({ id: item.id, packed: v })}
                 />
                 <p className={`flex-1 text-sm truncate ${item.packed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                   {item.name}
+                  {item.quantity > 1 && <span className="text-muted-foreground font-normal"> ×{item.quantity}</span>}
                 </p>
-                <button onClick={() => deleteMutation.mutate(item.id)} disabled={deleteMutation.isPending}
+                <button onClick={e => { e.stopPropagation(); deleteMutation.mutate(item.id); }} disabled={deleteMutation.isPending}
                   className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0 disabled:opacity-30">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -672,7 +840,16 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
         onSave={async (data) => {
           await createMutation.mutateAsync({ ...data, trip_id: tripId });
           closeSheet();
+          scrollToTopAfterAdd();
         }}
+      />
+      <EditPackingItemSheet
+        item={editingItem}
+        onClose={() => setEditingItem(null)}
+        onSave={(id, data) => updateItemMutation.mutate({ id, data })}
+        onDelete={(id) => deleteFromEditMutation.mutate(id)}
+        saving={updateItemMutation.isPending}
+        deleting={deleteFromEditMutation.isPending}
       />
     </div>
   );
@@ -1067,13 +1244,13 @@ export default function Utilities() {
   const { data: trip } = useQuery({
     queryKey: ['trip', tripId],
     queryFn: async () => { const r = await base44.entities.Trip.filter({ id: tripId }); return r[0] || null; },
-    enabled: !!tripId, staleTime: 60000,
+    enabled: !!tripId, staleTime: 30000,
   });
 
   const { data: tripCities = [] } = useQuery({
     queryKey: ['cities', tripId],
     queryFn: () => base44.entities.City.filter({ trip_id: tripId }, 'order'), // misma queryKey ['cities', tripId] que otras pantallas — unificado para no compartir caché con fetches distintos
-    enabled: !!tripId, staleTime: 60000,
+    enabled: !!tripId, staleTime: 30000,
   });
 
   const { data: myProfile, isLoading: profileLoading } = useQuery({
