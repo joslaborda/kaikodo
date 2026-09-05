@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Users, UserPlus, Crown, Pencil, Eye, Mail, Copy, Check, Trash2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { removeTripMember, setTripMemberRole } from '@/lib/tripMembers';
 import { useTranslation } from 'react-i18next';
 import { normalizeEmail } from '@/lib/utils';
 import { searchUserProfiles } from '@/lib/userProfiles';
+import Avatar from '@/components/trip/Avatar';
 
 export default function MembersPanel({
   trip, currentUserEmail, isAdmin, profiles = []
@@ -30,6 +31,58 @@ export default function MembersPanel({
   const [memberToRemove, setMemberToRemove] = useState(null);
   const [cancelling, setCancelling] = useState(null);
   const queryClient = useQueryClient();
+
+  // Búsqueda en vivo por username mientras se escribe — antes esta pantalla
+  // ("Ajustes de viaje") solo intentaba una búsqueda EXACTA de username al
+  // pulsar "Invitar", sin ningún resultado visible mientras tanto, así que
+  // parecía que solo funcionaba por email (que es literalmente lo que decía
+  // la etiqueta: "Invitar por email"). La modal de invitar desde Home
+  // (InviteModal.jsx) sí tenía esto — un usuario que SÍ aparecía ahí no
+  // aparecía aquí. Mismo patrón que esa modal: perfiles cacheados 2 min
+  // (modo "descubrimiento abierto", nunca trae email) + filtrado client-side
+  // mientras se teclea, sin esperar a pulsar nada.
+  const { data: allProfiles = [] } = useQuery({
+    queryKey: ['allUserProfiles'],
+    queryFn: () => searchUserProfiles({}),
+    staleTime: 120000,
+  });
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimerRef = useRef(null);
+
+  useEffect(() => {
+    clearTimeout(searchTimerRef.current);
+    const raw = inviteEmail.trim();
+    // Si parece un email, no tiene sentido buscar por username a la vez —
+    // se invita directo por email al pulsar el botón, como ya hacía.
+    if (!raw || raw.includes('@') || raw.length < 2) { setSearchResults([]); setSearching(false); return; }
+    setSearching(true);
+    searchTimerRef.current = setTimeout(() => {
+      try {
+        const q = raw.toLowerCase().replace(/^@/, '');
+        const results = allProfiles.filter(p => {
+          const un = (p.username || '').toLowerCase();
+          const un_norm = (p.username_normalized || '').toLowerCase();
+          const dn = (p.display_name || '').toLowerCase();
+          return un.startsWith(q) || un_norm.startsWith(q) || dn.startsWith(q) || un.includes(q) || dn.includes(q);
+        });
+        results.sort((a, b) => {
+          const aStarts = (a.username || '').toLowerCase().startsWith(q);
+          const bStarts = (b.username || '').toLowerCase().startsWith(q);
+          if (aStarts && !bStarts) return -1;
+          if (!aStarts && bStarts) return 1;
+          return 0;
+        });
+        // No mostrar gente que ya es miembro del viaje.
+        const membersNorm = members.map(normalizeEmail);
+        const filtered = results.filter(p => !p.email || !membersNorm.includes(normalizeEmail(p.email)));
+        setSearchResults(filtered.slice(0, 6));
+      } catch { setSearchResults([]); }
+      setSearching(false);
+    }, 150);
+    return () => clearTimeout(searchTimerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inviteEmail, allProfiles]);
 
   const { data: pendingInvites = [] } = useQuery({
     queryKey: ['tripPendingInvites', trip.id],
@@ -91,6 +144,60 @@ export default function MembersPanel({
     },
   });
 
+  // Núcleo común de "enviar la invitación", usado tanto al escribir un email
+  // directo / hacer fallback por username exacto (handleInvite) como al
+  // tocar un resultado de la búsqueda en vivo (handleInviteFromResult).
+  const sendInviteTo = async ({ resolvedEmail, targetUserId }) => {
+    if (!targetUserId) {
+      resolvedEmail = normalizeEmail(resolvedEmail);
+      if (members.some(m => normalizeEmail(m) === resolvedEmail)) {
+        toast({ title: t('membersPanel.alreadyMember'), description: t('membersPanel.alreadyMemberDesc') });
+        return;
+      }
+    }
+    const result = await sendTripInvite({
+      tripId: trip.id,
+      email: targetUserId ? undefined : resolvedEmail,
+      targetUserId,
+      role: inviteRole,
+      tripName: trip.name,
+      inviterEmail: currentUserEmail,
+      inviterName: (() => {
+        const myProf = profiles.find(p => normalizeEmail(p.email) === normalizeEmail(currentUserEmail) || normalizeEmail(p.user_email) === normalizeEmail(currentUserEmail));
+        return myProf?.display_name || myProf?.username || currentUserEmail;
+      })(),
+    });
+    if (!result?.emailSent && result?.inviteUrl) {
+      setShareLink(result.inviteUrl);
+      setInviteEmail('');
+    } else {
+      toast({ title: t('membersPanel.inviteSent'), description: t('membersPanel.inviteSentDesc', { email: resolvedEmail }) });
+      setInviteEmail('');
+      setInviteRole('editor');
+    }
+    setSearchResults([]);
+    queryClient.invalidateQueries({ queryKey: ['trip', trip.id] });
+  };
+
+  // Tocar un resultado de la búsqueda en vivo — antes esta pantalla no tenía
+  // ningún resultado visible mientras se escribía, así que esto no existía;
+  // ahora es el camino principal para invitar por username (mismo patrón
+  // que InviteModal.jsx en Home).
+  const handleInviteFromResult = async (profile) => {
+    setInviting(true);
+    try {
+      if (profile.email) {
+        await sendInviteTo({ resolvedEmail: profile.email });
+      } else {
+        await sendInviteTo({ targetUserId: profile.user_id });
+      }
+    } catch (e) {
+      toast({ title: t('common.error'), description: e.message || t('membersPanel.inviteError') });
+    } finally {
+      setInviting(false);
+    }
+  };
+
   const handleInvite = async () => {
     const raw = inviteEmail.trim();
     if (!raw) return;
@@ -98,20 +205,22 @@ export default function MembersPanel({
     try {
       let resolvedEmail = raw;
       let targetUserId;
-      // If not an email, search by username
+      // Si no parece un email, se envía directo: si hay resultados de la
+      // búsqueda en vivo visibles, se usa el primero (equivalente a tocarlo);
+      // si no, se prueba una búsqueda exacta como red de seguridad (p. ej.
+      // si el usuario pulsó Enter más rápido de lo que tardó el debounce).
       if (!raw.includes('@')) {
-        const query = raw.startsWith('@') ? raw.slice(1) : raw;
-        // Buscar por username_normalized primero, luego por username exacto.
-        // UserProfile.read se cerró en el rls — se busca vía función backend
-        // (búsqueda por username es "descubrimiento abierto": nunca devuelve
-        // email, el fallback de abajo ya resuelve el email vía User.filter).
-        let found = await searchUserProfiles({ usernameQuery: query, exact: true });
-        if (!found.length) {
-          toast({ title: t('membersPanel.userNotFound'), description: t('membersPanel.userNotFoundDesc', { query }) });
-          setInviting(false);
-          return;
+        let profile = searchResults[0];
+        if (!profile) {
+          const query = raw.startsWith('@') ? raw.slice(1) : raw;
+          const found = await searchUserProfiles({ usernameQuery: query, exact: true });
+          if (!found.length) {
+            toast({ title: t('membersPanel.userNotFound'), description: t('membersPanel.userNotFoundDesc', { query }) });
+            setInviting(false);
+            return;
+          }
+          profile = found[0];
         }
-        const profile = found[0];
         // Cierre de la fuga de emails: ya no se resuelve el email de un
         // desconocido vía searchUserProfiles({userIds}) — ese modo ahora
         // solo devuelve email si ya hay una relación real (mismo viaje o
@@ -124,38 +233,7 @@ export default function MembersPanel({
           targetUserId = profile.user_id;
         }
       }
-      // Duplicate check solo cuando conocemos el email en el cliente; si
-      // invitamos por targetUserId, createTripInvite ya verifica server-side
-      // si ese email ya es miembro.
-      if (!targetUserId) {
-        resolvedEmail = normalizeEmail(resolvedEmail);
-        if (members.some(m => normalizeEmail(m) === resolvedEmail)) {
-          toast({ title: t('membersPanel.alreadyMember'), description: t('membersPanel.alreadyMemberDesc') });
-          setInviting(false);
-          return;
-        }
-      }
-      const result = await sendTripInvite({
-        tripId: trip.id,
-        email: targetUserId ? undefined : resolvedEmail,
-        targetUserId,
-        role: inviteRole,
-        tripName: trip.name,
-        inviterEmail: currentUserEmail,
-        inviterName: (() => {
-          const myProf = profiles.find(p => normalizeEmail(p.email) === normalizeEmail(currentUserEmail) || normalizeEmail(p.user_email) === normalizeEmail(currentUserEmail));
-          return myProf?.display_name || myProf?.username || currentUserEmail;
-        })(),
-      });
-      if (!result?.emailSent && result?.inviteUrl) {
-        setShareLink(result.inviteUrl);
-        setInviteEmail('');
-      } else {
-        toast({ title: t('membersPanel.inviteSent'), description: t('membersPanel.inviteSentDesc', { email: resolvedEmail }) });
-        setInviteEmail('');
-        setInviteRole('editor');
-      }
-      queryClient.invalidateQueries({ queryKey: ['trip', trip.id] });
+      await sendInviteTo({ resolvedEmail, targetUserId });
     } catch (e) {
       toast({ title: t('common.error'), description: e.message || t('membersPanel.inviteError') });
     } finally {
@@ -353,18 +431,45 @@ export default function MembersPanel({
           ) : (
             <>
               <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
-                <Mail className="w-3 h-3" />{t('invites.modal.byEmail')}
+                <Mail className="w-3 h-3" />{t('membersPanel.inviteByUsernameOrEmail')}
               </p>
               <div className="space-y-2">
                 <div className="flex gap-2">
-                  <Input
-                    id="invite-input"
-                    placeholder={t('membersPanel.emailPlaceholder')}
-                    value={inviteEmail}
-                    onChange={e => setInviteEmail(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleInvite()}
-                    className="text-sm flex-1"
-                  />
+                  <div className="flex-1 relative">
+                    <Input
+                      id="invite-input"
+                      placeholder={t('membersPanel.usernameOrEmailPlaceholder')}
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleInvite()}
+                      className="text-sm w-full"
+                      autoComplete="off"
+                    />
+                    {/* Resultados en vivo mientras se escribe un username —
+                        antes no había ningún feedback aquí hasta pulsar
+                        "Invitar" (y encima con match exacto), así que
+                        alguien que SÍ estaba en Kaikōdo parecía no existir.
+                        Mismo patrón que la modal de invitar desde Home. */}
+                    {searchResults.length > 0 && (
+                      <div className="absolute z-10 left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+                        {searchResults.map(p => (
+                          <button key={p.user_id || p.username} type="button"
+                            onClick={() => handleInviteFromResult(p)}
+                            disabled={inviting}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-secondary/30 transition-colors border-b border-border last:border-0 disabled:opacity-50">
+                            <Avatar email={p.email} profile={p} size={28} />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground">{p.display_name || p.username}</p>
+                              {p.username && <p className="text-xs text-muted-foreground">@{p.username}</p>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {searching && inviteEmail.trim().length >= 2 && !inviteEmail.includes('@') && searchResults.length === 0 && (
+                      <p className="absolute left-1 top-full mt-1 text-xs text-muted-foreground">{t('membersPanel.searching')}</p>
+                    )}
+                  </div>
                   <Select value={inviteRole} onValueChange={setInviteRole}>
                     <SelectTrigger className="w-24 h-9 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
