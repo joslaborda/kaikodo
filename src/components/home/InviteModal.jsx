@@ -29,14 +29,18 @@ function ResultRow({ profile, email, triplesCount, status, onInvite, sending }) 
       <Avatar email={email} profile={profile} size={38} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-medium text-foreground truncate">{name}</p>
+          {/* Antes "truncate" cortaba cualquier nombre algo largo con "…"
+              (p.ej. "Carlos …") — quitado para todos los nombres de esta
+              modal, se ven completos siempre, aunque la fila ocupe algo más
+              de una línea. */}
+          <p className="text-sm font-medium text-foreground">{name}</p>
           {triplesCount > 0 && (
             <span className="text-xs bg-orange-50 text-primary border border-orange-200 rounded-full px-2 py-0.5 flex-shrink-0">
               {t('invites.modal.tripCount', { count: triplesCount })}
             </span>
           )}
         </div>
-        {username && <p className="text-xs text-muted-foreground truncate">{username}</p>}
+        {username && <p className="text-xs text-muted-foreground">{username}</p>}
       </div>
       {status === 'member' && (
         <span className="text-xs bg-green-50 text-green-700 border border-green-200 rounded-full px-2 py-0.5 flex-shrink-0 flex items-center gap-1">
@@ -428,8 +432,8 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
                         <div key={email} className={`flex items-center gap-3 px-4 py-3 ${i > 0 || pendingInvites.length > 0 ? 'border-t border-border' : ''}`}>
                           <Avatar email={email} profile={prof} size={36} />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">{name}</p>
-                            {prof?.username && <p className="text-xs text-muted-foreground truncate">@{prof.username}</p>}
+                            <p className="text-sm font-medium text-foreground">{name}</p>
+                            {prof?.username && <p className="text-xs text-muted-foreground">@{prof.username}</p>}
                           </div>
                           {isAdmin
                             ? <span className="text-xs bg-orange-50 text-primary border border-orange-200 rounded-full px-2 py-0.5 flex-shrink-0">{t('common.admin')}</span>
@@ -444,7 +448,7 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
                           <Clock className="w-3.5 h-3.5 text-muted-foreground" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-foreground truncate">{inv.email}</p>
+                          <p className="text-sm text-foreground break-all">{inv.email}</p>
                           <p className="text-xs text-muted-foreground">{t('invites.modal.invitedPending')}</p>
                         </div>
                         <button
