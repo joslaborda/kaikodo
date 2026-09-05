@@ -229,9 +229,17 @@ export default function PreTripTab({ trip, cities, packingItems, documents, myPr
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <Link to={createPageUrl('Utilities') + '?trip_id=' + tripId + '&tab=maleta'}>
-          <div className="bg-card rounded-2xl border border-border p-4 hover:border-primary/40 transition-colors">
+      <div className="grid grid-cols-2 gap-3 items-stretch">
+        {/* h-full en el Link y en la tarjeta: por defecto un <a> es un
+            elemento "inline" que solo ocupa el alto de su contenido — así
+            que aunque el grid estira la celda, la tarjeta visible (el div
+            de dentro) se quedaba con SU propia altura, más corta que la de
+            al lado si tenía menos contenido (Documentos no tiene barra de
+            progreso, así que quedaba más baja que Maleta). Con h-full en
+            ambos niveles, las dos tarjetas terminan siempre a la misma
+            altura, aunque el contenido de dentro sea distinto. */}
+        <Link to={createPageUrl('Utilities') + '?trip_id=' + tripId + '&tab=maleta'} className="block h-full">
+          <div className="bg-card rounded-2xl border border-border p-4 hover:border-primary/40 transition-colors h-full flex flex-col">
             <p className="text-xs text-muted-foreground mb-1">{t('pretrip.suitcase')}</p>
             <p className="text-2xl font-semibold text-foreground">{packedPct}%</p>
             <div className="mt-2 h-1 bg-secondary rounded-full overflow-hidden">
@@ -240,8 +248,8 @@ export default function PreTripTab({ trip, cities, packingItems, documents, myPr
             <p className="text-xs text-muted-foreground mt-1">{packedCount}/{packingItems.length} items</p>
           </div>
         </Link>
-        <Link to={createPageUrl('Documents') + '?trip_id=' + tripId}>
-          <div className="bg-card rounded-2xl border border-border p-4 hover:border-primary/40 transition-colors">
+        <Link to={createPageUrl('Documents') + '?trip_id=' + tripId} className="block h-full">
+          <div className="bg-card rounded-2xl border border-border p-4 hover:border-primary/40 transition-colors h-full flex flex-col justify-center">
             <p className="text-xs text-muted-foreground mb-1">{t('documents.title')}</p>
             <p className="text-2xl font-semibold text-foreground">{docsCount}</p>
             <p className="text-xs text-muted-foreground mt-1">{docsCount === 0 ? t('pretrip.noneUploaded') : t('pretrip.uploadedCount', { count: docsCount })}</p>
