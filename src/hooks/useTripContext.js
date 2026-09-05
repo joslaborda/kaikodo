@@ -39,16 +39,23 @@ export function useTripContext(tripId) {
     setOverrideCityId(null);
   }, [setOverrideCityId]);
 
+  // staleTime explícito (30s) — antes heredaba el default global de 5 min
+  // (query-client.js), demasiado para datos COMPARTIDOS entre viajeros: si
+  // Carlos cambia las fechas/ciudades del viaje desde su móvil, tu copia en
+  // caché podía tardar hasta 5 minutos en considerarse "vieja" y volver a
+  // pedirse, aunque cerraras y abrieras la app — el remount por sí solo no
+  // fuerza un refetch si react-query todavía cree que los datos son
+  // frescos. Este es el mismo valor que ya usa Cities.jsx para 'trip'.
   const { data: trip } = useQuery({
     queryKey: ['trip', tripId],
     queryFn: () => base44.entities.Trip.get(tripId),
-    enabled: !!tripId,
+    enabled: !!tripId, staleTime: 30000,
   });
 
   const { data: cities = [] } = useQuery({
     queryKey: ['cities', tripId],
     queryFn: () => base44.entities.City.filter({ trip_id: tripId }, 'order'),
-    enabled: !!tripId,
+    enabled: !!tripId, staleTime: 30000,
   });
 
   const activeCity = useMemo(
