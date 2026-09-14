@@ -58,26 +58,16 @@ const SHOW_FIELDS = {
 // Google Places API (New, Text Search) cuando hay una API key configurada
 // (VITE_GOOGLE_MAPS_API_KEY, ver src/lib/googleMaps.js) -- mejores
 // resultados, fotos/nombres reales de aeropuertos y estaciones en vez del
-// indice mas flojo de OpenStreetMap. Sin key configurada (todavia no
-// activada por Jose en Base44 -> Secretos) cae automaticamente en el
-// buscador anterior (Nominatim/OSM) para no romper nada mientras tanto: el
-// mismo codigo se activa solo en cuanto la key exista, sin otro deploy.
-async function searchLocationNominatim(query, signal) {
-    const params = new URLSearchParams({ q: query, format: 'json', limit: 6, addressdetails: 1, namedetails: 1 });
-    const res = await fetch('https://nominatim.openstreetmap.org/search?' + params, {
-          headers: { 'Accept-Language': 'es,en', 'User-Agent': 'KodoTravelApp/1.0' },
-          signal,
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.map(item => ({
-          id: item.place_id?.toString(),
-          name: item.namedetails?.name || item.display_name?.split(',')[0] || query,
-          address: item.display_name,
-          lat: parseFloat(item.lat), lng: parseFloat(item.lon),
-    }));
-}
-
+// indice mas flojo de OpenStreetMap.
+//
+// Bug reportado por Jose (14 sep 2026): la key de Google ya esta activa
+// desde hace tiempo, pero este buscador seguia teniendo un fallback a
+// Nominatim/OSM (sin key, o si Google fallaba/agotaba el tope diario) que
+// colaba resultados de OSM mezclados con los de Google. Restaurants.jsx ya
+// se habia corregido para ser SOLO Google (ver searchPlaces ahi: sin key o
+// con error, devuelve [] en vez de caer a Nominatim) -- aqui se replica
+// exactamente el mismo patron para que la busqueda de aeropuertos/estaciones
+// sea consistente con la de sitios/restaurantes.
 async function searchLocationGooglePlaces(query, signal, apiKey) {
       if (!canUseGoogleToday('autocomplete')) throw new Error('daily-cap-reached');
     const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
@@ -125,12 +115,12 @@ async function fetchGooglePlaceDetails(placeId, apiKey, signal) {
 }
 async function searchLocation(query, signal) {
     const apiKey = await getGoogleMapsApiKey();
-    if (!apiKey) return searchLocationNominatim(query, signal);
+    if (!apiKey) { console.warn('[searchLocation] getGoogleMapsApiKey devolvió clave vacía — el backend devolvió 401/500 o el secreto no está inyectado'); return []; }
     try {
           return await searchLocationGooglePlaces(query, signal, apiKey);
     } catch (err) {
           if (err.name === 'AbortError') throw err;
-          return searchLocationNominatim(query, signal);
+          return [];
     }
 }
 
