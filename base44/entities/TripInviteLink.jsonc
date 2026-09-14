@@ -1,0 +1,62 @@
+{
+  "name": "TripInviteLink",
+  "type": "object",
+  "properties": {
+    "trip_id": {
+      "type": "string"
+    },
+    "token": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "created_by": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string"
+    },
+    "max_uses": {
+      "type": "number"
+    },
+    "use_count": {
+      "type": "number"
+    },
+    "revoked": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "trip_id",
+    "token",
+    "role",
+    "created_by",
+    "expires_at",
+    "max_uses",
+    "use_count",
+    "revoked"
+  ],
+  "rls": {
+    // José (14 sep 2026): entidad separada a propósito de TripInvite, no
+    // reusada con un email vacío -- TripInvite tiene una vulnerabilidad ya
+    // cerrada (ver comentario en createTripInvite/entry.ts) en la que
+    // email:"" dejaba que cualquiera aceptase una invitación ajena y se
+    // autoasignase admin de un viaje sabiendo solo su id. Un "link general"
+    // hecho reabriendo esa puerta sería exactamente la misma forma de la
+    // misma vulnerabilidad, solo que a propósito. Con una entidad propia,
+    // sin campo email, no hay ninguna comprobación de coincidencia que
+    // saltarse por accidente -- la única puerta de entrada es
+    // redeemTripInviteLink, que valida token/caducidad/usos/revocado antes
+    // de nada.
+    //
+    // Las 4 operaciones cerradas del todo -- igual que TripInvite. Crear,
+    // leer el estado (para el contador de Ajustes), canjear y revocar pasan
+    // todos por funciones de backend con asServiceRole
+    // (createTripInviteLink, regenerateTripInviteLink, redeemTripInviteLink).
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
