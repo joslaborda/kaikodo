@@ -263,9 +263,15 @@ export default function PreTripTab({ trip, cities, packingItems, documents, myPr
 
       {/* Embajada + apps útiles — antes solo se veía entrando a Maleta y
           cambiando de pestaña a mano a "Emergencias"; nada en Home avisaba de
-          que existía. Ahora es visible directamente, con link a esa pestaña. */}
+          que existía. Ahora es visible directamente, con link a esa pestaña.
+          José (14 sep 2026): con el mismo space-y-3 de siempre, esta tarjeta
+          "se sentía" más pegada a Maleta/Documentos que el resto de saltos de
+          esta pantalla -- el valor en px era igual, pero al ser una tarjeta
+          más baja (menos contenido dentro) el ojo lo notaba. Se le da un
+          respiro de más a propósito (pt-1 extra encima del space-y normal),
+          tratándola como el principio de otro bloque, no una fila más. */}
       {(hasEmbassy || appsCount > 0) && (
-        <Link to={createPageUrl('Utilities') + '?trip_id=' + tripId + '&tab=emergencias'}>
+        <Link to={createPageUrl('Utilities') + '?trip_id=' + tripId + '&tab=emergencias'} className="block mt-5">
           <div className="bg-card rounded-2xl border border-border p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
             <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center shrink-0">
               <Landmark className="w-5 h-5 text-primary" />
