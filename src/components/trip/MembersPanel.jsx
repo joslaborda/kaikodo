@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Users, UserPlus, Crown, Pencil, Eye, Mail, Copy, Check, Trash2, Clock } from 'lucide-react';
+import { Users, UserPlus, Crown, Pencil, Eye, Mail, Copy, Check, Trash2, Clock, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui/use-toast';
 import { base44 } from '@/api/base44Client';
 import { sendTripInvite } from '@/lib/invites';
+import { getOrCreateTripInviteLink, buildTripInviteLinkUrl, buildTripInviteLinkShareText } from '@/lib/inviteLinks';
 import { removeTripMember, setTripMemberRole } from '@/lib/tripMembers';
 import { useTranslation } from 'react-i18next';
 import { normalizeEmail } from '@/lib/utils';
@@ -28,6 +29,7 @@ export default function MembersPanel({
   const [inviting, setInviting] = useState(false);
   const [shareLink, setShareLink] = useState('');
   const [copied, setCopied] = useState(false);
+  const [sharingLink, setSharingLink] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState(null);
   const [cancelling, setCancelling] = useState(null);
   const queryClient = useQueryClient();
@@ -147,6 +149,39 @@ export default function MembersPanel({
   // Núcleo común de "enviar la invitación", usado tanto al escribir un email
   // directo / hacer fallback por username exacto (handleInvite) como al
   // tocar un resultado de la búsqueda en vivo (handleInviteFromResult).
+  // José (14 sep 2026): mismo botón y mismo comportamiento que en
+  // InviteModal.jsx (Home) -- un solo componente de invitar reusado desde
+  // los dos sitios habría sido lo ideal, pero se optó por duplicar esta
+  // pieza concreta en vez de emprender la consolidación completa de los dos
+  // paneles a la vez que una función de seguridad nueva. Si se toca el
+  // comportamiento de compartir en un sitio, hay que tocarlo en el otro.
+  const handleShareWithGroup = async () => {
+    setSharingLink(true);
+    try {
+      const link = await getOrCreateTripInviteLink(trip.id);
+      const url = buildTripInviteLinkUrl(link, trip);
+      const inviterName = (() => {
+        const myProf = profiles.find(p => normalizeEmail(p.email) === normalizeEmail(currentUserEmail) || normalizeEmail(p.user_email) === normalizeEmail(currentUserEmail));
+        return myProf?.display_name || myProf?.username || currentUserEmail;
+      })();
+      const text = buildTripInviteLinkShareText(trip, inviterName, url);
+      try {
+        const { Share } = await import('@capacitor/share');
+        await Share.share({ text, url, dialogTitle: t('invites.modal.shareDialogTitle') });
+      } catch {
+        if (navigator.share) {
+          await navigator.share({ text, url });
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(text);
+          toast({ title: t('invites.modal.linkCopied') });
+        }
+      }
+    } catch (e) {
+      toast({ title: t('common.error'), description: e.message || t('invites.modal.shareError'), variant: 'destructive' });
+    }
+    setSharingLink(false);
+  };
+
   const sendInviteTo = async ({ resolvedEmail, targetUserId }) => {
     if (!targetUserId) {
       resolvedEmail = normalizeEmail(resolvedEmail);
@@ -433,6 +468,12 @@ export default function MembersPanel({
               <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
                 <Mail className="w-3 h-3" />{t('membersPanel.inviteByUsernameOrEmail')}
               </p>
+              <button type="button" onClick={handleShareWithGroup} disabled={sharingLink}
+                className="w-full flex items-center gap-2 px-3 py-2.5 mb-3 bg-secondary rounded-xl text-left hover:bg-secondary/70 transition-colors disabled:opacity-50">
+                <Share2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                <span className="text-xs font-medium text-foreground flex-1">{t('invites.modal.shareWithGroup')}</span>
+                <span className="text-xs text-muted-foreground">{sharingLink ? '…' : '→'}</span>
+              </button>
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
