@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Clock, Mail, Search, X } from 'lucide-react';
+import { Check, Clock, Mail, Search, Share2, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { sendTripInvite } from '@/lib/invites';
+import { getOrCreateTripInviteLink, buildTripInviteLinkUrl, buildTripInviteLinkShareText } from '@/lib/inviteLinks';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import Avatar from '@/components/trip/Avatar';
@@ -281,6 +282,37 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
     count,
   })).filter(({ email }) => getStatus(email) !== 'member').slice(0, 5);
 
+  const [sharingLink, setSharingLink] = useState(false);
+
+  // Compartir con el grupo -- genera (o reutiliza, si ya hay uno activo) el
+  // link general del viaje y abre la hoja nativa de compartir del sistema,
+  // NO una lista de botones por app dibujada por nosotros (ver la sesión de
+  // mockups: eso ya lo hace el propio sistema operativo). Con fallback a
+  // Web Share API / copiar al portapapeles si @capacitor/share no está
+  // disponible (p. ej. probando en un navegador de escritorio).
+  const handleShareWithGroup = async () => {
+    setSharingLink(true); setError('');
+    try {
+      const link = await getOrCreateTripInviteLink(tripId);
+      const url = buildTripInviteLinkUrl(link, trip);
+      const text = buildTripInviteLinkShareText(trip, currentUserName || currentUserEmail, url);
+      try {
+        const { Share } = await import('@capacitor/share');
+        await Share.share({ text, url, dialogTitle: t('invites.modal.shareDialogTitle') });
+      } catch {
+        if (navigator.share) {
+          await navigator.share({ text, url });
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(`${text}`);
+          setError(t('invites.modal.linkCopied'));
+        }
+      }
+    } catch (e) {
+      setError(e?.message || t('invites.modal.shareError'));
+    }
+    setSharingLink(false);
+  };
+
   if (!open) return null;
 
   return createPortal(
@@ -466,6 +498,21 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
               {/* Error */}
               {error && (
                 <p className="text-xs text-red-600 text-center">{error}</p>
+              )}
+
+              {/* Compartir con el grupo -- link general, solo se ve cuando
+                  hay algo que buscar/escribir todavía (query vacía), para no
+                  competir visualmente con resultados de búsqueda activos. */}
+              {query.trim().length < 2 && (
+                <button onClick={handleShareWithGroup} disabled={sharingLink}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-2xl hover:bg-secondary/30 transition-colors disabled:opacity-50">
+                  <Share2 className="w-4 h-4 text-primary flex-shrink-0" />
+                  <div className="flex-1 text-left">
+                    <p className="text-sm font-medium text-foreground">{t('invites.modal.shareWithGroup')}</p>
+                    <p className="text-xs text-muted-foreground">{t('invites.modal.shareWithGroupHint')}</p>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{sharingLink ? '…' : '→'}</span>
+                </button>
               )}
 
               {/* Email fallback */}

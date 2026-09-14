@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
 import { computeEditors } from '@/lib/syncTripMembers';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, Trash2, LogOut } from 'lucide-react';
+import { ChevronDown, Trash2, LogOut, Link2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -17,6 +17,7 @@ import { normalizeCountry, getCountryLabel } from '@/lib/countryConfig';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
 import { AlertTriangle } from 'lucide-react';
+import { getOrCreateTripInviteLink, regenerateTripInviteLink, buildTripInviteLinkUrl } from '@/lib/inviteLinks';
 
 // Solo se validaba end_date >= start_date de CADA ciudad por separado — nada
 // impedía que el start_date de una ciudad fuera muy anterior al end_date de
@@ -29,6 +30,75 @@ import { AlertTriangle } from 'lucide-react';
 function datesOverlap(aStart, aEnd, bStart, bEnd) {
   if (!aStart || !aEnd || !bStart || !bEnd) return false;
   return aStart < bEnd && bStart < aEnd;
+}
+
+// José (14 sep 2026): sección del link general de invitación (grupo, hasta
+// 20 usos, caduca en 7 días) -- ver base44/functions/createTripInviteLink
+// para el modelo completo. Solo visible para admins: crear/ver el estado lo
+// permitiría también un editor (createTripInviteLink), pero regenerar exige
+// admin, así que se simplifica mostrando la sección entera solo a admins.
+function TripInviteLinkSection({ trip, tripId }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState(false);
+
+  const { data: link, refetch } = useQuery({
+    queryKey: ['tripInviteLink', tripId],
+    // createTripInviteLink reutiliza el activo si ya existe -- llamarla
+    // aquí no crea uno nuevo de más, solo sirve también para "consultar el
+    // estado", que es justo lo que hace falta pintar aquí.
+    queryFn: () => getOrCreateTripInviteLink(tripId),
+    enabled: !!tripId,
+    staleTime: 30000,
+  });
+
+  const handleCopy = async () => {
+    if (!link) return;
+    const url = buildTripInviteLinkUrl(link, trip);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: t('invites.modal.linkCopied') });
+    } catch {}
+  };
+
+  const handleRegenerate = async () => {
+    setBusy(true);
+    try {
+      await regenerateTripInviteLink(tripId);
+      await refetch();
+      toast({ title: t('trip.dialog.linkRegenerated') });
+    } catch (e) {
+      toast({ title: t('common.error'), description: e.message, variant: 'destructive' });
+    }
+    setBusy(false);
+  };
+
+  if (!link) return null;
+
+  const usesLeft = Math.max(0, (link.max_uses || 0) - (link.use_count || 0));
+  const daysLeft = Math.max(0, Math.ceil((new Date(link.expires_at).getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+
+  return (
+    <div className="px-5 py-4 border-b border-border">
+      <div className="flex items-center gap-2 mb-2">
+        <Link2 className="w-4 h-4 text-primary" />
+        <p className="text-sm font-medium text-foreground">{t('trip.dialog.groupLink')}</p>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        {t('trip.dialog.groupLinkStatus', { used: link.use_count || 0, max: link.max_uses, days: daysLeft })}
+      </p>
+      <div className="flex gap-2">
+        <button onClick={handleCopy}
+          className="flex-1 h-9 rounded-full border border-border text-xs font-medium text-foreground bg-card">
+          {t('trip.dialog.copyLink')}
+        </button>
+        <button onClick={handleRegenerate} disabled={busy}
+          className="flex-1 h-9 rounded-full border border-border text-xs font-medium text-foreground bg-card flex items-center justify-center gap-1.5 disabled:opacity-50">
+          <RefreshCw className={`w-3.5 h-3.5 ${busy ? 'animate-spin' : ''}`} />{t('trip.dialog.regenerateLink')}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default
@@ -480,6 +550,8 @@ function SettingsDialog({
         <div className="px-5 py-4 border-b border-border">
           <MembersPanel trip={trip} currentUserEmail={currentUserEmail} isAdmin={isAdmin} profiles={profiles} />
         </div>
+
+        {isAdmin && <TripInviteLinkSection trip={trip} tripId={tripId} />}
 
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3.5">
