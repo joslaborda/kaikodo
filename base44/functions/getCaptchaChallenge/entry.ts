@@ -40,6 +40,29 @@ Deno.serve(async (req) => {
     } catch {
     }
 
+    // Hallazgo del escáner de seguridad de Base44 (14 sep 2026): esta
+    // función es y tiene que seguir siendo sin sesión (se usa ANTES de
+    // registrarse/resetear contraseña, no hay ningún usuario con el que
+    // comparar todavía) -- eso no es el bug en sí, es el motivo por el que
+    // el escáner no puede "arreglarlo solo". Lo que sí faltaba: nada
+    // impedía a un script llamarla en bucle sin límite, creando registros
+    // de CaptchaChallenge sin fin (coste de base de datos, no fuga de
+    // datos -- un reto sin resolver no sirve para registrarse ni resetear
+    // nada, verifyCaptcha exige la prueba-de-trabajo real).
+    // Mitigación: si ya hay demasiados retos sin usar y sin caducar
+    // todavía, se corta aquí en vez de seguir creando más -- quien esté de
+    // verdad intentando registrarse legítimamente apenas nota nada (el
+    // tráfico normal está muy por debajo de este umbral); quien esté
+    // abusando tiene que esperar a que caduquen los suyos.
+    const MAX_PENDING_CHALLENGES = 300;
+    const pending = await service.entities.CaptchaChallenge.filter({ used: false });
+    if (pending.length >= MAX_PENDING_CHALLENGES) {
+      return Response.json(
+        { error: "Demasiadas solicitudes ahora mismo. Inténtalo de nuevo en un momento." },
+        { status: 429 }
+      );
+    }
+
     const challenge = randomChallenge();
     await service.entities.CaptchaChallenge.create({
       challenge,
