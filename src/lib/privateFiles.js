@@ -21,10 +21,6 @@ import { base44 } from '@/api/base44Client';
  * resolveDocViewUrl() lo prioriza sobre `file_url`.
  */
 
-// 1h — margen cómodo para ver/descargar un documento sin que la URL caduque
-// a mitad, sin dejarla viva más de lo necesario tampoco.
-const SIGNED_URL_TTL_SECONDS = 60 * 60;
-
 /**
  * `file_url` es texto libre editable por cualquier miembro del viaje (campo
  * legado, ver arriba) — sin esta validación, alguien podía guardar
@@ -59,12 +55,12 @@ export async function uploadDocFile(file) {
   const result = await base44.functions.invoke('uploadPrivateDocument', { file });
   const data = result?.data ?? result;
   if (data?.error) throw new Error(data.error);
-  const { file_uri } = data;
-  const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({
-    file_uri,
-    expires_in: SIGNED_URL_TTL_SECONDS,
-  });
-  return { file_uri, previewUrl: signed_url };
+  // file_uri y previewUrl (URL firmada de corta duración) los devuelve ya
+  // la propia función de subida -- ver el comentario en
+  // uploadPrivateDocument/entry.ts sobre por qué CreateFileSignedUrl ya no
+  // se llama aparte desde aquí.
+  const { file_uri, previewUrl } = data;
+  return { file_uri, previewUrl };
 }
 
 /**
@@ -74,16 +70,24 @@ export async function uploadDocFile(file) {
  * público legado.
  */
 export async function resolveDocViewUrl(ticket) {
-  if (ticket?.file_uri) {
+  if (ticket?.file_uri && ticket?.id) {
     try {
-      const { signed_url } = await base44.integrations.Core.CreateFileSignedUrl({
-        file_uri: ticket.file_uri,
-        expires_in: SIGNED_URL_TTL_SECONDS,
-      });
+      // José (14 sep 2026): antes esto llamaba a CreateFileSignedUrl
+      // directamente desde el cliente con el file_uri en crudo -- firmaba
+      // CUALQUIER file_uri que se le pidiera, sin comprobar si quien llama
+      // tiene de verdad acceso a ESE documento (saltándose el rls de
+      // Ticket). Ahora pasa por getDocumentSignedUrl, que primero hace
+      // Ticket.get(ticketId) con el cliente normal (no de servicio) -- si
+      // el rls no le deja leerlo, ya falla ahí, antes de firmar nada.
+      const result = await base44.functions.invoke('getDocumentSignedUrl', { ticketId: ticket.id });
+      const data = result?.data ?? result;
+      if (data?.error) throw new Error(data.error);
+      const signed_url = data?.signed_url;
       if (signed_url && isSafeFileUrl(signed_url)) return signed_url;
     } catch {
-      // Si falla la firma (red, etc.), probamos con el file_url legado si
-      // existiera antes de rendirnos — mejor que dejar el botón sin hacer nada.
+      // Si falla la firma (red, sin acceso, etc.), probamos con el file_url
+      // legado si existiera antes de rendirnos — mejor que dejar el botón
+      // sin hacer nada.
     }
   }
   const legacyUrl = ticket?.file_url || '';
