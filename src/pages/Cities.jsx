@@ -143,24 +143,24 @@ function SpotEditModal({spot, open, onClose, onSave, onRemove }) {
 // ── Doc viewer modal ──────────────────────────────────────────────────────────
 const DOC_BG = { flight:'bg-blue-50 dark:bg-blue-950/30', hotel:'bg-purple-50 dark:bg-purple-950/30', train:'bg-green-50 dark:bg-green-950/30', bus:'bg-amber-50 dark:bg-amber-950/30', car:'bg-orange-50 dark:bg-orange-950/30', ticket:'bg-rose-50 dark:bg-rose-950/30', insurance:'bg-teal-50 dark:bg-teal-950/30', other:'bg-secondary' };
 
-function DocViewerModal({ doc, open, onClose, onEdit }) {
+function DocViewerModal({ doc, open, onClose, onEdit, onOpenFile }) {
   const { t } = useTranslation();
   const type = doc?.category || doc?.type || doc?.doc_type || 'other';
   const DocIcon = DOC_ICON_MAP[type] || FileText;
   const bgColor = DOC_BG[type] || 'bg-secondary';
 
-  // Resuelve la URL en el momento de abrir — para documentos con file_uri
-  // (storage privado) pide una URL firmada nueva cada vez en vez de reusar
-  // una que podría haber caducado. Ver src/lib/privateFiles.js. La pestaña
-  // se abre en blanco de forma SÍNCRONA (dentro del propio click) y se le
-  // asigna la URL después de resolverla — abrirla ya tras el await podía
-  // hacer que el navegador la tratase como pop-up no solicitado y la bloqueara.
+  // Antes esto abría con window.open('', '_blank') + win.location.href tras
+  // resolver la URL — un patrón pensado para navegador de escritorio que NO
+  // funciona en el WebView nativo de Capacitor (iOS/Android): window.open()
+  // ahí no abre pestaña real, así que ni el archivo ni el botón "Abrir"
+  // hacían nada. El resto de la app ya resuelve esto abriendo el archivo
+  // EN LA PROPIA APP con <PDFViewer> (mismo patrón que Home/DayCard.jsx) —
+  // aquí solo hacía falta conectar ese mismo camino en vez de reinventar uno
+  // nuevo con window.open.
   const openFile = async () => {
     if (!doc?.file_url && !doc?.file_uri) return;
-    const win = window.open('', '_blank');
     const url = await resolveDocViewUrl(doc);
-    if (url && win) win.location.href = url;
-    else if (win) win.close();
+    if (url) onOpenFile?.(url);
   };
 
   return (
@@ -876,7 +876,8 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
       {/* Doc view modal — for docs without file */}
       {viewingDoc && (
         <DocViewerModal doc={viewingDoc} open={!!viewingDoc} onClose={() => setViewingDoc(null)}
-          onEdit={() => { setEditingDoc(viewingDoc); setViewingDoc(null); }} />
+          onEdit={() => { setEditingDoc(viewingDoc); setViewingDoc(null); }}
+          onOpenFile={(url) => { setViewingDoc(null); setViewingFile(url); }} />
       )}
 
       {/* Doc edit modal */}
