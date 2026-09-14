@@ -574,13 +574,31 @@ export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }
                           <input type="date" value={stop.manual.start_date}
                             min={(idx > 0 ? stops[idx - 1]?.manual?.end_date : null) || formData.start_date || undefined}
                             max={formData.end_date || undefined}
-                            onChange={e => updateStopManual(idx, { start_date: e.target.value })}
+                            onChange={e => {
+                              // Mismo refuerzo en JS que en los campos de
+                              // fecha del propio viaje (min/max nativo del
+                              // input no siempre se respeta en el WebView
+                              // de Android) — se ignora si viola el rango.
+                              const v = e.target.value;
+                              const lo = (idx > 0 ? stops[idx - 1]?.manual?.end_date : null) || formData.start_date;
+                              const hi = formData.end_date;
+                              if (lo && v && v < lo) return;
+                              if (hi && v && v > hi) return;
+                              updateStopManual(idx, { start_date: v });
+                            }}
                             className="w-36 h-8 border border-border rounded-lg px-2 text-xs outline-none focus:border-primary bg-secondary"
                           />
                           <span className="text-xs text-muted-foreground">→</span>
                           <input type="date" value={stop.manual.end_date}
                             min={stop.manual.start_date || formData.start_date || undefined} max={formData.end_date || undefined}
-                            onChange={e => updateStopManual(idx, { end_date: e.target.value })}
+                            onChange={e => {
+                              const v = e.target.value;
+                              const lo = stop.manual.start_date || formData.start_date;
+                              const hi = formData.end_date;
+                              if (lo && v && v < lo) return;
+                              if (hi && v && v > hi) return;
+                              updateStopManual(idx, { end_date: v });
+                            }}
                             className="w-36 h-8 border border-border rounded-lg px-2 text-xs outline-none focus:border-primary bg-secondary"
                           />
                         </div>
