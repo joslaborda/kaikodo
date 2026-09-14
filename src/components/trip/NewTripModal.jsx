@@ -1,8 +1,9 @@
 import { useState, useRef, forwardRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Plus, X, Shuffle, ChevronDown, Loader2, AlertTriangle } from 'lucide-react';
-import { getCountryMeta, getTopCities, normalizeCountry, getCountryOptions, searchCountries, getCountryLabel } from '@/lib/countryConfig';
+import { Plus, X, Shuffle, AlertTriangle } from 'lucide-react';
+import { getCountryMeta, normalizeCountry, getCountryOptions, searchCountries, getCountryLabel } from '@/lib/countryConfig';
+import CityInput from '@/components/trip/CityInput';
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
@@ -180,78 +181,6 @@ const CountryField = forwardRef(function CountryField({ value, onChange, hasErro
   );
 });
 
-// ─── Inline city autocomplete ─────────────────────────────────────────────────
-function CityField({ country, value, onChange, placeholder }) {
-  const { t } = useTranslation();
-  const [cities, setCities] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState(value || '');
-  const containerRef = useRef(null);
-
-  useEffect(() => { setQ(value || ''); }, [value]);
-
-  useEffect(() => {
-    if (!country) { setCities([]); return; }
-    setCities([]);
-    setLoading(true);
-    getTopCities(country)
-      .then(c => setCities(c))
-      .catch(() => setCities([]))
-      .finally(() => setLoading(false));
-  }, [country]);
-
-  useEffect(() => {
-    const handler = e => { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  const filtered = q ? cities.filter(c => c.toLowerCase().includes(q.toLowerCase())) : cities;
-
-  return (
-    <div className="relative" ref={containerRef}>
-      <div className="relative">
-        <input
-          value={q}
-          onChange={e => { setQ(e.target.value); onChange(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          placeholder={loading ? t('utilities.loading') : (placeholder || t('trip.new.cityPlaceholder'))}
-          autoComplete="off"
-          className="w-full h-9 border border-border rounded-xl px-3 pr-7 text-sm outline-none focus:border-primary bg-card"
-        />
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
-        </div>
-      </div>
-      {open && !loading && filtered.length > 0 && (
-        <ul className="absolute z-50 mt-1 w-full max-h-52 overflow-y-auto bg-card border border-border rounded-xl shadow-lg">
-          {filtered.map(city => (
-            <li key={city} onMouseDown={() => { setQ(city); onChange(city); setOpen(false); }}
-              className="px-3 py-2 text-sm cursor-pointer hover:bg-orange-50 hover:text-primary transition-colors">
-              {city}
-            </li>
-          ))}
-        </ul>
-      )}
-      {open && !loading && filtered.length === 0 && q.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-xl shadow-lg px-3 py-2.5">
-          <p className="text-sm text-muted-foreground">{t('trip.new.typeCityName')}</p>
-          <button onMouseDown={() => { onChange(q); setOpen(false); }}
-            className="mt-1.5 text-sm text-primary font-medium">
-            {t('trip.new.useQuery', { q })}
-          </button>
-        </div>
-      )}
-      {open && !loading && cities.length === 0 && q.length === 0 && country && (
-        <div className="absolute z-50 mt-1 w-full bg-card border border-border rounded-xl shadow-lg px-3 py-2.5">
-          <p className="text-sm text-muted-foreground">{t('trip.new.typeCityName')}</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }) {
   const { t } = useTranslation();
@@ -381,6 +310,13 @@ export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }
         } : {}),
       },
       stops: tripCities.map(s => s.city),
+      // José (14 sep 2026): coordenadas reales de cada parada (si
+      // CityInput consiguió resolverlas vía Google Places) -- array
+      // paralelo a `stops`, igual que ya hace `stopCountries`. Puede venir
+      // con `lat`/`lng` a `undefined` en cualquier posición si esa parada
+      // se escribió a mano sin elegir ninguna sugerencia -- eso es
+      // exactamente el fallback esperado, no un error.
+      stopCoords: tripCities.map(s => ({ lat: s.lat ?? undefined, lng: s.lng ?? undefined })),
       stopCountries: tripCities.map(s => normalizeCountry(s.country || firstCountry)),
       allocations,
       selectedTemplate: null,
@@ -525,11 +461,12 @@ export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }
                       />
                     </div>
                     <div className="flex-1">
-                      <CityField
+                      <CityInput
                         key={stop.country}
                         country={stop.country}
                         value={stop.city}
-                        onChange={v => updateStop(idx, { city: v })}
+                        onChange={v => updateStop(idx, { city: v, lat: null, lng: null })}
+                        onSelectPlace={({ name, lat, lng }) => updateStop(idx, { city: name, lat, lng })}
                         placeholder={t('trip.new.cityN', { n: idx + 1 })}
                       />
                     </div>
