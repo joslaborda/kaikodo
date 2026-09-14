@@ -14,6 +14,14 @@
       "type": "string",
       "default": "Japan"
     },
+    "lat": {
+      "type": "number",
+      "description": "Latitud real de la ciudad (Google Places) -- José 14 sep 2026, ver src/lib/cityPlaces.js. Opcional a propósito: queda vacío si la ciudad se escribió a mano sin elegir ninguna sugerencia, o en registros creados antes de este cambio. No asumir que siempre existe."
+    },
+    "lng": {
+      "type": "number",
+      "description": "Longitud real de la ciudad (Google Places) -- mismo criterio que lat, ver arriba."
+    },
     "image_url": {
       "type": "string",
       "description": "Cover image URL"
