@@ -11,7 +11,6 @@ import { PlaneIcon } from '@/lib/icons';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { getCountryMeta, normalizeCountry, getCountryLabel } from '@/lib/countryConfig';
-import { getContinent, CONTINENT_ORDER } from '@/lib/continents';
 import { getTripCoverImage } from '@/lib/tripImage';
 import { getTripStatus } from '@/components/trip/TripCard';
 import { searchNewPlaces, fetchPlaceDetails } from '@/components/spots/placesAutocomplete';
@@ -386,16 +385,53 @@ export default function Profile() {
 
   const nextTripCities = useMemo(() => myTripCities.filter(c => c.trip_id === nextTrip?.id), [myTripCities, nextTrip]);
 
-  // Spots guardados cuyo país coincide con el próximo viaje y que todavía no
-  // se han importado (mismo criterio de duplicado por título que usa
-  // importSavedSpot en Restaurants.jsx).
+  // José (14 sep 2026): ya hay coordenadas reales disponibles (CityInput
+  // ahora las resuelve vía Google Places, ver src/lib/cityPlaces.js) --
+  // esto sustituye la comparación por nombre de ciudad de ayer por un radio
+  // geográfico real. Fórmula de Haversine, sin librería nueva.
+  //
+  // FALLBACK explícito, a propósito: si el spot guardado o NINGUNA ciudad
+  // del viaje tiene coordenadas todavía (registros de antes de este cambio,
+  // o escritos a mano sin elegir sugerencia de Google), se cae a comparar
+  // por nombre de ciudad normalizado -- exactamente el comportamiento de
+  // ayer, no un error ni un "no coincide nunca".
+  const MATCH_RADIUS_KM = 50;
+  function haversineKm(lat1, lng1, lat2, lng2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  const stripDiacritics = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const nextTripCityNames = useMemo(() =>
+    new Set(nextTripCities.map(c => stripDiacritics(c.name)).filter(Boolean)),
+  [nextTripCities]);
+  const nextTripCityCoords = useMemo(() =>
+    nextTripCities.filter(c => typeof c.lat === 'number' && typeof c.lng === 'number'),
+  [nextTripCities]);
+
+  function isNearNextTrip(spot) {
+    if (typeof spot.lat === 'number' && typeof spot.lng === 'number' && nextTripCityCoords.length > 0) {
+      return nextTripCityCoords.some(c => haversineKm(spot.lat, spot.lng, c.lat, c.lng) <= MATCH_RADIUS_KM);
+    }
+    // Sin coordenadas en alguno de los dos lados -- respaldo por nombre de
+    // ciudad, igual que ayer.
+    return !!(spot.city_name && nextTripCityNames.has(stripDiacritics(spot.city_name)));
+  }
+
+  // Spots guardados cerca del próximo viaje (radio real por coordenadas
+  // cuando hay, nombre de ciudad si no) y que todavía no se han importado
+  // (mismo criterio de duplicado por título que usa importSavedSpot en
+  // Restaurants.jsx).
   const pendingImportMatches = useMemo(() => {
-    if (!nextTrip || !nextTripCountries.length) return [];
+    if (!nextTrip || (!nextTripCityNames.size && !nextTripCityCoords.length)) return [];
     return savedSpotsRaw.filter(s =>
-      s.country && nextTripCountries.includes(normalizeCountry(s.country)) &&
+      isNearNextTrip(s) &&
       !nextTripSpots.some(sp => sp.title?.toLowerCase().trim() === s.title?.toLowerCase().trim())
     );
-  }, [savedSpotsRaw, nextTrip, nextTripCountries, nextTripSpots]);
+  }, [savedSpotsRaw, nextTrip, nextTripCityNames, nextTripCityCoords, nextTripSpots]);
 
   const importMutation = useMutation({
     mutationFn: async () => {
@@ -436,7 +472,6 @@ export default function Profile() {
   // ── Colección unificada (guardados + creados) ──
   const [collectionFilter, setCollectionFilter] = useState('all'); // all | saved | mine
   const [openSpot, setOpenSpot] = useState(null);
-  const [continentFilter, setContinentFilter] = useState('all');
   const [countryFilter, setCountryFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [googleResults, setGoogleResults] = useState([]);
@@ -555,31 +590,24 @@ export default function Profile() {
     [allCollection, collectionFilter]
   );
 
-  const continentGroups = useMemo(() => {
+  // José (14 sep 2026): antes esto era un filtro en dos niveles
+  // (continente → país dentro de ese continente) -- "debería ser por país,
+  // no por continente", así que se quita el nivel intermedio y los chips
+  // van directos a país. Mismo criterio de "se oculta solo si no hace
+  // falta" que ya tenía el continente: con un único país entre tus
+  // guardados/creados, no se muestra ningún chip.
+  const countryGroups = useMemo(() => {
     const g = {};
     ownerFiltered.forEach(s => {
-      const c = getContinent(normalizeCountry(s.country || '') || 'Otros');
+      const c = normalizeCountry(s.country || '') || 'Otros';
       g[c] = (g[c] || 0) + 1;
     });
     return g;
   }, [ownerFiltered]);
 
-  const countryGroups = useMemo(() => {
-    if (continentFilter === 'all') return {};
-    const g = {};
-    ownerFiltered
-      .filter(s => getContinent(normalizeCountry(s.country || '') || 'Otros') === continentFilter)
-      .forEach(s => {
-        const c = normalizeCountry(s.country || '') || 'Otros';
-        g[c] = (g[c] || 0) + 1;
-      });
-    return g;
-  }, [ownerFiltered, continentFilter]);
-
   const finalList = useMemo(() => ownerFiltered
-    .filter(s => continentFilter === 'all' || getContinent(normalizeCountry(s.country || '') || 'Otros') === continentFilter)
     .filter(s => countryFilter === 'all' || normalizeCountry(s.country || '') === countryFilter),
-  [ownerFiltered, continentFilter, countryFilter]);
+  [ownerFiltered, countryFilter]);
 
   if (profileLoading) return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -725,32 +753,18 @@ export default function Profile() {
                   { key: 'saved', label: `${t('profile.saved')} · ${savedSpotsRaw.length}` },
                   { key: 'mine', label: `${t('profile.created')} · ${mySpotsRaw.length}` },
                 ].map(f => (
-                  <button key={f.key} onClick={() => { setCollectionFilter(f.key); setContinentFilter('all'); setCountryFilter('all'); }}
+                  <button key={f.key} onClick={() => { setCollectionFilter(f.key); setCountryFilter('all'); }}
                     className={`flex-1 text-xs font-semibold py-2 rounded-full transition-colors ${collectionFilter === f.key ? 'bg-card text-foreground' : 'text-muted-foreground'}`}>
                     {f.label}
                   </button>
                 ))}
               </div>
 
-              {Object.keys(continentGroups).length > 1 && (
-                <div className="flex gap-1.5 overflow-x-auto pb-1 mb-2">
-                  <button onClick={() => { setContinentFilter('all'); setCountryFilter('all'); }}
-                    className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border ${continentFilter === 'all' ? 'bg-foreground text-white border-foreground' : 'bg-card border-border text-muted-foreground'}`}>
-                    {t('common.all')} · {ownerFiltered.length}
-                  </button>
-                  {CONTINENT_ORDER.filter(c => continentGroups[c]).map(c => (
-                    <button key={c} onClick={() => { setContinentFilter(c); setCountryFilter('all'); }}
-                      className={`flex-shrink-0 text-xs font-semibold px-3 py-1.5 rounded-full border ${continentFilter === c ? 'bg-foreground text-white border-foreground' : 'bg-card border-border text-muted-foreground'}`}>
-                      {t(`continents.${c}`)} · {continentGroups[c]}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {continentFilter !== 'all' && Object.keys(countryGroups).length > 1 && (
+              {Object.keys(countryGroups).length > 1 && (
                 <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3">
                   <button onClick={() => setCountryFilter('all')}
                     className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border ${countryFilter === 'all' ? 'bg-primary text-white border-primary' : 'bg-background border-border text-muted-foreground'}`}>
-                    {t('common.all')} · {Object.values(countryGroups).reduce((a, b) => a + b, 0)}
+                    {t('common.all')} · {ownerFiltered.length}
                   </button>
                   {Object.entries(countryGroups).sort((a, b) => b[1] - a[1]).map(([c, n]) => (
                     <button key={c} onClick={() => setCountryFilter(c)}

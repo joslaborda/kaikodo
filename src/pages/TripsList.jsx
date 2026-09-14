@@ -131,7 +131,7 @@ export default function TripsList() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async ({ formData, stops, stopCountries = [], allocations }) => {
+    mutationFn: async ({ formData, stops, stopCountries = [], stopCoords = [], allocations }) => {
       // UserProfile.email siempre se guarda en minúsculas (migración en
       // App.jsx), pero user.email viene tal cual del proveedor de auth — si
       // aquí se guarda sin normalizar, el propio creador del viaje queda con
@@ -167,6 +167,13 @@ export default function TripsList() {
         await base44.entities.City.create({
           trip_id: trip.id, name: stops[i],
           country: normalizeCountry(stopCountries[i] || formData.country || ''),
+          // José (14 sep 2026): coordenadas reales si CityInput las
+          // resolvió vía Google Places -- ver el comentario largo en
+          // cityPlaces.js. undefined si esa parada se escribió a mano sin
+          // elegir sugerencia; Base44 simplemente no guarda el campo en
+          // ese caso, no revienta nada.
+          lat: stopCoords[i]?.lat,
+          lng: stopCoords[i]?.lng,
           order: i,
           start_date: dates.start_date, end_date: dates.end_date,
           trip_members: trip.members || [],
