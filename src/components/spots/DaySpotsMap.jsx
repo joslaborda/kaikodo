@@ -31,6 +31,12 @@ function numberedDivIcon(L, num) {
 export default function DaySpotsMap({ spots = [], height = 220, onSelectSpot }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
+  // Qué librería creó el mapa actual en mapRef — imprescindible en el
+  // cleanup: un google.maps.Map NO tiene método .remove() (a diferencia de
+  // un mapa Leaflet). Llamarlo igualmente sin comprobar antes lanzaba una
+  // excepción no capturada al desmontar (cerrar el mapa del día en Ruta),
+  // que tumbaba toda la app y obligaba a reiniciarla.
+  const mapLibRef = useRef(null);
   const markersRef = useRef([]);
   const onSelectSpotRef = useRef(onSelectSpot);
   onSelectSpotRef.current = onSelectSpot;
@@ -54,8 +60,9 @@ export default function DaySpotsMap({ spots = [], height = 220, onSelectSpot }) 
       injectKodoMapStyles();
       loadLeaflet().then(L => {
         if (cancelled || !containerRef.current) return;
-        if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+        if (mapRef.current && mapLibRef.current === 'leaflet') { mapRef.current.remove(); mapRef.current = null; }
         const map = L.map(containerRef.current, { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
+        mapLibRef.current = 'leaflet';
         L.tileLayer(KODO_TILE_URL, { subdomains: KODO_TILE_SUBDOMAINS, attribution: KODO_TILE_ATTRIBUTION, maxZoom: 19 }).addTo(map);
         map.invalidateSize();
         const points = [];
@@ -86,13 +93,14 @@ export default function DaySpotsMap({ spots = [], height = 220, onSelectSpot }) 
         markGoogleUsed('mapLoad');
         markersRef.current.forEach(m => m.setMap(null));
         markersRef.current = [];
-        if (!mapRef.current) {
+        if (!mapRef.current || mapLibRef.current !== 'google') {
           mapRef.current = new google.maps.Map(containerRef.current, {
             styles: KODO_GOOGLE_MAP_STYLE,
             disableDefaultUI: true,
             zoomControl: true,
             gestureHandling: 'greedy',
           });
+          mapLibRef.current = 'google';
         }
         const map = mapRef.current;
         const bounds = new google.maps.LatLngBounds();
@@ -117,7 +125,16 @@ export default function DaySpotsMap({ spots = [], height = 220, onSelectSpot }) 
 
     return () => {
       cancelled = true;
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+      if (mapRef.current) {
+        // .remove() solo existe en Leaflet. Un google.maps.Map no tiene
+        // destructor propio — basta con soltar sus marcadores; el propio
+        // <div> del contenedor lo desmonta React al cerrar el mapa del día.
+        if (mapLibRef.current === 'leaflet') mapRef.current.remove();
+        else if (mapLibRef.current === 'google') markersRef.current.forEach(m => m.setMap(null));
+        mapRef.current = null;
+        mapLibRef.current = null;
+      }
+      markersRef.current = [];
     };
   }, [useGoogle, mappable.map(s => s.id + ':' + s.lat + ':' + s.lng).join(',')]);
 
