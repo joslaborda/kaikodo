@@ -285,6 +285,19 @@ Deno.serve(async (req) => {
         try {
           // Mismo límite alto que en acceptTripInvite/entry.ts -- ver ahí el porqué.
           const records = await service.entities[entityName].filter({ trip_id: tripId }, "-created_date", 2000);
+          // Hallazgo de seguridad (14 sep 2026, escáner de Base44 + verificado
+          // aquí): `patch` se usaba en el update() de abajo sin haberse
+          // declarado NUNCA en este ámbito -- cada llamada lanzaba
+          // ReferenceError, silenciado por el catch de abajo (que lo apuntaba
+          // en syncFailed pero la función seguía devolviendo éxito igual).
+          // Resultado real: expulsar a alguien NUNCA sincronizaba
+          // trip_members en el contenido ya existente del viaje -- el
+          // expulsado seguía pudiendo leer/editar/borrar todo lo de antes
+          // para siempre, aunque la app ya no se lo mostrara. Mismo patch que
+          // ya construyen correctamente acceptTripInvite/redeemTripInviteLink.
+          const patch = ROLE_AWARE_ENTITIES.includes(entityName)
+            ? { trip_members: newMembers, trip_editors: editors }
+            : { trip_members: newMembers };
           for (const record of records) {
             await service.entities[entityName].update(record.id, patch);
           }
@@ -294,10 +307,18 @@ Deno.serve(async (req) => {
       }
     } else {
       // action === "setRole" -- trip_members no cambia, solo trip_editors.
+      // Hallazgo de seguridad (14 sep 2026): esta rama leía los registros
+      // con filter() pero nunca llegaba a llamar a update() con ellos --
+      // degradar a alguien a "viewer" no le quitaba permisos de escritura
+      // sobre el contenido ya existente del viaje hasta que además lo
+      // expulsaran (bug distinto al de arriba, pero mismo efecto: acceso
+      // que debería haberse revocado y no se revocaba).
       for (const entityName of ROLE_AWARE_ENTITIES) {
         try {
-          // Mismo límite alto que en acceptTripInvite/entry.ts -- ver ahí el porqué.
           const records = await service.entities[entityName].filter({ trip_id: tripId }, "-created_date", 2000);
+          for (const record of records) {
+            await service.entities[entityName].update(record.id, { trip_editors: editors });
+          }
         } catch (e) {
           syncFailed.push({ entity: entityName, error: (e as Error).message });
         }
