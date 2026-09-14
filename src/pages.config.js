@@ -61,7 +61,6 @@ import Settings from './pages/Settings';
 import VerifyEmail from './pages/VerifyEmail';
 import Invites from './pages/Invites';
 import Photos from './pages/Photos';
-import Explore from './pages/Explore';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import ForgotPassword from './pages/ForgotPassword';
@@ -84,7 +83,6 @@ export const PAGES = {
     "VerifyEmail": VerifyEmail,
     "Invites": Invites,
     "Photos": Photos,
-    "Explore": Explore,
     "Terms": Terms,
     "Privacy": Privacy,
     "ForgotPassword": ForgotPassword,

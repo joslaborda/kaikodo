@@ -28,8 +28,11 @@ const globalNavItems = [
   { tk: 'profile.title', page: 'Profile',   icon: User },
 ];
 
-const pagesWithoutNav = ['MigrateData', 'TripsList', 'Explore', 'Profile', 'Settings', 'VerifyEmail', 'Invites'];
-const globalPages     = ['Explore'];
+const pagesWithoutNav = ['MigrateData', 'TripsList', 'Profile', 'Settings', 'VerifyEmail', 'Invites'];
+// Explore.jsx eliminado (14 sep 2026, junto con la función de comentarios
+// de spots) -- globalPages se queda vacío, no era su único propósito y
+// isGlobalPage sigue funcionando igual con .includes() sobre un array vacío.
+const globalPages     = [];
 const tripOnlyPages   = ['Home', 'Cities', 'Documents', 'Restaurants', 'Photos',
                          'Expenses', 'Utilities', 'Translator'];
 
