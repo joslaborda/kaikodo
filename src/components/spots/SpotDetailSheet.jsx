@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
 import useLikeSimple from './useLikeSimple';
-import InlineCommentsPopup from './InlineCommentsPopup';
 import { useTranslation } from 'react-i18next';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
 import { normalizeEmail } from '@/lib/utils';
@@ -24,7 +23,6 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
   const [assignedCityId, setAssignedCityId] = useState(spot?.city_id || null);
   const [assignedTime, setAssignedTime] = useState(spot?.assigned_time || '');
   const [saving, setSaving] = useState(false);
-  const [showComments, setShowComments] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Mismo criterio que SpotCard.jsx: solo quien creó el spot puede borrarlo.
   // Antes cualquier miembro del grupo veía el botón de borrar sin confirmación.
@@ -39,13 +37,6 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
   // usuario actual puede verlo (es miembro del viaje), puede borrarlo.
   const canDelete = normalizeEmail(spot?.created_by) === normalizeEmail(currentUserEmail) || !spot?.created_by;
   const { isLiked, count: likeCount, toggle: toggleLike } = useLikeSimple(spot?.id, userId, spot?.created_by_user_id);
-  const isReal = spot?.id && !String(spot?.id || '').startsWith('seed_');
-  const { data: comments = [] } = useQuery({
-    queryKey: ['spotComments', spot?.id],
-    queryFn: () => base44.entities.SpotComment.filter({ spot_id: spot.id }),
-    enabled: !!spot?.id && isReal,
-    staleTime: 30000,
-  });
 
   // Build trip day options from cities — must be before early return.
   //
@@ -289,16 +280,6 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
             }
             <span className={isLiked ? 'text-primary' : 'text-muted-foreground'}>{t('spots.sheet.like')}{likeCount > 0 ? ` · ${likeCount}` : ''}</span>
           </button>
-          <div className="w-px bg-border" />
-          {isReal && (
-            <button
-              onClick={e => { e.stopPropagation(); setShowComments(true); }}
-              className="flex-1 flex items-center justify-center gap-2 py-3 hover:bg-secondary/30 transition-colors text-sm text-muted-foreground"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              {t('spots.sheet.comment')}{comments.length > 0 ? ` · ${comments.length}` : ''}
-            </button>
-          )}
         </div>
 
         {/* Sticky footer buttons */}
@@ -310,7 +291,6 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
         </div>
       </div>
     </div>
-    {showComments && isReal && <InlineCommentsPopup spot={spot} userId={userId} onClose={() => setShowComments(false)} />}
     {showDeleteConfirm && (
       <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40" onClick={() => setShowDeleteConfirm(false)}>
         <div className="bg-card w-full max-w-md rounded-t-2xl p-5 pb-8" onClick={e => e.stopPropagation()}>

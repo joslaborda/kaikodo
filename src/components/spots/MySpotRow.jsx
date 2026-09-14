@@ -1,24 +1,16 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { Pencil, Navigation, Star } from 'lucide-react';
 import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
 import useLikeSimple from './useLikeSimple';
-import InlineCommentsPopup from './InlineCommentsPopup';
 import { useTranslation } from 'react-i18next';
+
+// Fila de comentarios eliminada (14 sep 2026) -- ver comentario en
+// SpotCard.jsx sobre por qué se quitó la función de comentarios de spots.
 
 export default
 function MySpotRow({ spot, onTap, userId }) {
   const { t } = useTranslation();
   const tc = TYPE_CONFIG[spot.type] || TYPE_CONFIG.custom;
   const { isLiked, count: likeCount, toggle: toggleLike } = useLikeSimple(spot.id, userId);
-  const [showComments, setShowComments] = useState(false);
-
-  const { data: comments = [] } = useQuery({
-    queryKey: ['spotComments', spot.id],
-    queryFn: () => base44.entities.SpotComment.filter({ spot_id: spot.id }),
-    staleTime: 60000,
-  });
 
   const hasDate = !!spot.assigned_date;
 
@@ -65,7 +57,7 @@ function MySpotRow({ spot, onTap, userId }) {
         </div>
       </button>
 
-      {/* Like + comment row */}
+      {/* Like row */}
       <div className="flex items-center gap-4 px-4 pb-3">
         <button onClick={e => { e.stopPropagation(); toggleLike(); }} className="flex items-center gap-1.5 text-xs transition-colors p-1 -m-1 rounded-lg">
           {isLiked
@@ -74,10 +66,6 @@ function MySpotRow({ spot, onTap, userId }) {
           }
           <span className={isLiked ? 'text-primary' : 'text-muted-foreground'}>{likeCount > 0 ? likeCount : t('spots.sheet.like')}</span>
         </button>
-        <button onClick={e => { e.stopPropagation(); setShowComments(true); }} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors p-1 -m-1 rounded-lg">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          {comments.length > 0 ? comments.length : t('spots.sheet.comment')}
-        </button>
         {(spot.address || (spot.lat && spot.lng)) && (
           <a href={getMapsUrl(spot)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors p-1 -m-1 rounded-lg ml-auto">
@@ -85,8 +73,6 @@ function MySpotRow({ spot, onTap, userId }) {
           </a>
         )}
       </div>
-
-      {showComments && <InlineCommentsPopup spot={spot} userId={userId} onClose={() => setShowComments(false)} />}
     </div>
   );
 }
