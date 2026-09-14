@@ -46,21 +46,19 @@
     "thumb"
   ],
   "rls": {
-    // Mismo patrón que ya se corrigió en Follow.jsonc: create:true sin
-    // exigir autoría dejaba que cualquiera publicara una reseña/valoración
-    // "firmada" con la identidad de otro usuario real (más grave que en
-    // Like porque aquí hay texto público persistente, no solo un contador).
-    //
-    // Límite conocido, no resuelto aquí: read/create tampoco comprueban la
-    // visibilidad del Spot padre (spot_id) — si alguien conoce/filtra el id
-    // de un spot personal o compartido al que ya no tiene acceso, puede
-    // seguir leyendo/comentando sus comentarios. base44 rls no permite
-    // condiciones cross-entity (no puede mirar Spot.visibility desde aquí);
-    // cerrarlo del todo requeriría mover la creación/lectura de comentarios
-    // a una función backend con asServiceRole, como se hizo con TripInvite.
-    "create": { "data.user_id": "{{user.id}}" },
-    "read": true,
-    "update": { "data.user_id": "{{user.id}}" },
-    "delete": { "data.user_id": "{{user.id}}" }
+    // Función de comentarios/valoración de spots eliminada del todo (14 sep
+    // 2026) tras la auditoría que encontró que read/create nunca comprobaban
+    // la visibilidad del Spot padre (spot_id) -- alguien que conociera/
+    // filtrara el id de un spot al que ya no tiene acceso podía seguir
+    // leyendo/comentando sus comentarios, y el motor de rls de Base44 no
+    // puede expresar esa condición cross-entity. En vez de mover esto a una
+    // función backend (que habría conservado la función), se decidió
+    // quitarla entera -- ver src/components/spots/SpotCard.jsx. Entidad
+    // dejada huérfana sin tocar el esquema, mismo criterio que
+    // ItineraryTemplate/Collection tras quitar las plantillas públicas.
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
   }
 }
