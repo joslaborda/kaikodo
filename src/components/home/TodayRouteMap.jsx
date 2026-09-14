@@ -43,6 +43,14 @@ function hotelSvgIcon(google) {
 export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onSelectSpot }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
+    // Mismo problema real que ya se arregló en DaySpotsMap.jsx (14 sep
+    // 2026): un google.maps.Map no tiene .remove(). Aquí es MÁS grave
+    // porque este mapa no es colapsable — se desmonta/limpia cada vez que
+    // cambian hotelSpot/items (ver deps del useEffect más abajo, línea con
+    // routeItems.map(...)), así que con Google activo podía petar la app
+    // solo por navegar Hoy/Mañana con normalidad, no solo al cerrar algo
+    // a propósito.
+    const mapLibRef = useRef(null);
     const markersRef = useRef([]);
     const onSelectSpotRef = useRef(onSelectSpot);
     onSelectSpotRef.current = onSelectSpot;
@@ -70,13 +78,14 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
                                   markersRef.current.forEach(m => m.setMap(null));
                                   markersRef.current = [];
 
-                                                      if (!mapRef.current) {
+                                                      if (!mapRef.current || mapLibRef.current !== 'google') {
                                                                   mapRef.current = new google.maps.Map(containerRef.current, {
                                                                                 styles: KODO_GOOGLE_MAP_STYLE,
                                                                                 disableDefaultUI: true,
                                                                                 gestureHandling: 'greedy',
                                                                                 scrollwheel: false,
                                                                   });
+                                                                  mapLibRef.current = 'google';
                                                       }
                                   const map = mapRef.current;
                                   const bounds = new google.maps.LatLngBounds();
@@ -117,9 +126,10 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
                     injectKodoMapStyles();
         loadLeaflet().then(L => {
                 if (cancelled || !containerRef.current) return;
-                if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+                if (mapRef.current && mapLibRef.current === 'leaflet') { mapRef.current.remove(); mapRef.current = null; }
 
                                  const map = L.map(containerRef.current, { zoomControl: false, attributionControl: true, scrollWheelZoom: false });
+                mapLibRef.current = 'leaflet';
                 L.tileLayer(KODO_TILE_URL, { subdomains: KODO_TILE_SUBDOMAINS, attribution: KODO_TILE_ATTRIBUTION, maxZoom: 19 }).addTo(map);
                 map.invalidateSize();
 
@@ -171,7 +181,14 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
 
                 return () => {
                         cancelled = true;
-                        if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+                        if (mapRef.current) {
+                                // .remove() solo existe en Leaflet — ver comentario arriba.
+                                if (mapLibRef.current === 'leaflet') mapRef.current.remove();
+                                else if (mapLibRef.current === 'google') markersRef.current.forEach(m => m.setMap(null));
+                                mapRef.current = null;
+                                mapLibRef.current = null;
+                        }
+                        markersRef.current = [];
                 };
 
   }, [hotelSpot?.id, hotelSpot?.lat, hotelSpot?.lng, useGoogle, routeItems.map(i => i.id + ':' + (i._kind === 'doc' ? i.location_lat + ':' + i.location_lng : i.lat + ':' + i.lng)).join(',')]);

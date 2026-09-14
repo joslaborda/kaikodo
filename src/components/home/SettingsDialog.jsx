@@ -370,11 +370,24 @@ function SettingsDialog({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">{t('trip.dialog.startDate')}</p>
-                    <Input type="date" value={cityDraft.start_date || ''} max={cityDraft.end_date || undefined} onChange={e => setCityDraft(p => ({ ...p, start_date: e.target.value }))} className="h-8 text-sm" />
+                    <Input type="date" value={cityDraft.start_date || ''} max={cityDraft.end_date || undefined}
+                      onChange={e => {
+                        // Mismo refuerzo en JS que en las fechas del viaje:
+                        // el min/max nativo no siempre se respeta en el
+                        // WebView de Android.
+                        const v = e.target.value;
+                        if (cityDraft.end_date && v && v > cityDraft.end_date) return;
+                        setCityDraft(p => ({ ...p, start_date: v }));
+                      }} className="h-8 text-sm" />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">{t('trip.dialog.endDate')}</p>
-                    <Input type="date" value={cityDraft.end_date || ''} min={cityDraft.start_date || undefined} onChange={e => setCityDraft(p => ({ ...p, end_date: e.target.value }))} className="h-8 text-sm" />
+                    <Input type="date" value={cityDraft.end_date || ''} min={cityDraft.start_date || undefined}
+                      onChange={e => {
+                        const v = e.target.value;
+                        if (cityDraft.start_date && v && v < cityDraft.start_date) return;
+                        setCityDraft(p => ({ ...p, end_date: v }));
+                      }} className="h-8 text-sm" />
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
@@ -422,11 +435,21 @@ function SettingsDialog({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">{t('trip.dialog.startDate')}</p>
-                <Input type="date" value={cityDraft.start_date || ''} max={cityDraft.end_date || undefined} onChange={e => setCityDraft(p => ({ ...p, start_date: e.target.value }))} className="h-8 text-sm" />
+                <Input type="date" value={cityDraft.start_date || ''} max={cityDraft.end_date || undefined}
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (cityDraft.end_date && v && v > cityDraft.end_date) return;
+                    setCityDraft(p => ({ ...p, start_date: v }));
+                  }} className="h-8 text-sm" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">{t('trip.dialog.endDate')}</p>
-                <Input type="date" value={cityDraft.end_date || ''} min={cityDraft.start_date || undefined} onChange={e => setCityDraft(p => ({ ...p, end_date: e.target.value }))} className="h-8 text-sm" />
+                <Input type="date" value={cityDraft.end_date || ''} min={cityDraft.start_date || undefined}
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (cityDraft.start_date && v && v < cityDraft.start_date) return;
+                    setCityDraft(p => ({ ...p, end_date: v }));
+                  }} className="h-8 text-sm" />
               </div>
             </div>
             <div className="flex justify-end gap-2">
