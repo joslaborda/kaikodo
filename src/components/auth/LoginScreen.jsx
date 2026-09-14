@@ -150,7 +150,7 @@ export default function LoginScreen({ onSuccess, invitePreview, startInRegister 
       // retos son de un solo uso y se comprueban en backend).
       const verifyRes = await base44.functions.invoke('verifyCaptcha', { token: captchaToken });
       if (!verifyRes?.data?.success) {
-        setError(t('auth.errors.turnstileFailed'));
+        setError(t('auth.errors.captchaFailed'));
         return;
       }
       // register() manda un código OTP por email pero NO deja al usuario
@@ -213,7 +213,7 @@ export default function LoginScreen({ onSuccess, invitePreview, startInRegister 
     try {
       const verifyRes = await base44.functions.invoke('verifyCaptcha', { token: forgotCaptchaToken });
       if (!verifyRes?.data?.success) {
-        setError(t('auth.errors.turnstileFailed'));
+        setError(t('auth.errors.captchaFailed'));
         return;
       }
       await base44.auth.resetPasswordRequest(trimmedEmail);
