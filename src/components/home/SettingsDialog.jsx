@@ -190,6 +190,12 @@ function SettingsDialog({
       country: city.country || '',
       start_date: city.start_date || '',
       end_date: city.end_date || '',
+      // José (14 sep 2026): si esta ciudad ya tenía coordenadas (guardadas
+      // al crearla vía CityInput+Google Places), se mantienen al editar
+      // fechas/país sin tocar el nombre -- si no se hiciera esto, abrir y
+      // guardar la edición sin cambiar el nombre las borraría igualmente.
+      lat: city.lat ?? null,
+      lng: city.lng ?? null,
     });
   };
 
@@ -220,6 +226,11 @@ function SettingsDialog({
         country: normalizeCountry(cityDraft.country || ''),
         start_date: cityDraft.start_date || '',
         end_date: cityDraft.end_date || '',
+        // José (14 sep 2026): coordenadas reales si se eligió una
+        // sugerencia de Google al escribir el nombre -- ver CityInput.jsx.
+        // undefined (Base44 no toca el campo) si se escribió a mano.
+        lat: cityDraft.lat,
+        lng: cityDraft.lng,
       });
             // Avisa a los demas miembros si el pais o las fechas de la parada
             // cambian de verdad -- esto es un cambio de destino del viaje.
@@ -302,6 +313,8 @@ function SettingsDialog({
         country: normalizeCountry(cityDraft.country || ''),
         start_date: cityDraft.start_date || '',
         end_date: cityDraft.end_date || '',
+        lat: cityDraft.lat,
+        lng: cityDraft.lng,
         trip_members: trip.members,
         trip_editors: computeEditors(trip.members, trip),
       });
@@ -430,7 +443,10 @@ function SettingsDialog({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">{t('common.city')}</p>
-                    <CityInput country={cityDraft.country} value={cityDraft.name || ''} onChange={v => setCityDraft(p => ({ ...p, name: v }))} extraSuggestions={existingCityNames} placeholder={t('common.city')} />
+                    <CityInput country={cityDraft.country} value={cityDraft.name || ''}
+                      onChange={v => setCityDraft(p => ({ ...p, name: v, lat: null, lng: null }))}
+                      onSelectPlace={({ name, lat, lng }) => setCityDraft(p => ({ ...p, name, lat, lng }))}
+                      extraSuggestions={existingCityNames} placeholder={t('common.city')} />
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">{t('common.country')}</p>
@@ -495,7 +511,10 @@ function SettingsDialog({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-xs text-muted-foreground mb-1">{t('common.city')}</p>
-                <CityInput country={cityDraft.country} value={cityDraft.name || ''} onChange={v => setCityDraft(p => ({ ...p, name: v }))} extraSuggestions={existingCityNames} placeholder={t('common.city')} />
+                <CityInput country={cityDraft.country} value={cityDraft.name || ''}
+                  onChange={v => setCityDraft(p => ({ ...p, name: v, lat: null, lng: null }))}
+                  onSelectPlace={({ name, lat, lng }) => setCityDraft(p => ({ ...p, name, lat, lng }))}
+                  extraSuggestions={existingCityNames} placeholder={t('common.city')} />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">{t('common.country')}</p>
