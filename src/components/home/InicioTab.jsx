@@ -101,8 +101,25 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
     other:  (props) => <FileText size={20} {...props} />,
   };
 
-  const packedCount = packingItems.filter(i => i.packed).length;
-  const packedPct   = packingItems.length ? Math.round(packedCount / packingItems.length * 100) : 0;
+  // La propia pantalla de Maleta (Utilities.jsx) excluye la categoría
+  // "souvenir" del total/%, pero aquí se contaba con packingItems en crudo
+  // — el % de Home podía no coincidir con el que ves al entrar en Maleta
+  // (y daba la sensación de que actualizar la maleta "no cambiaba nada").
+  const packingItemsForPct = packingItems.filter(i => i.category !== 'souvenir');
+  const packedCount = packingItemsForPct.filter(i => i.packed).length;
+  const packedPct   = packingItemsForPct.length ? Math.round(packedCount / packingItemsForPct.length * 100) : 0;
+
+  // José (14 sep 2026): Maleta no debe verse una vez el viaje ya ha
+  // empezado -- si hoy hay un billete de transporte (vuelo/tren/bus/coche)
+  // cuya hora de salida ya pasó, se considera que el viaje ya está en
+  // marcha y se oculta (se sigue pudiendo editar desde Utilidades). Sin
+  // ningún billete con hora conocida no hay forma de saberlo, así que se
+  // mantiene visible el resto del día de salida como hasta ahora.
+  const hasDepartedTransportToday = todayDocs.some(d => {
+    if (!TRANSPORT_TYPES.includes(d.category) || !d.time) return false;
+    const [h, m] = d.time.split(':').map(Number);
+    return (h * 60 + m) <= nowMinutes;
+  });
 
   const destName   = sortedCities.length > 0 ? sortedCities.map(c => c.name).join(' · ') : trip?.destination || '';
   const firstCity  = sortedCities[0];
@@ -203,7 +220,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
         </div>
       )}
 
-      {packingItems.length > 0 && (
+      {packingItemsForPct.length > 0 && !hasDepartedTransportToday && (
         <div className="bg-card rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-foreground">{t('utilities.packing.tabMaleta')}</p>
@@ -212,7 +229,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
           <div className="h-1.5 bg-secondary rounded-full overflow-hidden mb-1">
             <div className="h-full bg-primary rounded-full transition-all" style={{ width: packedPct + '%' }} />
           </div>
-          <p className="text-xs text-muted-foreground">{t('home.inicio.packedReady', { packed: packedCount, total: packingItems.length })}</p>
+          <p className="text-xs text-muted-foreground">{t('home.inicio.packedReady', { packed: packedCount, total: packingItemsForPct.length })}</p>
         </div>
       )}
 

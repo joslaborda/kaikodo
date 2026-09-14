@@ -285,7 +285,15 @@ function SettingsDialog({
                   type="date"
                   value={startDate}
                   max={endDate || undefined}
-                  onChange={e => setStartDate(e.target.value)}
+                  onChange={e => {
+                    // Ver el mismo comentario en NewTripModal.jsx: el
+                    // min/max nativo del <input type="date"> no siempre se
+                    // respeta en el WebView de Android, así que se
+                    // refuerza en JS para que nunca quede start > end.
+                    const v = e.target.value;
+                    if (endDate && v && v > endDate) return;
+                    setStartDate(v);
+                  }}
                   className="h-8 text-sm flex-1"
                 />
                 <span className="text-muted-foreground text-sm">→</span>
@@ -293,7 +301,11 @@ function SettingsDialog({
                   type="date"
                   value={endDate}
                   min={startDate || undefined}
-                  onChange={e => setEndDate(e.target.value)}
+                  onChange={e => {
+                    const v = e.target.value;
+                    if (startDate && v && v < startDate) return;
+                    setEndDate(v);
+                  }}
                   className="h-8 text-sm flex-1"
                 />
                 {totalDays && (

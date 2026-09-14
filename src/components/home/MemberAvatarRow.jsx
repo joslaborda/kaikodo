@@ -61,7 +61,11 @@ export default function MemberAvatarRow({
               ? <img src={profile.avatar_url} alt={name} className="w-9 h-9 rounded-full object-cover" />
               : <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold ${colors[i % colors.length]}`}>{initials}</div>
             }
-            <span className="text-xs text-muted-foreground max-w-[48px] truncate text-center">{isMe ? t('common.you') : name}</span>
+            {/* Antes max-w-[48px] + truncate cortaba cualquier nombre más
+                ancho que 48px con "…" (p.ej. "Carlos …"). José pidió ver
+                el nombre completo siempre — se quita el corte y se deja
+                que envuelva a una segunda línea en vez de truncar. */}
+            <span className="text-xs text-muted-foreground max-w-[64px] leading-tight text-center break-words">{isMe ? t('common.you') : name}</span>
           </div>
         );
       })}

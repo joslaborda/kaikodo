@@ -203,8 +203,12 @@ export default function PreTripTab({ trip, cities, packingItems, documents, myPr
   const actionableReqs = requirements.filter(r => r.level !== 'ok');
   const displayReqs   = [...visaReqs, ...actionableReqs.filter(r => r.type !== 'visa')];
   const doneCount     = displayReqs.filter(r => r.level !== 'ok' && checkedItems[r.id]).length;
-  const packedCount   = packingItems.filter(i => i.packed).length;
-  const packedPct     = packingItems.length ? Math.round(packedCount / packingItems.length * 100) : 0;
+  // Mismo ajuste que InicioTab.jsx: la propia pantalla de Maleta excluye
+  // "souvenir" del total/%, así que aquí también hay que excluirlo para que
+  // el % de esta tarjeta coincida con el que ves al entrar en Maleta.
+  const packingItemsForPct = packingItems.filter(i => i.category !== 'souvenir');
+  const packedCount   = packingItemsForPct.filter(i => i.packed).length;
+  const packedPct     = packingItemsForPct.length ? Math.round(packedCount / packingItemsForPct.length * 100) : 0;
   const docsCount     = documents?.length || 0;
 
   const sortedCities = useMemo(() =>
@@ -245,7 +249,7 @@ export default function PreTripTab({ trip, cities, packingItems, documents, myPr
             <div className="mt-2 h-1 bg-secondary rounded-full overflow-hidden">
               <div className="h-full bg-primary rounded-full transition-all" style={{ width: packedPct + '%' }} />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{packedCount}/{packingItems.length} items</p>
+            <p className="text-xs text-muted-foreground mt-1">{packedCount}/{packingItemsForPct.length} items</p>
           </div>
         </Link>
         <Link to={createPageUrl('Documents') + '?trip_id=' + tripId} className="block h-full">
