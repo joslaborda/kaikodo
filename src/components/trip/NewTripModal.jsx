@@ -467,7 +467,17 @@ export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }
                 type="date"
                 value={formData.end_date}
                 min={formData.start_date || undefined}
-                onChange={e => setFormData(p => ({ ...p, end_date: e.target.value }))}
+                onChange={e => {
+                  // El min del <input> nativo no siempre se respeta en el
+                  // WebView de Android (varía por fabricante/versión) — sin
+                  // este chequeo en JS se podía seleccionar una fecha fin
+                  // anterior al inicio pese al atributo min. Se ignora el
+                  // valor si viola la regla, en vez de aceptarlo y confiar
+                  // solo en el aviso de "invalidEndDate" al enviar.
+                  const v = e.target.value;
+                  if (formData.start_date && v && v < formData.start_date) return;
+                  setFormData(p => ({ ...p, end_date: v }));
+                }}
                 className={`w-full h-10 border rounded-xl px-3 text-sm outline-none transition-colors ${invalidEndDate ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-border bg-card focus:border-primary'}`}
               />
               {invalidEndDate && <p className="text-xs text-red-500">{t('trip.dialog.endBeforeStart')}</p>}
