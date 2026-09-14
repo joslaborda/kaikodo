@@ -1800,7 +1800,7 @@
       "registerFailed": "Couldn't create the account. Try again.",
       "otpFailed": "Incorrect or expired code.",
       "forgotFailed": "Couldn't send the email. Try again.",
-      "turnstileFailed": "Security check failed, please try again"
+      "captchaFailed": "Security check failed, please try again"
     },
     "captcha": {
       "verifying": "Verifying you’re human…",
