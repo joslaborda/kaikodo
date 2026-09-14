@@ -217,17 +217,19 @@ function DeleteAccountRow({ user, profile }) {
         await Promise.all(packing.map(p => base44.entities.PackingItem.delete(p.id)));
       }));
 
-      const [saved, notifications, likes, comments] = await Promise.all([
+      // SpotComment ya no se lee/borra aquí -- la función de comentarios de
+      // spots se eliminó (14 sep 2026, ver SpotCard.jsx) y la entidad quedó
+      // con rls en false para todo, así que este .filter() ya no devolvía
+      // nada de todas formas.
+      const [saved, notifications, likes] = await Promise.all([
         base44.entities.SavedSpot.filter({ user_id: user.id }),
         base44.entities.Notification.filter({ user_id: user.id }),
         base44.entities.Like.filter({ user_id: user.id }),
-        base44.entities.SpotComment.filter({ user_id: user.id }),
       ]);
       await Promise.all([
         ...saved.map(s => base44.entities.SavedSpot.delete(s.id)),
         ...notifications.map(n => base44.entities.Notification.delete(n.id)),
         ...likes.map(l => base44.entities.Like.delete(l.id)),
-        ...comments.map(c => base44.entities.SpotComment.delete(c.id)),
       ]);
 
       await Promise.all(trips.map(async trip => {
