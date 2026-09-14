@@ -1,15 +1,15 @@
 import { PlaneIcon } from '@/lib/icons';
 import Logo from '@/components/Logo';
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useAuth } from '@/lib/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Archive, Map, Plus } from 'lucide-react';
+import { Map, Plus } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import TripCard, { HeroTripCard, getTripStatus } from '@/components/trip/TripCard';
 import NewTripModal from '@/components/trip/NewTripModal';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import CreateProfileModal from '@/components/social/CreateProfileModal';
 import { createPageUrl } from '@/utils';
 import { normalizeCountry } from '@/lib/countryConfig';
@@ -64,6 +64,7 @@ export default function TripsList() {
   const { user, isLoadingAuth } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { data: myProfile, isLoading: profileLoading } = useQuery({
     queryKey: ['myProfile', user?.id],
@@ -199,7 +200,7 @@ export default function TripsList() {
   });
 
   // Classify trips
-  const { heroTrip, heroCities, upcomingTrips, pastTrips } = useMemo(() => {
+  const { heroTrips, heroCitiesById, upcomingTrips, pastTrips, singleActiveTripId, heroIsPastFallback } = useMemo(() => {
     const withStatus = trips.map(tr => ({
       t: tr,
       cities: allCities.filter(c => c.trip_id === tr.id),
@@ -211,23 +212,61 @@ export default function TripsList() {
       .sort((a,b) => a.status.days - b.status.days);
     const past     = withStatus.filter(x => x.status?.type === 'past' || !x.status);
 
-    // Hero priority: active → soonest upcoming → most recent past
-    let hero = null;
-    if (active.length > 0) hero = active[0];
-    else if (upcoming.length > 0) hero = upcoming[0];
-    else if (past.length > 0) hero = past[0];
+    // José (14 sep 2026): antes solo el PRIMER viaje activo se trataba como
+    // hero -- si había un segundo viaje activo a la vez (posible, nada
+    // impide solapar fechas entre dos viajes, ver comentario del
+    // auto-redirect más abajo) no encajaba en ninguna lista y desaparecía
+    // de la pantalla sin más. Ahora TODOS los activos son hero con el
+    // mismo peso visual -- José: "si hay 2 viajes activos, los dos deberían
+    // tener el mismo peso [...] los dos igual que el de arriba".
+    // Sin ningún activo, el hero sigue siendo el próximo más cercano (uno
+    // solo, como antes) o, en su defecto, no hay hero y se muestra el CTA
+    // de "todos finalizados".
+    let heroes = [];
+    if (active.length > 0) heroes = active;
+    else if (upcoming.length > 0) heroes = [upcoming[0]];
 
-    // Remove hero from upcoming list
-    const heroId = hero?.t?.id;
-    const upcomingRest = upcoming.filter(x => x.t.id !== heroId);
+    const heroIds = new Set(heroes.map(x => x.t.id));
+    const upcomingRest = upcoming.filter(x => !heroIds.has(x.t.id));
+    const heroCitiesById = {};
+    heroes.forEach(x => { heroCitiesById[x.t.id] = x.cities; });
 
     return {
-      heroTrip:     hero?.t || null,
-      heroCities:   hero?.cities || [],
+      heroTrips:    heroes.map(x => x.t),
+      heroCitiesById,
       upcomingTrips: upcomingRest,
       pastTrips:    past,
+      // Solo con exactamente UN viaje activo tiene sentido saltar
+      // directamente a él al abrir la app -- con 0 o 2+ (raro, pero
+      // posible con varios viajes solapados) no hay a cuál ir sin
+      // preguntar, así que se deja null y TripsList se muestra normal.
+      singleActiveTripId: active.length === 1 ? active[0].t.id : null,
+      // José (14 sep 2026): cuando no hay ningún hero (nada activo ni
+      // próximo) es precisamente el momento en que "Nuevo viaje" debería
+      // ser LA acción principal de la pantalla -- CTA arriba en vez de
+      // tarjeta hero, con su propio texto, igual que EmptyState (0 viajes).
+      heroIsPastFallback: heroes.length === 0 && past.length > 0,
     };
   }, [trips, allCities]);
+
+  // José (14 sep 2026): si hay exactamente un viaje activo, entrar
+  // directamente a su Home al ABRIR la app, saltándose esta pantalla --
+  // pero solo al aterrizar en "/" (arranque real de la app), nunca cuando
+  // el usuario navega aquí a propósito desde "Mis viajes" (que usa la ruta
+  // explícita /TripsList, ver Layout.jsx), o quedaría atrapado sin poder
+  // volver nunca a la lista. Una vez por sesión (sessionStorage, se
+  // resetea al matar y reabrir la app de verdad) para no re-saltar si el
+  // usuario vuelve aquí más tarde con el botón atrás del navegador.
+  const autoRedirectedRef = useRef(false);
+  useEffect(() => {
+    if (autoRedirectedRef.current) return;
+    if (location.pathname !== '/') return;
+    if (!singleActiveTripId) return;
+    if (sessionStorage.getItem('kodo_auto_redirect_done') === '1') return;
+    autoRedirectedRef.current = true;
+    sessionStorage.setItem('kodo_auto_redirect_done', '1');
+    navigate(createPageUrl(`Home?trip_id=${singleActiveTripId}`), { replace: true });
+  }, [singleActiveTripId, location.pathname, navigate]);
 
   const needsOnboarding = user?.is_verified === true && !profileLoading && myProfile === null;
   const firstName = myProfile?.display_name?.split(' ')[0] || user?.full_name?.split(' ')[0] || '';
@@ -303,50 +342,69 @@ export default function TripsList() {
           <EmptyState onCreateTrip={() => setDialogOpen(true)} />
         ) : (
           <>
-            {/* Hero — always shown */}
-            {heroTrip && <HeroTripCard trip={heroTrip} cities={heroCities} />}
-
-            {/* Upcoming (excluding hero) */}
-            {upcomingTrips.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">{t('tripslist.upcoming')}</p>
-                {upcomingTrips.map(({ t, cities }) => (
-                  <TripCard key={t.id} trip={t} cities={cities} />
-                ))}
-              </div>
-            )}
-
-            {/* New trip button */}
-            <button onClick={() => setDialogOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-border rounded-2xl text-sm text-primary font-medium bg-card hover:bg-orange-50 dark:hover:bg-primary/10 transition-colors">
-              <Plus className="w-4 h-4" />{t('tripslist.newTrip')}
-            </button>
-
-            {/* Past trips — collapsible */}
-            {pastCount > 0 && (
-              <div>
-                <button
-                  onClick={() => setShowPast(p => !p)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-card border border-border rounded-2xl text-sm text-muted-foreground hover:bg-secondary/30 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <Archive className="w-4 h-4 text-muted-foreground" />
-                    <span>{t('tripslist.pastTrips', { count: pastCount })}</span>
-                  </div>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                    className={`transition-transform ${showPast ? 'rotate-90' : ''}`}>
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
+            {heroIsPastFallback ? (
+              // Sin nada activo ni próximo: el CTA de "nuevo viaje" pasa a
+              // ser lo primero que se ve (mismo tratamiento que EmptyState,
+              // con su propio texto), en vez de la tarjeta del último viaje
+              // ya acabado -- José: "el botón nuevo viaje debería estar
+              // arriba parecido al de ningún viaje con texto actualizado".
+              <div className="border border-dashed border-border rounded-2xl p-8 text-center bg-card">
+                <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-3"><PlaneIcon className="w-7 h-7 text-muted-foreground/50" /></div>
+                <p className="text-sm font-medium text-foreground mb-1">{t('tripslist.allFinishedTitle')}</p>
+                <p className="text-xs text-muted-foreground mb-5">{t('tripslist.allFinishedSubtitle')}</p>
+                <button onClick={() => setDialogOpen(true)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-sm rounded-full font-medium hover:bg-primary/90 transition-colors">
+                  <Plus className="w-4 h-4" />{t('tripslist.newTrip')}
                 </button>
-                {showPast && (
-                  <div className="mt-4 flex flex-col gap-2">
-                    {pastTrips.map(({ t, cities }) => (
-                      <div key={t.id}>
-                        <TripCard trip={t} cities={cities} />
+              </div>
+            ) : (
+              <>
+                {/* Hero(es) -- José (14 sep 2026): con 2+ viajes activos a la
+                    vez (posible, nada impide solapar fechas) los dos se
+                    muestran con el mismo peso visual, ninguno "gana" sobre
+                    el otro. Con 0 o 1 activo es un solo hero, como antes. */}
+                {heroTrips.map(trip => (
+                  <HeroTripCard key={trip.id} trip={trip} cities={heroCitiesById[trip.id] || []} />
+                ))}
 
-                      </div>
+                {/* Upcoming (excluding hero) */}
+                {upcomingTrips.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-1">{t('tripslist.upcoming')}</p>
+                    {upcomingTrips.map(({ t, cities }) => (
+                      <TripCard key={t.id} trip={t} cities={cities} />
                     ))}
                   </div>
                 )}
+
+                {/* New trip button -- José (14 sep 2026): "no me gusta que
+                    el botón cambie, debería estar siempre como el de todos
+                    finalizados" -- pastilla sólida siempre, ya no discontinua
+                    en ningún caso. */}
+                <button onClick={() => setDialogOpen(true)}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-full text-sm text-white font-medium bg-primary hover:bg-primary/90 transition-colors">
+                  <Plus className="w-4 h-4" />{t('tripslist.newTrip')}
+                </button>
+              </>
+            )}
+
+            {/* Past trips — José (14 sep 2026): "debería ser igual en
+                próximos y finalizados [...] que salgan debajo todos, con un
+                desplegar y compactar" -- mismo tratamiento de sección
+                (etiqueta + lista) que "Próximos" en vez del recuadro con
+                icono de archivo, con un simple enlace de texto para
+                desplegar/ocultar. */}
+            {pastCount > 0 && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('tripslist.past')}</p>
+                  <button onClick={() => setShowPast(p => !p)} className="text-xs font-medium text-primary">
+                    {showPast ? t('tripslist.hidePast') : t('tripslist.viewAllPast', { count: pastCount })}
+                  </button>
+                </div>
+                {showPast && pastTrips.map(({ t, cities }) => (
+                  <TripCard key={t.id} trip={t} cities={cities} />
+                ))}
               </div>
             )}
           </>

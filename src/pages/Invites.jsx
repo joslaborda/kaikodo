@@ -8,6 +8,7 @@ import { Loader2, MapPin, Calendar, Mail, Check, X, ChevronLeft } from 'lucide-r
 import { createPageUrl } from '@/utils';
 import { toast } from '@/components/ui/use-toast';
 import { acceptTripInvite, declineTripInvite } from '@/lib/invites';
+import { getTripInviteLinkPreview, redeemTripInviteLink } from '@/lib/inviteLinks';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useTranslation } from 'react-i18next';
@@ -20,6 +21,10 @@ export default function Invites() {
   const dateLocale = i18n.language === 'en' ? undefined : es;
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
+  // Link general (TripInviteLink) -- parámetro distinto a propósito de
+  // `token` (invitación personal), para que los dos flujos nunca se puedan
+  // confundir ni mezclar entre sí en la misma URL.
+  const linkToken = searchParams.get('linkToken');
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -85,6 +90,14 @@ export default function Invites() {
       return data.trip;
     },
     enabled: !!invite?.trip_id && !!token,
+  });
+
+  // ── Con linkToken: link general de grupo ────────────────────────────────────
+  const { data: linkPreview, isLoading: linkPreviewLoading, error: linkPreviewError } = useQuery({
+    queryKey: ['tripInviteLinkPreview', linkToken],
+    queryFn: () => getTripInviteLinkPreview(linkToken),
+    enabled: !!linkToken && !!currentUser,
+    retry: false,
   });
 
   // ── Sin token: listar invitaciones del usuario ──────────────────────────────
@@ -192,6 +205,143 @@ export default function Invites() {
     }
     setProcessing(false);
   };
+
+  // ── Unirse vía link general ───────────────────────────────────────────────────
+  const handleJoinViaLink = async () => {
+    if (!linkToken || !currentUser?.email) return;
+    setProcessing(true);
+    try {
+      const trip = await redeemTripInviteLink(linkToken);
+      await notifyMembers(trip.id, trip?.name, currentUser.email, currentUser.id);
+      navigate(createPageUrl(`Home?trip_id=${trip.id}`));
+    } catch (e) {
+      toast({ title: t('common.error'), description: e.message || t('invites.page.acceptError'), variant: 'destructive' });
+      setProcessing(false);
+    }
+  };
+
+  // ── Render: con linkToken ────────────────────────────────────────────────────
+  if (linkToken) {
+    if (!currentUser) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-4">
+          <div className="w-14 h-14 rounded-full bg-orange-100 dark:bg-orange-950/30 flex items-center justify-center">
+            <Mail className="w-7 h-7 text-primary" />
+          </div>
+          <h2 className="text-lg font-semibold text-foreground">{t('invites.page.youHaveInvite')}</h2>
+          <p className="text-sm text-muted-foreground text-center">{t('invites.page.createAccountHint')}</p>
+          <button onClick={() => navigateToLogin()}
+            className="h-11 px-8 rounded-full bg-primary text-white text-sm font-medium mt-2">
+            {t('invites.page.loginToAccept')}
+          </button>
+        </div>
+      );
+    }
+
+    if (linkPreviewLoading) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+
+    // Mismos códigos de error que redeemTripInviteLink/getTripInviteLinkPreview
+    // -- mensaje amistoso en vez de un error crudo, nunca "es tu culpa".
+    if (linkPreviewError || !linkPreview?.trip) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-4">
+          <div className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-950/30 flex items-center justify-center">
+            <X className="w-7 h-7 text-red-500" />
+          </div>
+          <h2 className="text-lg font-semibold text-foreground">{t('invites.page.invalidTitle')}</h2>
+          <p className="text-sm text-muted-foreground text-center">
+            {linkPreviewError?.message || t('invites.page.invalidBody')}
+          </p>
+          <button onClick={() => navigate(createPageUrl('TripsList'))}
+            className="h-11 px-8 rounded-full bg-primary text-white text-sm font-medium mt-2">
+            {t('invites.page.goToTrips')}
+          </button>
+        </div>
+      );
+    }
+
+    const linkTrip = linkPreview.trip;
+    const isMember = currentUser?.email && linkTrip?.members?.includes(currentUser.email.toLowerCase());
+
+    if (isMember) {
+      return (
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-4">
+          <div className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-950/30 flex items-center justify-center">
+            <Check className="w-7 h-7 text-green-600" />
+          </div>
+          <h2 className="text-lg font-semibold text-foreground">{t('invites.page.alreadyMemberTitle')}</h2>
+          <p className="text-sm text-muted-foreground text-center">
+            {t('invites.page.alreadyMemberBody1')} <span className="font-medium text-foreground">{linkTrip.name}</span>.
+          </p>
+          <button onClick={() => navigate(createPageUrl('Home') + `?trip_id=${linkTrip.id}`)}
+            className="h-11 px-8 rounded-full bg-primary text-white text-sm font-medium mt-2">
+            {t('invites.page.goToTrip')}
+          </button>
+        </div>
+      );
+    }
+
+    if (showOnboarding) {
+      return <CreateProfileModal user={currentUser} open={true} onComplete={() => setOnboardingDismissed(true)} />;
+    }
+
+    // Sin botón de "rechazar" -- a diferencia de una invitación personal, no
+    // hay nada que registrar como rechazado (el link ni siquiera sabe quién
+    // eres hasta que pulsas unirte). Un solo botón, explícito, nunca
+    // automático al cargar la página -- mismo criterio que la invitación
+    // personal de arriba.
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="px-5 pt-[calc(env(safe-area-inset-top,0px)+3.5rem)] pb-6 border-b border-border bg-background">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-950/30 flex items-center justify-center">
+              <Mail className="w-4 h-4 text-primary" />
+            </div>
+            <p className="text-xs text-muted-foreground">{t('invites.page.youHaveInvite')}</p>
+          </div>
+          <h1 className="text-xl font-semibold text-foreground">{t('invites.page.joinQuestion')}</h1>
+        </div>
+
+        <div className="px-5 py-6 space-y-4">
+          <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
+            <p className="text-lg font-semibold text-foreground">{linkTrip.name}</p>
+
+            {linkTrip.destination && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
+                {linkTrip.destination}{linkTrip.country ? `, ${getCountryLabel(linkTrip.country, i18n.language)}` : ''}
+              </div>
+            )}
+
+            {linkTrip.start_date && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="w-4 h-4 text-primary flex-shrink-0" />
+                {format(parseISO(linkTrip.start_date), i18n.language === 'en' ? 'MMMM d, yyyy' : "d 'de' MMMM yyyy", { locale: dateLocale })}
+                {linkTrip.end_date && ` — ${format(parseISO(linkTrip.end_date), i18n.language === 'en' ? 'MMMM d, yyyy' : "d 'de' MMMM yyyy", { locale: dateLocale })}`}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button onClick={() => navigate(createPageUrl('TripsList'))} disabled={processing}
+              className="flex-1 h-12 rounded-full border border-border text-sm font-medium text-muted-foreground bg-card">
+              {t('common.cancel')}
+            </button>
+            <button onClick={handleJoinViaLink} disabled={processing}
+              className="flex-1 h-12 rounded-full bg-primary text-white text-sm font-semibold disabled:opacity-50">
+              {processing ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : t('invites.page.joinTrip')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Render: con token ────────────────────────────────────────────────────────
   if (token) {
