@@ -611,7 +611,12 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
   };
 
   const bgClass = isToday_ ? 'bg-orange-50/50 dark:bg-orange-950/10' : 'bg-card';
-  const borderLeft = isToday_ ? 'border-l-2 border-l-primary' : '';
+  // José (15 sep 2026): "la caja se queda con 2 líneas en la izquierda, una
+  // más fina que la otra" -- era este borde izquierdo de 2px, duplicado
+  // encima del borde naranja que YA rodea la tarjeta entera cuando es hoy
+  // (ver el wrapper exterior, `border-orange-200`). Con los dos a la vez
+  // se veían como dos líneas distintas en vez de una. El del wrapper
+  // exterior ya basta para marcar "hoy", así que este se quita.
 
   const renderItem = (item, idx) => {
     const DocIcon = item._kind === 'doc' ? (DOC_ICON_MAP[item.category || item.type || item.doc_type] || FileText) : null;
@@ -681,7 +686,7 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
   };
 
   return (
-    <div className={`${bgClass} ${borderLeft}`} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+    <div className={`${bgClass}`} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
 
       {/* Title */}
       <div className="px-4 py-3 border-t border-border bg-card">

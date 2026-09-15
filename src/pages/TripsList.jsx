@@ -174,6 +174,7 @@ export default function TripsList() {
           // ese caso, no revienta nada.
           lat: stopCoords[i]?.lat,
           lng: stopCoords[i]?.lng,
+          photo_ref: stopCoords[i]?.photoRef,
           order: i,
           start_date: dates.start_date, end_date: dates.end_date,
           trip_members: trip.members || [],

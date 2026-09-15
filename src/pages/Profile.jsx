@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { PlaneIcon } from '@/lib/icons';
 import { Link } from 'react-router-dom';
+import OTabBar from '@/components/trip/OTabBar';
 import { createPageUrl } from '@/utils';
 import { getCountryMeta, normalizeCountry, getCountryLabel } from '@/lib/countryConfig';
 import { getTripCoverImage } from '@/lib/tripImage';
@@ -69,19 +70,32 @@ function CollectionRow({ spot, tripName, onDelete, deleting, onOpenSheet }) {
           )}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">{spot.title}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
-              <span>{spot.city_name || spot.city || ''}</span>
-              {spot.owner === 'mine' && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50">
-                  {t('profile.yours')}
+            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+              {typeof spot.rating === 'number' && (
+                <span className="inline-flex items-center gap-0.5 text-foreground font-medium shrink-0">
+                  <Star className="w-3 h-3 fill-current text-amber-400" />{spot.rating.toFixed(1)}
                 </span>
               )}
-              {spot.importedToTripName && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-50 dark:bg-orange-950/30 text-primary border border-orange-200 dark:border-orange-900/50">
-                  {t('profile.inYourTrip', { trip: spot.importedToTripName })}
-                </span>
-              )}
+              {/* José (15 sep 2026): la ciudad es lo que de verdad distingue
+                  un spot de otro dentro de un mismo país filtrado -- se
+                  queda sola en su propia línea, más visible, en vez de
+                  compartir sitio con las etiquetas de abajo. */}
+              <span className="truncate">{spot.city_name || spot.city || t('profile.unknownLocation')}</span>
             </p>
+            {(spot.owner === 'mine' || spot.importedToTripName) && (
+              <p className="mt-1 flex items-center gap-1.5 flex-wrap">
+                {spot.owner === 'mine' && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50">
+                    {t('profile.yours')}
+                  </span>
+                )}
+                {spot.importedToTripName && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-50 dark:bg-orange-950/30 text-primary border border-orange-200 dark:border-orange-900/50">
+                    {t('profile.inYourTrip', { trip: spot.importedToTripName })}
+                  </span>
+                )}
+              </p>
+            )}
           </div>
         </button>
         {!confirming && (
@@ -168,7 +182,14 @@ function SpotDetailSheet({ spot, onClose }) {
               </div>
             )}
             <div className="min-w-0">
-              <p id="spot-sheet-title" className="text-base font-semibold text-foreground truncate">{spot.title}</p>
+              <div className="flex items-center gap-1.5">
+                <p id="spot-sheet-title" className="text-base font-semibold text-foreground truncate">{spot.title}</p>
+                {typeof spot.rating === 'number' && (
+                  <span className="inline-flex items-center gap-0.5 text-sm text-foreground font-medium shrink-0">
+                    <Star className="w-3.5 h-3.5 fill-current text-amber-400" />{spot.rating.toFixed(1)}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground truncate">{[spot.city_name, spot.country].filter(Boolean).join(', ')}</p>
             </div>
           </div>
@@ -470,7 +491,7 @@ export default function Profile() {
   });
 
   // ── Colección unificada (guardados + creados) ──
-  const [collectionFilter, setCollectionFilter] = useState('all'); // all | saved | mine
+  const [collectionFilter, setCollectionFilter] = useState('saved'); // saved | mine
   const [openSpot, setOpenSpot] = useState(null);
   const [countryFilter, setCountryFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -569,7 +590,7 @@ export default function Profile() {
         title: details?.title || place.title,
         type: details?.type || place.type || 'custom',
         address: details?.address || '',
-        city_name: (place.subtitle || '').split(',')[0]?.trim() || '',
+        city_name: details?.city_name || (place.subtitle || '').split(',')[0]?.trim() || '',
         country: normalizeCountry(details?.country || ''),
         lat: details?.lat || null,
         lng: details?.lng || null,
@@ -747,18 +768,21 @@ export default function Profile() {
             <EmptyCollection onFocusSearch={() => searchInputRef.current?.focus()} />
           ) : (
             <>
-              <div className="flex bg-secondary rounded-full p-0.5 mb-3">
-                {[
-                  { key: 'all', label: `${t('common.all')} · ${allCollection.length}` },
+              {/* José (15 sep 2026): "Todos, Guardados y Creados no tiene
+                  sentido, que sea solo Guardados y Creados. Además el
+                  sistema para navegar de una pestaña a otra es incorrecto,
+                  no sigue el formato Ō -- debería ser igual que en Gastos"
+                  -- mismo componente OTabBar que ya usa Expenses.jsx, en
+                  vez de las pastillas hechas a mano de aquí. */}
+              <OTabBar
+                tabs={[
                   { key: 'saved', label: `${t('profile.saved')} · ${savedSpotsRaw.length}` },
                   { key: 'mine', label: `${t('profile.created')} · ${mySpotsRaw.length}` },
-                ].map(f => (
-                  <button key={f.key} onClick={() => { setCollectionFilter(f.key); setCountryFilter('all'); }}
-                    className={`flex-1 text-xs font-semibold py-2 rounded-full transition-colors ${collectionFilter === f.key ? 'bg-card text-foreground' : 'text-muted-foreground'}`}>
-                    {f.label}
-                  </button>
-                ))}
-              </div>
+                ]}
+                activeKey={collectionFilter === 'all' ? 'saved' : collectionFilter}
+                onChange={(key) => { setCollectionFilter(key); setCountryFilter('all'); }}
+              />
+              <div className="mb-3" />
 
               {Object.keys(countryGroups).length > 1 && (
                 <div className="flex gap-1.5 overflow-x-auto pb-1 mb-3">
@@ -775,9 +799,24 @@ export default function Profile() {
                 </div>
               )}
               {finalList.length === 0 ? (
-                <div className="bg-card border border-border rounded-2xl text-center py-8">
-                  <p className="text-sm text-muted-foreground">{t('profile.emptyHere')}</p>
-                </div>
+                collectionFilter === 'mine' ? (
+                  // José (15 sep 2026): un spot "creado" es lo contrario de
+                  // uno guardado -- no está en ningún buscador, lo conoces
+                  // tú. El hueco vacío tenía que empujar a esa idea, no ser
+                  // un genérico "nada por aquí".
+                  <div className="bg-card border border-dashed border-border rounded-2xl text-center py-8 px-5">
+                    <p className="text-sm font-semibold text-foreground mb-1.5">{t('profile.createdEmptyTitle')}</p>
+                    <p className="text-xs text-muted-foreground mb-4 leading-relaxed">{t('profile.createdEmptyBody')}</p>
+                    <Link to={createPageUrl('TripsList')}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-full">
+                      <CirclePlus className="w-3.5 h-3.5" />{t('profile.createSpotCta')}
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="bg-card border border-border rounded-2xl text-center py-8">
+                    <p className="text-sm text-muted-foreground">{t('profile.emptyHere')}</p>
+                  </div>
+                )
               ) : (
                 <div className="bg-card border border-border rounded-2xl divide-y divide-border overflow-hidden">
                   {finalList.map(spot => (

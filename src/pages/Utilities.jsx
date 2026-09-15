@@ -281,6 +281,18 @@ function RequirementsTab({ reqs, country, homeCountry, meta, skipVaccines = [], 
     </div>
   );
 
+  // José (15 sep 2026): "requisitos para viajar al país de donde eres es un
+  // poco absurdo" -- si el destino coincide con tu propia nacionalidad, no
+  // hay visados/vacunas/enchufes que mostrar, un mensaje corto en vez del
+  // desglose entero.
+  if (normalizeCountry(country) === normalizeCountry(homeCountry)) return (
+    <div className="bg-card rounded-2xl border border-border text-center py-12 px-6">
+      <Info className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" />
+      <p className="text-sm font-medium text-foreground mb-1">{t('utilities.reqs.homeCountryTitle')}</p>
+      <p className="text-xs text-muted-foreground">{t('utilities.reqs.homeCountryBody')}</p>
+    </div>
+  );
+
   if (!reqs) return (
     <div className="bg-card rounded-2xl border border-border text-center py-12 px-6">
       <Info className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" />
@@ -935,6 +947,15 @@ function EmergencyContent({ country, homeCountry, secondNationality, meta, activ
           <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-muted-foreground/40" />
           <p className="text-sm font-medium text-foreground mb-1">{t('utilities.noDataFor', { country: getCountryLabel(country, i18n.language) })}</p>
           <p className="text-xs text-muted-foreground">{t('utilities.emerg.noInfo')}</p>
+        </div>
+      )}
+      {/* José (15 sep 2026): "raro necesitarlo en tu propio país" -- aviso
+          corto encima, pero el 112/lo que sea SE QUEDA visible debajo, "por
+          si acaso" (esto sí lo pidió José explícitamente). */}
+      {!loading && data && normalizeCountry(country) === normalizeCountry(homeCountry) && (
+        <div className="bg-card rounded-2xl border border-border text-center py-5 px-6">
+          <p className="text-sm font-medium text-foreground mb-1">{t('utilities.emerg.homeCountryTitle')}</p>
+          <p className="text-xs text-muted-foreground">{t('utilities.emerg.homeCountryBody')}</p>
         </div>
       )}
       {/* Emergency numbers */}
