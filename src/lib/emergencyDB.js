@@ -63,8 +63,7 @@ const EMERGENCY_DB = {
       { name: 'Emergencias 112', icon: '🆘', description: 'App oficial del 112 con geolocalización automática.' },
     ],
     safety_tips: [
-      'Cuidado con los carteristas en zonas turísticas como Las Ramblas (Barcelona) o el Metro de Madrid.',
-      'El 112 atiende en múltiples idiomas.',
+      'Cuidado con los carteristas en zonas turísticas concurridas y el transporte público.',
       'En caso de accidente, la cobertura sanitaria pública es universal.',
     ],
   },
@@ -362,7 +361,7 @@ const EMERGENCY_DB = {
     safety_tips: [
       'El número de emergencias en UK es 999, no 112 (aunque 112 también funciona).',
       'Con tarjeta sanitaria europea (EHIC) o el nuevo GHIC post-Brexit tienes cobertura básica.',
-      'En zonas como Brixton o Hackney en Londres, precaución nocturna como en cualquier capital.',
+      'Precaución nocturna en barrios periféricos de grandes ciudades, como en cualquier capital.',
     ],
   },
 

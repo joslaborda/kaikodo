@@ -2,6 +2,7 @@
  * Stable, deterministic image resolution for trips.
  * Priority: cover_image → first city → country → destination → fallback
  */
+import { useState, useEffect } from 'react';
 
 const CITY_IMAGES = {
   'tokyo':'photo-1540959733332-eab4deabeeaf','kyoto':'photo-1493976040374-85c8e12f0c0e','osaka':'photo-1590559899731-a382839e5549','hiroshima':'photo-1528360983277-13d401cdc186','nara':'photo-1545569341-9eb8b30979d9','hakone':'photo-1578271887552-5ac3a72752bc','sapporo':'photo-1478436127897-769e1b3f0f36','fukuoka':'photo-1535979863199-3c77338429a0','nikko':'photo-1554797589-7241bb691973',
@@ -179,4 +180,38 @@ export function getTripCoverImage(trip, cities = []) {
     return unsplashUrl(FALLBACK_IMAGES[idx]);
   }
   return unsplashUrl(FALLBACK_IMAGES[0]);
+}
+
+// José (15 sep 2026): "no puedes usar fotos de Google Maps cuando te digan
+// la ciudad? solucionaría todo" -- tenía razón, es la solución de verdad
+// en vez de seguir ampliando el diccionario fijo de arriba ciudad a
+// ciudad (que se queda corto siempre: pasó con Dublín, con León...).
+//
+// getTripCoverImage() de arriba sigue existiendo tal cual -- sigue siendo
+// el fallback SÍNCRONO instantáneo (nunca hay parpadeo ni hueco en blanco
+// mientras carga nada). Este hook lo usa como valor inicial y, SOLO si la
+// primera ciudad del viaje tiene photo_ref guardado (ver City.jsonc,
+// capturado al añadir la ciudad vía CityInput+Google Places), pide en
+// segundo plano la URL real de la foto y sustituye el fallback por la
+// buena en cuanto llega -- mejora progresiva, nunca bloqueante.
+export function useTripCoverImage(trip, cities = []) {
+  const fallback = getTripCoverImage(trip, cities);
+  const [url, setUrl] = useState(fallback);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUrl(fallback);
+    const sorted = [...cities].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const withPhoto = sorted.find(c => c.photo_ref);
+    if (!withPhoto) return;
+    import('@/lib/cityPlaces').then(({ buildCityPhotoUrl }) =>
+      buildCityPhotoUrl(withPhoto.photo_ref)
+    ).then(realUrl => {
+      if (!cancelled && realUrl) setUrl(realUrl);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip?.id, cities.map(c => c.photo_ref).join(',')]);
+
+  return url;
 }
