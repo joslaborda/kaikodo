@@ -47,6 +47,14 @@
                                                         <category android:name="android.intent.category.DEFAULT" />
                                                         <category android:name="android.intent.category.BROWSABLE" />
                                                         <data android:scheme="https" android:host="kaikodo.app" android:pathPrefix="/auth-callback" />
+                                                        <!-- José (15 sep 2026): añadido /Invites, cubre tanto la
+                                                             invitación personal (?token=) como el link general de
+                                                             grupo (?linkToken=): las dos viven en la misma ruta,
+                                                             solo cambia el parámetro. Sin esto, tocar un link de
+                                                             invitación siempre abría el navegador aunque la app
+                                                             estuviera instalada, nunca se había cubierto, solo se
+                                                             hizo para el login nativo en su momento. -->
+                                                        <data android:scheme="https" android:host="kaikodo.app" android:pathPrefix="/Invites" />
                                     </intent-filter>
 
                     </activity>
