@@ -62,6 +62,18 @@ export default function MemberAvatarRow({
     staleTime: 30000,
   });
 
+  // José (15 sep 2026): "que salgan los avatares con nombre y apellido
+  // (mismo formato que en invitaciones)" -- misma idea que ya se usa en
+  // GridAvatarItem (InviteModal.jsx): primera palabra en una línea,
+  // el resto en la siguiente, en vez de dejar que el texto envuelva donde
+  // quiera. Nombres de una sola palabra se quedan en una línea, sin
+  // segunda línea vacía.
+  const splitName = (full) => {
+    const parts = (full || '').trim().split(/\s+/);
+    if (parts.length <= 1) return [full || '', ''];
+    return [parts[0], parts.slice(1).join(' ')];
+  };
+
   return (
     <div className="px-4 py-3 flex items-center gap-4 flex-wrap">
       {memberEmails.map((email, i) => {
@@ -73,17 +85,16 @@ export default function MemberAvatarRow({
         const name = profile?.display_name || profile?.username || t('common.member');
         const initials = (profile?.display_name || profile?.username || '?').slice(0, 2).toUpperCase();
         const isMe = normalizeEmail(currentUserEmail) === email;
+        const [l1, l2] = isMe ? [t('common.you'), ''] : splitName(name);
         return (
           <div key={email} className="flex flex-col items-center gap-1">
             {profile?.avatar_url
               ? <img src={profile.avatar_url} alt={name} className="w-9 h-9 rounded-full object-cover" />
               : <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold ${colors[i % colors.length]}`}>{initials}</div>
             }
-            {/* Antes max-w-[48px] + truncate cortaba cualquier nombre más
-                ancho que 48px con "…" (p.ej. "Carlos …"). José pidió ver
-                el nombre completo siempre — se quita el corte y se deja
-                que envuelva a una segunda línea en vez de truncar. */}
-            <span className="text-xs text-muted-foreground max-w-[64px] leading-tight text-center break-words">{isMe ? t('common.you') : name}</span>
+            <span className="text-xs text-muted-foreground leading-tight text-center max-w-[64px]">
+              {l1}{l2 && <><br />{l2}</>}
+            </span>
           </div>
         );
       })}

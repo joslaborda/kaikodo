@@ -4,11 +4,17 @@ import { Users, Car, FileText, Hotel, TrainFront } from 'lucide-react';
 import { BusFront, PlaneIcon } from '@/lib/icons';
 import { ChevronRight } from 'lucide-react';
 import { getCountryMeta } from '@/lib/countryConfig';
-import { getTripCoverImage } from '@/lib/tripImage';
+import { useTripCoverImage } from '@/lib/tripImage';
 import { daysUntil } from '@/lib/tripDays';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import DayCard from './DayCard';
 import MemberAvatarRow from './MemberAvatarRow';
 import PDFViewer from '@/components/PDFViewer';
 import { resolveDocViewUrl } from '@/lib/privateFiles';
+import { scheduleTicketReminder, cancelTicketReminder, scheduleSpotReminder } from '@/lib/localReminders';
+import { notify, resolveUserIds } from '@/lib/notifications';
+import { normalizeEmail } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 
 export default function InicioTab({ trip, cities, documents, packingItems, profiles, tripId, onInvite, currentUserEmail }) {
@@ -33,6 +39,77 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
     [...cities].sort((a, b) => (a.start_date || '').localeCompare(b.start_date || '')),
     [cities]
   );
+
+  // José (15 sep 2026): "la página Salida se ve muy pobre, debería mostrar
+  // las mismas cosas que Hoy también además -- el botón de añadir
+  // alojamiento, el mapa si hay spots, los docs" -- Salida nunca pedía
+  // Spot/ItineraryDay ni usaba DayCard (el mismo componente que ya
+  // resuelve todo eso en TodayTab.jsx), así que no tenía forma de
+  // mostrarlo. Mismas queries y handlers que TodayTab, aplicados aquí al
+  // día de salida.
+  const queryClient = useQueryClient();
+  const { data: allSpots = [] } = useQuery({
+    queryKey: ['spots', tripId],
+    queryFn: () => base44.entities.Spot.filter({ trip_id: tripId }),
+    enabled: !!tripId, staleTime: 30000,
+  });
+  const { data: itineraryDays = [] } = useQuery({
+    queryKey: ['itineraryDays', tripId],
+    queryFn: () => base44.entities.ItineraryDay.filter({ trip_id: tripId }),
+    enabled: !!tripId, staleTime: 60000,
+  });
+  const departureCity = sortedCities[0];
+  const hotelForDepartureCity = departureCity
+    ? allSpots.find(s => s.city_id === departureCity.id && s.type === 'hotel')
+    : null;
+  const departureSpots = departureCity
+    ? allSpots.filter(s => s.city_id === departureCity.id && s.assigned_date === todayStr)
+        .sort((a, b) => (a.day_order ?? 999) - (b.day_order ?? 999))
+    : [];
+
+  const handleReorderSpots = async (newOrder) => {
+    await Promise.all(newOrder.map((spot, idx) =>
+      base44.entities.Spot.update(spot.id, { day_order: idx })
+    ));
+    queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
+  };
+
+  // Mismo handler que TodayTab.jsx -- ver ahí los comentarios originales
+  // sobre por qué hace falta limpiar day_order y reprogramar recordatorios.
+  const handleUpdateItemTime = async (item, time) => {
+    const timeIsChanging = (time || '') !== (item.time || '');
+    if (item._kind === 'doc') {
+      const oldTime = item.time || '';
+      await base44.entities.Ticket.update(item.id, { time, ...(timeIsChanging ? { day_order: null } : {}) });
+      queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+      if (timeIsChanging) {
+        cancelTicketReminder(item.id);
+        scheduleTicketReminder({ ...item, time, trip_id: item.trip_id || tripId });
+      }
+      if ((time || '') !== oldTime && time && item.visibility !== 'personal') {
+        const sharedWith = item.visibility === 'selected_users'
+          ? (item.shared_with || [])
+          : (trip?.members || []).filter(e => normalizeEmail(e) !== normalizeEmail(currentUserEmail));
+        const targets = sharedWith.filter(e => normalizeEmail(e) !== normalizeEmail(currentUserEmail));
+        if (targets.length) {
+          const myProfile = (profiles || []).find(p => normalizeEmail(p.email) === normalizeEmail(currentUserEmail));
+          resolveUserIds(targets).then(resolved => {
+            resolved.forEach(({ userId }) => notify({
+              userId, type: 'doc_time', actor: myProfile, tripId, tripName: trip?.name,
+              refId: item.id, refTitle: item.name || t('documents.docFallback'),
+              refExtra: { time, endTime: item.end_time || null },
+            }));
+          });
+        }
+      }
+    } else if (item._kind === 'spot') {
+      await base44.entities.Spot.update(item.id, { assigned_time: time, ...(timeIsChanging ? { day_order: null } : {}) });
+      queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
+      if (timeIsChanging) {
+        scheduleSpotReminder({ ...item, assigned_time: time });
+      }
+    }
+  };
 
   const TRANSPORT_TYPES = ['flight', 'train', 'bus', 'car'];
   const todayDocs = documents.filter(d => {
@@ -134,7 +211,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
     : (firstCity?.country || trip?.destination || trip?.name);
   const heroSubtitle = isSingleCity ? (firstCity?.country || '') : destName;
 
-  const coverImage = getTripCoverImage(trip, cities);
+  const coverImage = useTripCoverImage(trip, cities);
 
   return (
     <div className="space-y-3">
@@ -218,6 +295,28 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
             );
           })}
         </div>
+      )}
+
+      {/* José (15 sep 2026): mismo DayCard que ya usa Hoy -- spots del día,
+          mapa con el hotel si hay uno guardado, y los botones de
+          "+ Doc / + Spot / + Nota" que antes solo existían en Hoy/Mañana. */}
+      {departureCity && (
+        <DayCard
+          label={t('common.today')}
+          city={departureCity}
+          docs={todayDocs}
+          spots={departureSpots}
+          itineraryDays={itineraryDays}
+          dateStr={todayStr}
+          tripId={tripId}
+          defaultOpen={false}
+          onReorderSpots={handleReorderSpots}
+          onUpdateItemTime={handleUpdateItemTime}
+          hotelSpot={hotelForDepartureCity}
+          trip={trip}
+          currentUserEmail={currentUserEmail}
+          profiles={profiles}
+        />
       )}
 
       {packingItemsForPct.length > 0 && !hasDepartedTransportToday && (

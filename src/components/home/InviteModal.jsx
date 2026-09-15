@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Clock, Mail, Search, Share2, X, Link2 } from 'lucide-react';
+import { Check, Clock, Mail, Search, Share2, X, Link2, MessageCircle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { sendTripInvite } from '@/lib/invites';
 import { getOrCreateTripInviteLink, buildTripInviteLinkUrl, buildTripInviteLinkShareText } from '@/lib/inviteLinks';
@@ -93,7 +93,7 @@ export function GridAvatarItem({ profile, email, triplesCount, status, onInvite,
       </div>
       <span className="text-xs text-foreground text-center leading-tight line-clamp-2 max-w-[72px]">{name}</span>
       {status === 'available' && triplesCount > 0 && (
-        <span className="text-[10px] text-muted-foreground">{t('invites.modal.tripCount', { count: triplesCount })}</span>
+        <span className="text-[10px] font-semibold text-primary bg-orange-50 border border-orange-200 rounded-full px-1.5 py-0.5">{t('invites.modal.tripCount', { count: triplesCount })}</span>
       )}
       {status === 'member' && <span className="text-[10px] text-green-600 font-medium">{t('common.member')}</span>}
       {status === 'pending' && <span className="text-[10px] text-amber-600 font-medium">{t('common.pending')}</span>}
@@ -179,7 +179,15 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
       setQuery(''); setMode('search'); setEmailInput('');
       setSearchResults([]); setDone(false); setError(''); setSentTo('');
       setShareLinkData(null);
+      // José (15 sep 2026): "debería salir instantáneamente al cargar
+      // invitar, sin tener que pinchar compartir enlace, es un paso
+      // innecesario" -- se genera/reutiliza el link nada más abrir, en vez
+      // de esperar a que se toque el botón. createTripInviteLink reutiliza
+      // el activo si ya existe, así que esto es barato incluso si al final
+      // no se llega a compartir nada.
+      handleOpenShareOptions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Precargar todos los perfiles al abrir el modal — búsqueda client-side inmediata.
@@ -525,31 +533,17 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
                 </div>
               )}
 
-              {/* Current members + pending */}
-              {query.trim().length < 2 && (members.length > 0 || pendingInvites.length > 0) && (
+              {/* Pending invites -- solo pendientes, no miembros actuales
+                  (José 15 sep 2026: "en el viaje no es necesario, ya se ve
+                  en con quién ya has viajado" -- cierto para miembros, pero
+                  aquí también vivía la única forma de cancelar una
+                  invitación pendiente, así que esa parte se queda). */}
+              {query.trim().length < 2 && pendingInvites.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('invites.modal.onTrip')}</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('common.pending')}</p>
                   <div className="bg-card rounded-2xl border border-border overflow-hidden">
-                    {members.map((email, i) => {
-                      const prof = profiles.find(p => normalizeEmail(p.email) === normalizeEmail(email) || normalizeEmail(p.user_email) === normalizeEmail(email));
-                      const name = prof?.display_name || prof?.username || t('common.member');
-                      const isAdmin = roles[email] === 'admin' || trip?.created_by === email;
-                      return (
-                        <div key={email} className={`flex items-center gap-3 px-4 py-3 ${i > 0 || pendingInvites.length > 0 ? 'border-t border-border' : ''}`}>
-                          <Avatar email={email} profile={prof} size={36} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-foreground">{name}</p>
-                            {prof?.username && <p className="text-xs text-muted-foreground">@{prof.username}</p>}
-                          </div>
-                          {isAdmin
-                            ? <span className="text-xs bg-orange-50 text-primary border border-orange-200 rounded-full px-2 py-0.5 flex-shrink-0">{t('common.admin')}</span>
-                            : <span className="text-xs bg-green-50 text-green-700 border border-green-200 rounded-full px-2 py-0.5 flex-shrink-0 flex items-center gap-1"><Check className="w-3 h-3" />{t('common.member')}</span>
-                          }
-                        </div>
-                      );
-                    })}
-                    {pendingInvites.map(inv => (
-                      <div key={inv.id} className="flex items-center gap-3 px-4 py-3 border-t border-border">
+                    {pendingInvites.map((inv, i) => (
+                      <div key={inv.id} className={`flex items-center gap-3 px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
                         <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
                           <Clock className="w-3.5 h-3.5 text-muted-foreground" />
                         </div>
@@ -588,7 +582,7 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
                     <div className="grid grid-cols-3 gap-2">
                       <button onClick={openWhatsApp} className="flex flex-col items-center gap-1.5 py-2">
                         <div className="w-12 h-12 rounded-full bg-[#25D366] flex items-center justify-center">
-                          <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.6 6.3A8.86 8.86 0 0 0 12 4a8.9 8.9 0 0 0-8.9 8.9c0 1.57.41 3.1 1.19 4.44L3 21l3.76-1.27a8.9 8.9 0 0 0 5.24 1.68 8.9 8.9 0 0 0 8.9-8.9c0-2.38-.93-4.6-2.3-6.21zM12 19.1a7.3 7.3 0 0 1-4.44-1.5l-.32-.2-2.47.82.83-2.4-.21-.34a7.32 7.32 0 1 1 13.61-3.8A7.31 7.31 0 0 1 12 19.1zm4.02-5.47c-.22-.11-1.3-.64-1.5-.72-.2-.07-.35-.11-.5.11-.15.22-.57.72-.7.87-.13.15-.26.16-.48.05-.22-.11-.94-.35-1.79-1.11-.66-.59-1.11-1.32-1.24-1.54-.13-.22-.01-.34.1-.45.1-.1.22-.26.33-.39.11-.13.15-.22.22-.37.07-.15.04-.28-.02-.39-.06-.11-.5-1.21-.69-1.66-.18-.43-.36-.37-.5-.38-.13-.01-.28-.01-.43-.01s-.39.06-.6.28c-.2.22-.79.77-.79 1.87s.81 2.17.92 2.32c.11.15 1.6 2.45 3.89 3.43.54.24.97.38 1.3.48.55.17 1.05.15 1.44.09.44-.07 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.15-.42-.26z"/></svg>
+                          <MessageCircle className="w-5 h-5 text-white" fill="white" strokeWidth={0} />
                         </div>
                         <span className="text-[10px] text-foreground font-medium">WhatsApp</span>
                       </button>
