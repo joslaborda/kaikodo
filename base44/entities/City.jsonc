@@ -22,6 +22,10 @@
       "type": "number",
       "description": "Longitud real de la ciudad (Google Places) -- mismo criterio que lat, ver arriba."
     },
+    "photo_ref": {
+      "type": "string",
+      "description": "José (15 sep 2026): nombre del recurso de foto de Google Places para esta ciudad (ver src/lib/cityPlaces.js) -- sustituye el diccionario fijo de fotos por ciudad/país, que se quedaba corto con cualquier ciudad no incluida a mano (pasó con Dublín y con León). Opcional, mismo criterio que lat/lng: puede faltar si la ciudad se escribió a mano o es de antes de este cambio."
+    },
     "image_url": {
       "type": "string",
       "description": "Cover image URL"
