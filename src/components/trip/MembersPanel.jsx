@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { normalizeEmail } from '@/lib/utils';
 import { searchUserProfiles } from '@/lib/userProfiles';
 import Avatar from '@/components/trip/Avatar';
+import { GridAvatarItem } from '@/components/home/InviteModal';
 
 export default function MembersPanel({
   trip, currentUserEmail, isAdmin, profiles = []
@@ -27,6 +28,10 @@ export default function MembersPanel({
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('editor');
   const [inviting, setInviting] = useState(false);
+  // José (14 sep 2026): mismo arreglo que en InviteModal.jsx (Home) --
+  // tocar un resultado de búsqueda mandaba la invitación al instante, sin
+  // confirmar. Ahora solo abre esta confirmación.
+  const [confirmingResultProfile, setConfirmingResultProfile] = useState(null);
   const [shareLink, setShareLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [sharingLink, setSharingLink] = useState(false);
@@ -95,6 +100,52 @@ export default function MembersPanel({
   const members = trip?.members || [];
   const roles = trip?.roles || {};
 
+  // José (15 sep 2026): "que no esté [en Ajustes] no significa que no lo
+  // queramos" -- tenía razón, se me pasó preguntarlo. Misma sección que ya
+  // hay en InviteModal.jsx (Home), mismo componente (GridAvatarItem,
+  // exportado desde allí en vez de duplicado aquí).
+  const normalizedMembersForStatus = members.map(normalizeEmail);
+  const getStatus = (email) => {
+    const e = normalizeEmail(email);
+    if (normalizedMembersForStatus.includes(e)) return 'member';
+    if (pendingInvites.some(i => normalizeEmail(i.email) === e)) return 'pending';
+    return 'available';
+  };
+
+  const { data: coTravelerEmails = [] } = useQuery({
+    queryKey: ['coTravelers', currentUserEmail],
+    queryFn: async () => {
+      if (!currentUserEmail) return [];
+      const allTrips = await base44.entities.Trip.filter({ created_by: currentUserEmail });
+      const emails = new Map();
+      const normalizedCurrentMembers = members.map(normalizeEmail);
+      allTrips.forEach(t => {
+        (t.members || []).forEach(rawEmail => {
+          const e = normalizeEmail(rawEmail);
+          if (e && e !== normalizeEmail(currentUserEmail) && !normalizedCurrentMembers.includes(e)) {
+            emails.set(e, (emails.get(e) || 0) + 1);
+          }
+        });
+      });
+      return Array.from(emails.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([email, count]) => ({ email, count }));
+    },
+    enabled: !!trip?.id && !!currentUserEmail,
+    staleTime: 300000,
+  });
+  const coTravelerEmailList = coTravelerEmails.map(c => c.email);
+  const { data: coTravelerProfilesRaw = [] } = useQuery({
+    queryKey: ['coTravelerProfiles', coTravelerEmailList.join(',')],
+    queryFn: () => searchUserProfiles({ emails: coTravelerEmailList }),
+    enabled: coTravelerEmailList.length > 0,
+    staleTime: 300000,
+  });
+  const coTravelerProfiles = coTravelerEmails.map(({ email, count }) => ({
+    profile: coTravelerProfilesRaw.find(p => normalizeEmail(p.email) === normalizeEmail(email) || normalizeEmail(p.user_email) === normalizeEmail(email)),
+    email, count,
+  })).filter(({ email }) => getStatus(email) !== 'member').slice(0, 6);
+
   // `profiles` llega como array (así lo devuelve el useQuery de perfiles en
   // Home.jsx: `data: profiles = []`), pero este componente asumía que podía
   // llegar como objeto {email: profile} — con un array, `profiles?.[email]`
@@ -155,31 +206,54 @@ export default function MembersPanel({
   // pieza concreta en vez de emprender la consolidación completa de los dos
   // paneles a la vez que una función de seguridad nueva. Si se toca el
   // comportamiento de compartir en un sitio, hay que tocarlo en el otro.
-  const handleShareWithGroup = async () => {
+  const [shareLinkData, setShareLinkData] = useState(null); // { url, text } | null
+  const [linkCopiedFlash, setLinkCopiedFlash] = useState(false);
+
+  const inviterName = () => {
+    const myProf = profiles.find(p => normalizeEmail(p.email) === normalizeEmail(currentUserEmail) || normalizeEmail(p.user_email) === normalizeEmail(currentUserEmail));
+    return myProf?.display_name || myProf?.username || currentUserEmail;
+  };
+
+  const handleOpenShareOptions = async () => {
     setSharingLink(true);
     try {
       const link = await getOrCreateTripInviteLink(trip.id);
       const url = buildTripInviteLinkUrl(link, trip);
-      const inviterName = (() => {
-        const myProf = profiles.find(p => normalizeEmail(p.email) === normalizeEmail(currentUserEmail) || normalizeEmail(p.user_email) === normalizeEmail(currentUserEmail));
-        return myProf?.display_name || myProf?.username || currentUserEmail;
-      })();
-      const text = buildTripInviteLinkShareText(trip, inviterName, url);
-      try {
-        const { Share } = await import('@capacitor/share');
-        await Share.share({ text, url, dialogTitle: t('invites.modal.shareDialogTitle') });
-      } catch {
-        if (navigator.share) {
-          await navigator.share({ text, url });
-        } else if (navigator.clipboard) {
-          await navigator.clipboard.writeText(text);
-          toast({ title: t('invites.modal.linkCopied') });
-        }
-      }
+      const text = buildTripInviteLinkShareText(trip, inviterName(), url);
+      setShareLinkData({ url, text });
     } catch (e) {
       toast({ title: t('common.error'), description: e.message || t('invites.modal.shareError'), variant: 'destructive' });
     }
     setSharingLink(false);
+  };
+
+  const openWhatsApp = async () => {
+    const waUrl = 'https://wa.me/?text=' + encodeURIComponent(shareLinkData.text);
+    try {
+      const { Browser } = await import('@capacitor/browser');
+      await Browser.open({ url: waUrl });
+    } catch {
+      window.open(waUrl, '_blank');
+    }
+  };
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLinkData.url);
+      setLinkCopiedFlash(true);
+      setTimeout(() => setLinkCopiedFlash(false), 2000);
+    } catch {}
+  };
+
+  const shareToOther = async () => {
+    try {
+      const { Share } = await import('@capacitor/share');
+      await Share.share({ text: shareLinkData.text, url: shareLinkData.url, dialogTitle: t('invites.modal.shareDialogTitle') });
+    } catch {
+      if (navigator.share) {
+        try { await navigator.share({ text: shareLinkData.text, url: shareLinkData.url }); } catch {}
+      }
+    }
   };
 
   const sendInviteTo = async ({ resolvedEmail, targetUserId }) => {
@@ -468,12 +542,38 @@ export default function MembersPanel({
               <p className="text-xs text-muted-foreground mb-3 flex items-center gap-1">
                 <Mail className="w-3 h-3" />{t('membersPanel.inviteByUsernameOrEmail')}
               </p>
-              <button type="button" onClick={handleShareWithGroup} disabled={sharingLink}
-                className="w-full flex items-center gap-2 px-3 py-2.5 mb-3 bg-secondary rounded-xl text-left hover:bg-secondary/70 transition-colors disabled:opacity-50">
-                <Share2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-                <span className="text-xs font-medium text-foreground flex-1">{t('invites.modal.shareWithGroup')}</span>
-                <span className="text-xs text-muted-foreground">{sharingLink ? '…' : '→'}</span>
-              </button>
+              {shareLinkData ? (
+                <div className="bg-secondary rounded-xl p-3 mb-3">
+                  <p className="text-xs text-muted-foreground mb-2.5 px-1">{t('invites.modal.shareWithGroup')}</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button type="button" onClick={openWhatsApp} className="flex flex-col items-center gap-1.5 py-2">
+                      <div className="w-12 h-12 rounded-full bg-[#25D366] flex items-center justify-center">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.6 6.3A8.86 8.86 0 0 0 12 4a8.9 8.9 0 0 0-8.9 8.9c0 1.57.41 3.1 1.19 4.44L3 21l3.76-1.27a8.9 8.9 0 0 0 5.24 1.68 8.9 8.9 0 0 0 8.9-8.9c0-2.38-.93-4.6-2.3-6.21zM12 19.1a7.3 7.3 0 0 1-4.44-1.5l-.32-.2-2.47.82.83-2.4-.21-.34a7.32 7.32 0 1 1 13.61-3.8A7.31 7.31 0 0 1 12 19.1zm4.02-5.47c-.22-.11-1.3-.64-1.5-.72-.2-.07-.35-.11-.5.11-.15.22-.57.72-.7.87-.13.15-.26.16-.48.05-.22-.11-.94-.35-1.79-1.11-.66-.59-1.11-1.32-1.24-1.54-.13-.22-.01-.34.1-.45.1-.1.22-.26.33-.39.11-.13.15-.22.22-.37.07-.15.04-.28-.02-.39-.06-.11-.5-1.21-.69-1.66-.18-.43-.36-.37-.5-.38-.13-.01-.28-.01-.43-.01s-.39.06-.6.28c-.2.22-.79.77-.79 1.87s.81 2.17.92 2.32c.11.15 1.6 2.45 3.89 3.43.54.24.97.38 1.3.48.55.17 1.05.15 1.44.09.44-.07 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.15-.42-.26z"/></svg>
+                      </div>
+                      <span className="text-[10px] text-foreground font-medium">WhatsApp</span>
+                    </button>
+                    <button type="button" onClick={copyShareLink} className="flex flex-col items-center gap-1.5 py-2">
+                      <div className="w-12 h-12 rounded-full bg-card flex items-center justify-center">
+                        {linkCopiedFlash ? <Check className="w-5 h-5 text-green-600" /> : <Copy className="w-5 h-5 text-foreground" />}
+                      </div>
+                      <span className="text-[10px] text-foreground font-medium">{linkCopiedFlash ? t('invites.modal.linkCopiedShort') : t('invites.modal.copyLink')}</span>
+                    </button>
+                    <button type="button" onClick={shareToOther} className="flex flex-col items-center gap-1.5 py-2">
+                      <div className="w-12 h-12 rounded-full bg-card flex items-center justify-center">
+                        <Share2 className="w-5 h-5 text-foreground" />
+                      </div>
+                      <span className="text-[10px] text-foreground font-medium">{t('invites.modal.shareToOther')}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={handleOpenShareOptions} disabled={sharingLink}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 mb-3 bg-secondary rounded-xl text-left hover:bg-secondary/70 transition-colors disabled:opacity-50">
+                  <Share2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                  <span className="text-xs font-medium text-foreground flex-1">{t('invites.modal.shareWithGroup')}</span>
+                  <span className="text-xs text-muted-foreground">{sharingLink ? '…' : '→'}</span>
+                </button>
+              )}
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <div className="flex-1 relative">
@@ -495,7 +595,7 @@ export default function MembersPanel({
                       <div className="absolute z-10 left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden max-h-64 overflow-y-auto">
                         {searchResults.map(p => (
                           <button key={p.user_id || p.username} type="button"
-                            onClick={() => handleInviteFromResult(p)}
+                            onClick={() => setConfirmingResultProfile(p)}
                             disabled={inviting}
                             className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-secondary/30 transition-colors border-b border-border last:border-0 disabled:opacity-50">
                             <Avatar email={p.email} profile={p} size={28} />
@@ -529,8 +629,55 @@ export default function MembersPanel({
                   {inviting ? '...' : t('invites.modal.sendInvite')}
                 </Button>
               </div>
+
+              {/* José (15 sep 2026): misma sección que ya había en Home,
+                  se me había olvidado traerla también a Ajustes. */}
+              {inviteEmail.trim().length < 2 && coTravelerProfiles.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">{t('invites.modal.traveledWith')}</p>
+                  <div className="grid grid-cols-4 gap-3">
+                    {coTravelerProfiles.map(({ profile, email, count }) => (
+                      <GridAvatarItem key={email}
+                        profile={profile} email={email}
+                        triplesCount={count} status={getStatus(email)}
+                        onInvite={(p, e) => setConfirmingResultProfile(p)}
+                        sending={inviting}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
+        </div>
+      )}
+
+      {confirmingResultProfile && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-6"
+          onClick={() => setConfirmingResultProfile(null)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative bg-card rounded-2xl p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <div className="flex flex-col items-center gap-2 mb-5">
+              <Avatar email={confirmingResultProfile.email} profile={confirmingResultProfile} size={48} />
+              <p className="text-sm text-foreground text-center">
+                {t('invites.modal.confirmInvite', {
+                  name: confirmingResultProfile.display_name || confirmingResultProfile.username || t('common.member'),
+                })}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmingResultProfile(null)}
+                className="flex-1 h-10 rounded-full border border-border text-sm font-medium text-muted-foreground bg-background">
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => { const p = confirmingResultProfile; setConfirmingResultProfile(null); handleInviteFromResult(p); }}
+                disabled={inviting}
+                className="flex-1 h-10 rounded-full bg-primary text-white text-sm font-medium disabled:opacity-50">
+                {t('invites.modal.confirmSend')}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
