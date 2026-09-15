@@ -63,12 +63,23 @@ export async function fetchPlaceDetails(placeId, signal) {
   const p = await res.json();
   const photoName = p.photos?.[0]?.name;
   const countryComp = (p.addressComponents || []).find(c => (c.types || []).includes('country'));
+  // José (15 sep 2026): "no sabes dónde está cada uno, la organización de
+  // los spots es pésima" -- el nombre de ciudad que se guardaba salía de
+  // trocear el subtítulo del autocompletado a lo bruto (poco fiable, a
+  // veces vacío), en vez de usar el componente de dirección real que
+  // Google ya devuelve aquí. `locality` es el habitual (una ciudad), con
+  // `postal_town` y `administrative_area_level_2` como respaldo para
+  // países/zonas donde Google no usa locality (p.ej. Reino Unido).
+  const cityComp = (p.addressComponents || []).find(c => (c.types || []).includes('locality'))
+    || (p.addressComponents || []).find(c => (c.types || []).includes('postal_town'))
+    || (p.addressComponents || []).find(c => (c.types || []).includes('administrative_area_level_2'));
   return {
     title: p.displayName?.text,
     address: p.formattedAddress,
     lat: p.location?.latitude, lng: p.location?.longitude,
     type: googleTypeToKodoType(p.primaryType ? [p.primaryType, ...(p.types || [])] : p.types),
     country: countryComp?.longText || '',
+    city_name: cityComp?.longText || '',
     image_url: photoName ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=200&key=${apiKey}` : null,
   };
 }
