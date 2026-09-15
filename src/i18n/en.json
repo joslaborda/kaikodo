@@ -1052,6 +1052,7 @@
     "explore": "Explore",
     "noPublicSpots": "No community public spots yet",
     "yours": "yours",
+    "unknownLocation": "Location not specified",
     "inYourTrip": "In your {{trip}} trip",
     "deleteSpot": "Delete {{title}}",
     "inItineraryWarning": "This is in your {{trip}} trip ({{date}}) — deleting it removes it from the itinerary too.",
@@ -1059,8 +1060,11 @@
     "deleteAnyway": "Delete anyway",
     "searchCta": "Search for a place",
     "emptyHere": "Nothing here",
+    "createdEmptyTitle": "Your secret spots",
+    "createdEmptyBody": "That bench with the best sunset views, the terrace nobody knows about, the viewpoint with no name on Google Maps. Share it, so other travelers can discover it too.",
+    "createSpotCta": "Create spot",
     "myCollection": "My collection",
-    "unifiedSearchPlaceholder": "Search your collection or anywhere new",
+    "unifiedSearchPlaceholder": "Search...",
     "searchHint": "Results from your collection and beyond, together — each one labelled by where it's from.",
     "alreadyAdded": "Already added",
     "newFromGoogle": "New · Google",
@@ -1476,6 +1480,8 @@
       "intro1": "Requirements to travel to",
       "intro2": "with a passport from",
       "needHomeCountry": "Add your nationality in your profile to see visa and vaccine requirements",
+      "homeCountryTitle": "You're already home",
+      "homeCountryBody": "Nothing to sort out -- this trip is within your own country.",
       "completeProfileCta": "Complete profile",
       "visa": {
         "evisa": "Apply online before travelling",
@@ -1499,6 +1505,8 @@
       "tips": "Useful tips"
     },
     "emerg": {
+      "homeCountryTitle": "You already know the emergency numbers",
+      "homeCountryBody": "It's your own country -- you probably already know who to call. Leaving them here anyway, just in case.",
       "police": "Police",
       "ambulance": "Ambulance",
       "fire": "Fire brigade",

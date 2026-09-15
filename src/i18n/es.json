@@ -1052,6 +1052,7 @@
     "explore": "Explorar",
     "noPublicSpots": "Todavía no hay spots públicos de la comunidad",
     "yours": "tuyo",
+    "unknownLocation": "Ubicación sin especificar",
     "inYourTrip": "En tu viaje a {{trip}}",
     "deleteSpot": "Eliminar {{title}}",
     "inItineraryWarning": "Está en tu viaje a {{trip}} ({{date}}) — si lo borras, también desaparece del itinerario.",
@@ -1059,8 +1060,11 @@
     "deleteAnyway": "Eliminar de todos modos",
     "searchCta": "Buscar un sitio",
     "emptyHere": "Nada por aquí",
+    "createdEmptyTitle": "Tus sitios secretos",
+    "createdEmptyBody": "Ese banco con las mejores vistas al atardecer, la terraza que nadie conoce, el mirador sin nombre en Google Maps. Compártelo, para que otros viajeros también lo descubran.",
+    "createSpotCta": "Crear spot",
     "myCollection": "Mi colección",
-    "unifiedSearchPlaceholder": "Buscar en tu colección o cualquier sitio nuevo",
+    "unifiedSearchPlaceholder": "Buscar...",
     "searchHint": "Resultados de tu colección y de fuera, juntos — cada uno marcado según de dónde viene.",
     "alreadyAdded": "Ya añadido",
     "newFromGoogle": "Nuevo · Google",
@@ -1476,6 +1480,8 @@
       "intro1": "Requisitos para viajar a",
       "intro2": "con pasaporte de",
       "needHomeCountry": "Añade tu nacionalidad en tu perfil para ver los requisitos de visado y vacunas",
+      "homeCountryTitle": "Ya estás en casa",
+      "homeCountryBody": "Nada que tramitar — este viaje es dentro de tu propio país.",
       "completeProfileCta": "Completar perfil",
       "visa": {
         "evisa": "Tramitar online antes de viajar",
@@ -1499,6 +1505,8 @@
       "tips": "Consejos útiles"
     },
     "emerg": {
+      "homeCountryTitle": "Ya conoces los números de emergencia",
+      "homeCountryBody": "Es tu país — seguro que ya sabes a quién llamar. Los dejamos aquí abajo por si acaso.",
       "police": "Policía",
       "ambulance": "Ambulancia",
       "fire": "Bomberos",
