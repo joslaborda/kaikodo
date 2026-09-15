@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Clock } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 import { normalizeEmail } from '@/lib/utils';
 import { searchUserProfiles } from '@/lib/userProfiles';
 import { useTranslation } from 'react-i18next';
 
 export default function MemberAvatarRow({
-  trip, profiles, onInvite, currentUserEmail
+  trip, profiles, onInvite, currentUserEmail, tripId
 }) {
   const { t } = useTranslation();
   const colors = ['bg-orange-100 text-primary','bg-violet-100 text-violet-700','bg-blue-100 text-blue-700','bg-green-100 text-green-700'];
@@ -44,6 +45,23 @@ export default function MemberAvatarRow({
     return map;
   }, [memberProfiles, profiles]);
 
+  // José (14 sep 2026): esto nunca se había llegado a programar de verdad
+  // -- solo se vio en la maqueta interactiva, pero el código real seguía
+  // sin pedir las invitaciones pendientes. Mismo queryKey que InviteModal.jsx
+  // (['tripPendingInvites', tripId]) para compartir caché -- al enviar una
+  // invitación desde ahí, esto se refresca solo.
+  // Límite honesto: el rls de TripInvite solo deja leer una invitación a
+  // quien la mandó o a quien va dirigida -- así que esto solo muestra
+  // "pendiente" desde la cuenta de quien invitó, no a cualquier otro
+  // miembro del viaje (no es un fallo, es la misma regla que evita filtrar
+  // a quién ha invitado quién).
+  const { data: pendingInvites = [] } = useQuery({
+    queryKey: ['tripPendingInvites', tripId],
+    queryFn: () => base44.entities.TripInvite.filter({ trip_id: tripId, status: 'pending' }),
+    enabled: !!tripId,
+    staleTime: 30000,
+  });
+
   return (
     <div className="px-4 py-3 flex items-center gap-4 flex-wrap">
       {memberEmails.map((email, i) => {
@@ -69,6 +87,16 @@ export default function MemberAvatarRow({
           </div>
         );
       })}
+      {pendingInvites.map(inv => (
+        <div key={inv.id} className="flex flex-col items-center gap-1">
+          <div className="w-9 h-9 rounded-full border-2 border-dashed border-amber-300 bg-amber-50 flex items-center justify-center">
+            <Clock className="w-3.5 h-3.5 text-amber-500" />
+          </div>
+          <span className="text-[11px] text-amber-600 leading-tight text-center font-medium max-w-[64px]">
+            {t('common.pending')}<br />{t('invites.modal.toAccept')}
+          </span>
+        </div>
+      ))}
       <button onClick={onInvite} className="flex flex-col items-center gap-1">
         <div className="w-9 h-9 rounded-full border-2 border-dashed border-border flex items-center justify-center hover:border-primary/40 transition-colors">
           <UserPlus className="w-4 h-4 text-muted-foreground/50" />

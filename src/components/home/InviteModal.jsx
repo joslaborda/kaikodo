@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Clock, Mail, Search, Share2, X } from 'lucide-react';
+import { Check, Clock, Mail, Search, Share2, X, Link2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { sendTripInvite } from '@/lib/invites';
 import { getOrCreateTripInviteLink, buildTripInviteLinkUrl, buildTripInviteLinkShareText } from '@/lib/inviteLinks';
@@ -63,6 +63,44 @@ function ResultRow({ profile, email, triplesCount, status, onInvite, sending }) 
   );
 }
 
+// José (14 sep 2026): "el apartado de con quién ya has viajado ocupa
+// demasiado espacio así, algo parecido a Instagram con los avatares en
+// grande" -- misma info que ResultRow (nombre, estado, nº de viajes juntos)
+// pero en cuadrícula de avatares grandes en vez de filas apiladas, igual
+// que la hoja de compartir de Instagram/WhatsApp.
+export function GridAvatarItem({ profile, email, triplesCount, status, onInvite, sending }) {
+  const { t } = useTranslation();
+  const name = profile?.display_name || profile?.username || t('common.member');
+  const isBusy = status !== 'available' || sending;
+  return (
+    <button
+      onClick={() => status === 'available' && !sending && onInvite(profile, email)}
+      disabled={isBusy}
+      className={`flex flex-col items-center gap-1.5 ${isBusy ? 'opacity-45' : ''}`}
+    >
+      <div className="relative">
+        <Avatar email={email} profile={profile} size={64} />
+        {status === 'member' && (
+          <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-green-500 border-2 border-card flex items-center justify-center">
+            <Check className="w-2.5 h-2.5 text-white" />
+          </span>
+        )}
+        {status === 'pending' && (
+          <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-amber-400 border-2 border-card flex items-center justify-center">
+            <Clock className="w-2.5 h-2.5 text-white" />
+          </span>
+        )}
+      </div>
+      <span className="text-xs text-foreground text-center leading-tight line-clamp-2 max-w-[72px]">{name}</span>
+      {status === 'available' && triplesCount > 0 && (
+        <span className="text-[10px] text-muted-foreground">{t('invites.modal.tripCount', { count: triplesCount })}</span>
+      )}
+      {status === 'member' && <span className="text-[10px] text-green-600 font-medium">{t('common.member')}</span>}
+      {status === 'pending' && <span className="text-[10px] text-amber-600 font-medium">{t('common.pending')}</span>}
+    </button>
+  );
+}
+
 export default function InviteModal({ open, onClose, trip, tripId, queryClient, profiles = [], currentUserEmail = '', currentUserName = '' }) {
   const { t } = useTranslation();
   const [cancelling, setCancelling] = useState(null);
@@ -72,6 +110,10 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState('');
   const [done, setDone] = useState(false);
+  // José (14 sep 2026): "es súper sensible y si tocas a alguien sin querer
+  // la invitación se manda directamente" -- ahora tocar una fila solo abre
+  // esta confirmación, nunca envía nada por sí sola.
+  const [confirmingInvite, setConfirmingInvite] = useState(null); // { profile, email } | null
   const [error, setError] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -127,12 +169,16 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
     staleTime: 300000,
   });
 
-  // Focus input on open
+  // Focus input on open -- José (14 sep 2026): antes esto enfocaba el
+  // campo de búsqueda a los 100ms de abrir, lo que disparaba el teclado
+  // automáticamente sin que el usuario pidiera escribir nada -- "no me
+  // mola, mejor que no salga el teclado". Ahora solo se limpia el estado,
+  // sin robar el foco -- el usuario decide cuándo escribir.
   useEffect(() => {
     if (open) {
       setQuery(''); setMode('search'); setEmailInput('');
       setSearchResults([]); setDone(false); setError(''); setSentTo('');
-      setTimeout(() => inputRef.current?.focus(), 100);
+      setShareLinkData(null);
     }
   }, [open]);
 
@@ -280,37 +326,65 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
       || profiles.find(p => normalizeEmail(p.email) === normalizeEmail(email) || normalizeEmail(p.user_email) === normalizeEmail(email)),
     email,
     count,
-  })).filter(({ email }) => getStatus(email) !== 'member').slice(0, 5);
+  })).filter(({ email }) => getStatus(email) !== 'member').slice(0, 6);
 
   const [sharingLink, setSharingLink] = useState(false);
+  // José (15 sep 2026): "el modelo de Instagram funciona de puta madre y
+  // los usuarios ya lo conocen" -- la fila de iconos (WhatsApp/Copiar
+  // enlace/Compartir con...) SÍ la podemos construir nosotros (la
+  // cuadrícula de arriba de Instagram no, es su red social interna, no
+  // algo que el sistema operativo nos dé gratis). WhatsApp como acceso
+  // directo (la gente lo prefiere, ya lo dijiste), Copiar enlace aparte, y
+  // "Compartir con..." como comodín para todo lo demás vía la hoja nativa.
+  const [shareLinkData, setShareLinkData] = useState(null); // { url, text } | null
+  const [linkCopiedFlash, setLinkCopiedFlash] = useState(false);
 
-  // Compartir con el grupo -- genera (o reutiliza, si ya hay uno activo) el
-  // link general del viaje y abre la hoja nativa de compartir del sistema,
-  // NO una lista de botones por app dibujada por nosotros (ver la sesión de
-  // mockups: eso ya lo hace el propio sistema operativo). Con fallback a
-  // Web Share API / copiar al portapapeles si @capacitor/share no está
-  // disponible (p. ej. probando en un navegador de escritorio).
-  const handleShareWithGroup = async () => {
+  const handleOpenShareOptions = async () => {
     setSharingLink(true); setError('');
     try {
       const link = await getOrCreateTripInviteLink(tripId);
       const url = buildTripInviteLinkUrl(link, trip);
       const text = buildTripInviteLinkShareText(trip, currentUserName || currentUserEmail, url);
-      try {
-        const { Share } = await import('@capacitor/share');
-        await Share.share({ text, url, dialogTitle: t('invites.modal.shareDialogTitle') });
-      } catch {
-        if (navigator.share) {
-          await navigator.share({ text, url });
-        } else if (navigator.clipboard) {
-          await navigator.clipboard.writeText(`${text}`);
-          setError(t('invites.modal.linkCopied'));
-        }
-      }
+      setShareLinkData({ url, text });
     } catch (e) {
       setError(e?.message || t('invites.modal.shareError'));
     }
     setSharingLink(false);
+  };
+
+  // window.open() no funciona de forma fiable en el WebView nativo de
+  // Capacitor (mismo problema que ya arreglamos para abrir documentos) --
+  // se usa @capacitor/browser, con window.open solo como último recurso.
+  const openWhatsApp = async () => {
+    const waUrl = 'https://wa.me/?text=' + encodeURIComponent(shareLinkData.text);
+    try {
+      const { Browser } = await import('@capacitor/browser');
+      await Browser.open({ url: waUrl });
+    } catch {
+      window.open(waUrl, '_blank');
+    }
+  };
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLinkData.url);
+      setLinkCopiedFlash(true);
+      setTimeout(() => setLinkCopiedFlash(false), 2000);
+    } catch {}
+  };
+
+  // Comodín para todo lo que no sea WhatsApp/copiar -- Telegram, Mail,
+  // Mensajes, etc. Aquí sí tiene sentido delegar en la hoja nativa del
+  // sistema, no intentar dibujar un botón por cada app posible.
+  const shareToOther = async () => {
+    try {
+      const { Share } = await import('@capacitor/share');
+      await Share.share({ text: shareLinkData.text, url: shareLinkData.url, dialogTitle: t('invites.modal.shareDialogTitle') });
+    } catch {
+      if (navigator.share) {
+        try { await navigator.share({ text: shareLinkData.text, url: shareLinkData.url }); } catch {}
+      }
+    }
   };
 
   if (!open) return null;
@@ -419,7 +493,7 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
                           <ResultRow key={profile.user_id || email}
                             profile={profile} email={email}
                             triplesCount={coCount} status={status}
-                            onInvite={(p, e) => handleInvite(p, e)}
+                            onInvite={(p, e) => setConfirmingInvite({ profile: p, email: e })}
                             sending={sending}
                           />
                         );
@@ -437,13 +511,13 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
               {/* Recommendations — only when not searching */}
               {query.trim().length < 2 && coTravelerProfiles.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('invites.modal.traveledWith')}</p>
-                  <div className="bg-card rounded-2xl border border-border overflow-hidden">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">{t('invites.modal.traveledWith')}</p>
+                  <div className="grid grid-cols-4 gap-3">
                     {coTravelerProfiles.map(({ profile, email, count }) => (
-                      <ResultRow key={email}
+                      <GridAvatarItem key={email}
                         profile={profile} email={email}
                         triplesCount={count} status={getStatus(email)}
-                        onInvite={(p, e) => handleInvite(p, e)}
+                        onInvite={(p, e) => setConfirmingInvite({ profile: p, email: e })}
                         sending={sending}
                       />
                     ))}
@@ -500,19 +574,49 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
                 <p className="text-xs text-red-600 text-center">{error}</p>
               )}
 
-              {/* Compartir con el grupo -- link general, solo se ve cuando
-                  hay algo que buscar/escribir todavía (query vacía), para no
-                  competir visualmente con resultados de búsqueda activos. */}
+              {/* Compartir enlace -- link general, solo se ve cuando hay
+                  algo que buscar/escribir todavía (query vacía), para no
+                  competir visualmente con resultados de búsqueda activos.
+                  Al tocarlo, se genera/reutiliza el link y esta misma fila
+                  se convierte en los 3 botones de abajo (WhatsApp directo /
+                  copiar / compartir con...), en vez de abrir directamente
+                  la hoja nativa. */}
               {query.trim().length < 2 && (
-                <button onClick={handleShareWithGroup} disabled={sharingLink}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-2xl hover:bg-secondary/30 transition-colors disabled:opacity-50">
-                  <Share2 className="w-4 h-4 text-primary flex-shrink-0" />
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-medium text-foreground">{t('invites.modal.shareWithGroup')}</p>
-                    <p className="text-xs text-muted-foreground">{t('invites.modal.shareWithGroupHint')}</p>
+                shareLinkData ? (
+                  <div className="bg-card border border-border rounded-2xl p-3">
+                    <p className="text-xs text-muted-foreground mb-2.5 px-1">{t('invites.modal.shareWithGroup')}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button onClick={openWhatsApp} className="flex flex-col items-center gap-1.5 py-2">
+                        <div className="w-12 h-12 rounded-full bg-[#25D366] flex items-center justify-center">
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.6 6.3A8.86 8.86 0 0 0 12 4a8.9 8.9 0 0 0-8.9 8.9c0 1.57.41 3.1 1.19 4.44L3 21l3.76-1.27a8.9 8.9 0 0 0 5.24 1.68 8.9 8.9 0 0 0 8.9-8.9c0-2.38-.93-4.6-2.3-6.21zM12 19.1a7.3 7.3 0 0 1-4.44-1.5l-.32-.2-2.47.82.83-2.4-.21-.34a7.32 7.32 0 1 1 13.61-3.8A7.31 7.31 0 0 1 12 19.1zm4.02-5.47c-.22-.11-1.3-.64-1.5-.72-.2-.07-.35-.11-.5.11-.15.22-.57.72-.7.87-.13.15-.26.16-.48.05-.22-.11-.94-.35-1.79-1.11-.66-.59-1.11-1.32-1.24-1.54-.13-.22-.01-.34.1-.45.1-.1.22-.26.33-.39.11-.13.15-.22.22-.37.07-.15.04-.28-.02-.39-.06-.11-.5-1.21-.69-1.66-.18-.43-.36-.37-.5-.38-.13-.01-.28-.01-.43-.01s-.39.06-.6.28c-.2.22-.79.77-.79 1.87s.81 2.17.92 2.32c.11.15 1.6 2.45 3.89 3.43.54.24.97.38 1.3.48.55.17 1.05.15 1.44.09.44-.07 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.15-.42-.26z"/></svg>
+                        </div>
+                        <span className="text-[10px] text-foreground font-medium">WhatsApp</span>
+                      </button>
+                      <button onClick={copyShareLink} className="flex flex-col items-center gap-1.5 py-2">
+                        <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
+                          {linkCopiedFlash ? <Check className="w-5 h-5 text-green-600" /> : <Link2 className="w-5 h-5 text-foreground" />}
+                        </div>
+                        <span className="text-[10px] text-foreground font-medium">{linkCopiedFlash ? t('invites.modal.linkCopiedShort') : t('invites.modal.copyLink')}</span>
+                      </button>
+                      <button onClick={shareToOther} className="flex flex-col items-center gap-1.5 py-2">
+                        <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
+                          <Share2 className="w-5 h-5 text-foreground" />
+                        </div>
+                        <span className="text-[10px] text-foreground font-medium">{t('invites.modal.shareToOther')}</span>
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-xs text-muted-foreground">{sharingLink ? '…' : '→'}</span>
-                </button>
+                ) : (
+                  <button onClick={handleOpenShareOptions} disabled={sharingLink}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-2xl hover:bg-secondary/30 transition-colors disabled:opacity-50">
+                    <Share2 className="w-4 h-4 text-primary flex-shrink-0" />
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-medium text-foreground">{t('invites.modal.shareWithGroup')}</p>
+                      <p className="text-xs text-muted-foreground">{t('invites.modal.shareWithGroupHint')}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{sharingLink ? '…' : '→'}</span>
+                  </button>
+                )
               )}
 
               {/* Email fallback */}
@@ -529,6 +633,37 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
           </>
         )}
       </div>
+
+      {/* José (14 sep 2026): confirmación explícita antes de mandar nada --
+          ver el comentario en confirmingInvite arriba. */}
+      {confirmingInvite && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-6"
+          onClick={e => { e.stopPropagation(); setConfirmingInvite(null); }}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative bg-card rounded-2xl p-5 w-full max-w-xs" onClick={e => e.stopPropagation()}>
+            <div className="flex flex-col items-center gap-2 mb-5">
+              <Avatar email={confirmingInvite.email} profile={confirmingInvite.profile} size={48} />
+              <p className="text-sm text-foreground text-center">
+                {t('invites.modal.confirmInvite', {
+                  name: confirmingInvite.profile?.display_name || confirmingInvite.profile?.username || t('common.member'),
+                })}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmingInvite(null)}
+                className="flex-1 h-10 rounded-full border border-border text-sm font-medium text-muted-foreground bg-background">
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => { const { profile, email } = confirmingInvite; setConfirmingInvite(null); handleInvite(profile, email); }}
+                disabled={sending}
+                className="flex-1 h-10 rounded-full bg-primary text-white text-sm font-medium disabled:opacity-50">
+                {t('invites.modal.confirmSend')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body
   );

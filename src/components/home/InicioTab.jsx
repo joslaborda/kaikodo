@@ -239,7 +239,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
             <Users className="w-4 h-4" />{t('home.travelers')}
           </p>
         </div>
-        <MemberAvatarRow trip={trip} profiles={profiles} onInvite={onInvite} currentUserEmail={currentUserEmail} />
+        <MemberAvatarRow trip={trip} profiles={profiles} onInvite={onInvite} currentUserEmail={currentUserEmail} tripId={tripId} />
       </div>
 
       <PDFViewer fileUrl={viewFile} onClose={() => setViewFile(null)} />
