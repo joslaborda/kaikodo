@@ -4,7 +4,7 @@ import { createPageUrl } from '@/utils';
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useTranslation } from 'react-i18next';
-import { getTripCoverImage } from '@/lib/tripImage';
+import { useTripCoverImage } from '@/lib/tripImage';
 import { getCountryMeta } from '@/lib/countryConfig';
 
 // Devuelve solo datos: el texto lo pone quien renderiza, con su t(). Antes
@@ -54,7 +54,7 @@ function getFlag(trip, cities) {
 // ── Hero card ─────────────────────────────────────────────────────────────────
 export function HeroTripCard({ trip, cities = [] }) {
   const { t } = useTranslation();
-  const coverImage = getTripCoverImage(trip, cities);
+  const coverImage = useTripCoverImage(trip, cities);
   const status     = getTripStatus(trip);
   const dateRange  = formatDateRange(trip);
   const subtitle   = getRouteSubtitle(trip, cities);
@@ -125,7 +125,7 @@ export function HeroTripCard({ trip, cities = [] }) {
 // ── Compact card ──────────────────────────────────────────────────────────────
 export default function TripCard({ trip, cities = [] }) {
   const { t } = useTranslation();
-  const coverImage = getTripCoverImage(trip, cities);
+  const coverImage = useTripCoverImage(trip, cities);
   const status     = getTripStatus(trip);
   const dateRange  = formatDateRange(trip);
   const subtitle   = getRouteSubtitle(trip, cities);

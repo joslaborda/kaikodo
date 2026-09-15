@@ -109,7 +109,7 @@ export default function CityInput({ country, value, onChange, onSelectPlace, pla
           if (!match) return null;
           return fetchCityLocation(match.placeId);
         })
-        .then(loc => { if (loc) onSelectPlace({ name: city, lat: loc.lat, lng: loc.lng }); })
+        .then(loc => { if (loc) onSelectPlace({ name: city, lat: loc.lat, lng: loc.lng, photoRef: loc.photoName }); })
         .catch(() => {});
     }
   };
@@ -120,7 +120,7 @@ export default function CityInput({ country, value, onChange, onSelectPlace, pla
     setOpen(false);
     if (onSelectPlace) {
       fetchCityLocation(result.placeId)
-        .then(loc => { if (loc) onSelectPlace({ name: result.name, lat: loc.lat, lng: loc.lng }); })
+        .then(loc => { if (loc) onSelectPlace({ name: result.name, lat: loc.lat, lng: loc.lng, photoRef: loc.photoName }); })
         .catch(() => {});
     }
   };

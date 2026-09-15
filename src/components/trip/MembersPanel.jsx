@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Users, UserPlus, Crown, Pencil, Eye, Mail, Copy, Check, Trash2, Clock, Share2 } from 'lucide-react';
+import { Users, UserPlus, Crown, Pencil, Eye, Mail, Copy, Check, Trash2, Clock, Share2, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -548,7 +548,7 @@ export default function MembersPanel({
                   <div className="grid grid-cols-3 gap-2">
                     <button type="button" onClick={openWhatsApp} className="flex flex-col items-center gap-1.5 py-2">
                       <div className="w-12 h-12 rounded-full bg-[#25D366] flex items-center justify-center">
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M17.6 6.3A8.86 8.86 0 0 0 12 4a8.9 8.9 0 0 0-8.9 8.9c0 1.57.41 3.1 1.19 4.44L3 21l3.76-1.27a8.9 8.9 0 0 0 5.24 1.68 8.9 8.9 0 0 0 8.9-8.9c0-2.38-.93-4.6-2.3-6.21zM12 19.1a7.3 7.3 0 0 1-4.44-1.5l-.32-.2-2.47.82.83-2.4-.21-.34a7.32 7.32 0 1 1 13.61-3.8A7.31 7.31 0 0 1 12 19.1zm4.02-5.47c-.22-.11-1.3-.64-1.5-.72-.2-.07-.35-.11-.5.11-.15.22-.57.72-.7.87-.13.15-.26.16-.48.05-.22-.11-.94-.35-1.79-1.11-.66-.59-1.11-1.32-1.24-1.54-.13-.22-.01-.34.1-.45.1-.1.22-.26.33-.39.11-.13.15-.22.22-.37.07-.15.04-.28-.02-.39-.06-.11-.5-1.21-.69-1.66-.18-.43-.36-.37-.5-.38-.13-.01-.28-.01-.43-.01s-.39.06-.6.28c-.2.22-.79.77-.79 1.87s.81 2.17.92 2.32c.11.15 1.6 2.45 3.89 3.43.54.24.97.38 1.3.48.55.17 1.05.15 1.44.09.44-.07 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.15-.42-.26z"/></svg>
+                        <MessageCircle className="w-5 h-5 text-white" fill="white" strokeWidth={0} />
                       </div>
                       <span className="text-[10px] text-foreground font-medium">WhatsApp</span>
                     </button>
