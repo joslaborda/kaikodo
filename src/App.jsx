@@ -3,7 +3,7 @@ import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client
 import { queryClientInstance, persistOptions } from '@/lib/query-client'
 import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { decodeInvitePreview } from '@/lib/invitePreview';
@@ -50,6 +50,33 @@ const AuthenticatedApp = () => {
   const { user: authUser, isLoadingAuth, isLoadingPublicSettings, authError, checkAppState } = useAuth();
     const { t } = useTranslation();
     const location = useLocation();
+    const navigate = useNavigate();
+
+    // José (15 sep 2026): el único listener de appUrlOpen que existía
+    // (nativeAuth.js, ver listenForLoginCallback) ignora a propósito
+    // cualquier URL que no sea la del login -- hace `return` sin más. Así
+    // que aunque el intent-filter de Android/el AASA de iOS ahora también
+    // cubran /Invites, la propia app no hacía NADA con ese link al
+    // abrirse: se quedaba en la pantalla de siempre, ignorando el token.
+    // Capacitor permite varios listeners sobre el mismo evento -- este es
+    // un segundo, genérico, que solo navega dentro de la app a la
+    // ruta+parámetros del link, para cualquier URL de kaikodo.app que no
+    // sea el propio auth-callback (ese ya tiene su manejo especial de
+    // intercambio de token, no hace falta duplicarlo aquí).
+    useEffect(() => {
+      let handle;
+      import('@capacitor/app').then(({ App: CapApp }) => {
+        CapApp.addListener('appUrlOpen', ({ url }) => {
+          if (!url) return;
+          try {
+            const parsed = new URL(url);
+            if (parsed.pathname === '/auth-callback') return; // ya lo gestiona nativeAuth.js
+            navigate(parsed.pathname + parsed.search);
+          } catch {}
+        }).then(h => { handle = h; });
+      }).catch(() => {}); // web: @capacitor/app no aplica, no hay nada que escuchar
+      return () => { handle?.remove(); };
+    }, [navigate]);
 
     // #3: el email de "restablecer contraseña" (base44.auth.resetPasswordRequest,
     // ver LoginScreen.jsx) enlaza a una página propia para poner la contraseña
