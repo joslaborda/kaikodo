@@ -79,15 +79,31 @@ function ChatTab({ tripId, currentUserEmail, currentUserId, myProfile, tripMembe
   };
 
   const sendMutation = useMutation({
-    mutationFn: (payload) => {
+    mutationFn: async (payload) => {
       if (!tripMembers?.length) throw new Error(t('cities.tripNotLoadedRetry'));
+      // José (17 sep 2026) — hallazgo de seguridad: la RLS de create en
+      // TripMessage.jsonc exige que el `trip_members` del propio mensaje
+      // incluya al autor, pero ese `trip_members` lo rellena el cliente con
+      // la prop `tripMembers` (derivada del `trip` en caché de Home.jsx).
+      // Con el query cache persistido en localStorage (`kodo-query-cache`),
+      // esa prop puede seguir teniendo al usuario justo después de que un
+      // admin lo expulse -- se confirmó en vivo: expulsar a alguien no le
+      // impedía seguir escribiendo en el chat del grupo con el hueco de
+      // caché entre el montaje de Home y el refetch fresco del viaje.
+      // Aquí se pide el Trip real, sin caché, justo antes de crear el
+      // mensaje, y se corta si el usuario ya no aparece en members -- cierra
+      // la ventana de carrera en vez de confiar en la prop que ya se tenía.
+      const freshTrip = await base44.entities.Trip.get(tripId);
+      const freshMembers = freshTrip?.members || [];
+      const stillMember = freshMembers.some(e => normalizeEmail(e) === normalizeEmail(currentUserEmail));
+      if (!stillMember) throw new Error(t('cities.noLongerMember'));
       return base44.entities.TripMessage.create({
         trip_id: tripId,
         user_id: currentUserId,
         user_email: currentUserEmail,
         display_name: myProfile?.display_name || currentUserEmail,
         avatar_url: myProfile?.avatar_url || null,
-        trip_members: tripMembers,
+        trip_members: freshMembers,
         ...payload,
       });
     },
