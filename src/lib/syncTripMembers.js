@@ -28,7 +28,7 @@ const SYNCED_ENTITIES = [
 // de otra gente. Mismo motivo que trip_members: el motor de rls de base44 no
 // puede comparar contra Trip.roles directamente, así que cada registro
 // lleva su propia copia de "quién NO es viewer en este viaje ahora mismo".
-const ROLE_AWARE_ENTITIES = ['City', 'Expense'];
+const ROLE_AWARE_ENTITIES = ['City', 'Expense', 'ItineraryDay'];
 
 /**
  * A partir de trip.roles (y trip.created_by, que cuenta como admin aunque no
