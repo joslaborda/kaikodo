@@ -16,7 +16,7 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  * se puede volver a correr sin miedo si algo falla a mitad.
  */
 
-const ROLE_AWARE_ENTITIES = ["City", "Expense"];
+const ROLE_AWARE_ENTITIES = ["City", "Expense", "ItineraryDay"];
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
