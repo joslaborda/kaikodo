@@ -29,6 +29,11 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "Copia de Trip.members en el momento de crear/sincronizar — usada por rls porque base44 no permite comprobar la pertenencia al viaje contra otra entidad. Se mantiene al día vía syncTripMembers() cada vez que cambia la membresía del viaje."
+    },
+    "trip_editors": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Subconjunto de trip_members que NO tiene rol 'viewer' (más el creador del viaje, siempre) -- ver el mismo campo en Expense.jsonc para el porqué completo. Añadido el 17-sep-2026: revisión de seguridad en vivo (expulsión/degradación de rol) encontró que un Lector podía crear y editar notas del día sin ninguna restricción, porque create/update/delete aquí solo comprobaban trip_members, igual que read -- el mismo hueco (hallazgo #6 original) que ya se había cerrado para Expense/City pero no se replicó aquí. IMPRESCINDIBLE ejecutar backfillTripEditors (ahora incluye ItineraryDay) sobre los registros existentes antes de publicar este cambio, o toda edición de días ya creados se bloquea para todo el mundo hasta el backfill."
     }
   },
   "required": [
@@ -37,9 +42,9 @@
     "title"
   ],
   "rls": {
-    "create": { "data.trip_members": { "$in": ["{{user.email}}"] } },
+    "create": { "data.trip_editors": { "$in": ["{{user.email}}"] } },
     "read": { "data.trip_members": { "$in": ["{{user.email}}"] } },
-    "update": { "data.trip_members": { "$in": ["{{user.email}}"] } },
-    "delete": { "data.trip_members": { "$in": ["{{user.email}}"] } }
+    "update": { "data.trip_editors": { "$in": ["{{user.email}}"] } },
+    "delete": { "data.trip_editors": { "$in": ["{{user.email}}"] } }
   }
 }
