@@ -62,7 +62,31 @@
 * imitando el comportamiento habitual de apps como WhatsApp o Gmail.
 */
 
-const ONESIGNAL_APP_ID = import.meta.env.VITE_ONESIGNAL_APP_ID;
+import { base44 } from '@/api/base44Client';
+
+let oneSignalAppIdPromise = null;
+
+// José (17 sep 2026) — hallazgo del escáner de seguridad de Base44
+// ("Secretos expuestos"): leer import.meta.env.VITE_ONESIGNAL_APP_ID aquí
+// nunca funcionaba en producción (Base44 no inyecta Secretos en el bundle
+// del cliente en build time, solo en funciones de backend en runtime —
+// mismo patrón ya arreglado antes para Google Maps, ver
+// getGoogleMapsApiKey() en src/lib/googleMaps.js, cuyo patrón se replica
+// aquí tal cual). Se pide ahora al backend (sin exigir sesión, igual que
+// getTurnstileSiteKey antes de él, ya que esto corre en main.jsx antes de
+// que exista ninguna sesión). No se cachea el fallo (si la primera llamada
+// falla por red, la siguiente vuelve a intentarlo).
+function getOneSignalAppId() {
+    if (oneSignalAppIdPromise) return oneSignalAppIdPromise;
+    oneSignalAppIdPromise = base44.functions.invoke('getOneSignalAppId', {})
+        .then(res => res?.data?.appId || res?.appId || null)
+        .catch(() => null)
+        .then(appId => {
+            if (!appId) oneSignalAppIdPromise = null; // no cachear fallo
+            return appId;
+        });
+    return oneSignalAppIdPromise;
+}
 
 const READY_POLL_INTERVAL_MS = 250;
 const READY_POLL_TIMEOUT_MS = 8000;
@@ -137,18 +161,18 @@ function whenNativeReady() {
 */
 export function initPushNotifications() {
     if (!isNativePlatform()) return;
-    if (!ONESIGNAL_APP_ID) {
-          console.warn('[push] VITE_ONESIGNAL_APP_ID no está definido, no se inicializa OneSignal');
-          return;
-    }
-    whenNativeReady().then((available) => {
+    Promise.all([getOneSignalAppId(), whenNativeReady()]).then(([appId, available]) => {
+          if (!appId) {
+                  console.warn('[push] No se pudo obtener el App ID de OneSignal del backend, no se inicializa');
+                  return;
+          }
           const OneSignal = getOneSignal();
           if (!available || !OneSignal) {
                   console.warn('[push] OneSignal no disponible tras esperar al bridge nativo — el plugin no se cargó');
                   return;
           }
           console.log('[push] Inicializando OneSignal…');
-          OneSignal.initialize(ONESIGNAL_APP_ID);
+          OneSignal.initialize(appId);
           OneSignal.Notifications.requestPermission(true);
     });
 }
