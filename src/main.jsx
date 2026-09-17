@@ -7,6 +7,20 @@ import { initPushNotifications, clearDeliveredNotifications } from '@/lib/pushNo
 import { initNotificationTapHandler, clearStaleDeliveredNotifications } from '@/lib/localReminders'
 import { relayNativeLoginIfNeeded } from '@/lib/nativeAuth'
 
+// José (16 sep 2026): la barra de estado de Android salía gris por
+// defecto, sin relación con el fondo de la app -- el plugin no se llamaba
+// nunca en tiempo de ejecución. La config de capacitor.config.ts ayuda,
+// pero esta llamada explícita es la que de verdad lo aplica de forma
+// fiable en todos los Android. No-op en web -- el import falla en un
+// navegador normal y se ignora sin más.
+if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
+  import('@capacitor/status-bar').then(({ StatusBar, Style }) => {
+    StatusBar.setBackgroundColor({ color: '#f8f6f3' }).catch(() => {});
+    StatusBar.setStyle({ style: Style.Light }).catch(() => {});
+    StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+  }).catch(() => {});
+}
+
 // No-op en web (PWA en navegador) - solo pide permiso y arranca OneSignal
 // dentro del shell nativo de Capacitor. Ver src/lib/pushNotifications.js.
 initPushNotifications()
