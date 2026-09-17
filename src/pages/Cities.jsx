@@ -297,6 +297,16 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
       else await base44.entities.ItineraryDay.create({ city_id: cityId, trip_id: tripId, date: dayDate, title: '', ...payload, order: 0, trip_members: trip.members });
       queryClient.invalidateQueries({ queryKey: ['itineraryDays', tripId] });
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+    } catch (e) {
+      // José (17 sep 2026) — revisión de seguridad: handleAddNote/handleDeleteNote/
+      // handleSaveNote actualizan notesList de forma optimista ANTES de llamar
+      // aquí, y esta función no tenía catch — si el guardado fallaba (p. ej. rls
+      // de ItineraryDay rechazando a un Lector, ver hallazgo de hoy), la nota
+      // seguía viéndose en pantalla como si se hubiera guardado, sin ningún
+      // aviso, hasta la siguiente recarga. Se revierte al contenido real ya
+      // persistido y se avisa, en vez de dejar el estado local mintiendo.
+      setNotesList(parseNotes(day?.content));
+      toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' });
     } finally { setSavingNotes(false); }
   };
 
@@ -312,6 +322,10 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
       else await base44.entities.ItineraryDay.create({ city_id: cityId, trip_id: tripId, date: dayDate, title: titleVal, content: '', order: 0, trip_members: trip.members });
       queryClient.invalidateQueries({ queryKey: ['itineraryDays', tripId] });
       setTitleEditing(false);
+    } catch (e) {
+      // Mismo motivo que saveNotes de arriba.
+      setTitleVal(day?.title || '');
+      toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' });
     } finally {
       setSavingTitle(false);
     }
