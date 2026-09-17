@@ -24,7 +24,14 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  */
 Deno.serve(async (req) => {
   try {
-    const key = Deno.env.get("VITE_ONESIGNAL_APP_ID") || "";
+    // José (17 sep 2026) — confirmado en vivo tras publicar: la función
+    // desplegaba bien pero devolvía appId vacío. Causa: ONESIGNAL_APP_ID (sin
+    // prefijo VITE_) es el nombre real del secreto ya guardado en Base44 —
+    // es el mismo App ID que createNotification/entry.ts usa para mandar
+    // pushes por la REST API de OneSignal (ver ahí, línea 76). VITE_
+    // ONESIGNAL_APP_ID nunca se llegó a crear como secreto aparte; se deja
+    // como fallback por si en algún momento se añade con ese otro nombre.
+    const key = Deno.env.get("ONESIGNAL_APP_ID") || Deno.env.get("VITE_ONESIGNAL_APP_ID") || "";
     return Response.json({ appId: key });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
