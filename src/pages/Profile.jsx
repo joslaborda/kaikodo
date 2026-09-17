@@ -492,6 +492,7 @@ export default function Profile() {
 
   // ── Colección unificada (guardados + creados) ──
   const [collectionFilter, setCollectionFilter] = useState('saved'); // saved | mine
+  const [showSpotTripPicker, setShowSpotTripPicker] = useState(false);
   const [openSpot, setOpenSpot] = useState(null);
   const [countryFilter, setCountryFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -807,10 +808,36 @@ export default function Profile() {
                   <div className="bg-card border border-dashed border-border rounded-2xl text-center py-8 px-5">
                     <p className="text-sm font-semibold text-foreground mb-1.5">{t('profile.createdEmptyTitle')}</p>
                     <p className="text-xs text-muted-foreground mb-4 leading-relaxed">{t('profile.createdEmptyBody')}</p>
-                    <Link to={createPageUrl('TripsList')}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-full">
-                      <CirclePlus className="w-3.5 h-3.5" />{t('profile.createSpotCta')}
-                    </Link>
+                    {/* José (16 sep 2026): "manda a TripsList, no actúa como
+                        en Spots" -- tenía razón, un spot necesita un viaje
+                        al que pertenecer y mandar a la lista general sin
+                        más no es "crear". Si tiene viajes, elige uno aquí
+                        mismo y va directo a esa pantalla de Spots lista
+                        para buscar/crear; si no tiene ninguno, ahí sí hace
+                        falta crear un viaje primero. */}
+                    {myTrips.length > 0 ? (
+                      <div className="relative inline-block">
+                        <button onClick={() => setShowSpotTripPicker(v => !v)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-full">
+                          <CirclePlus className="w-3.5 h-3.5" />{t('profile.createSpotCta')}
+                        </button>
+                        {showSpotTripPicker && (
+                          <div className="absolute z-20 top-full mt-1.5 left-1/2 -translate-x-1/2 w-52 bg-card border border-border rounded-xl shadow-lg overflow-hidden text-left">
+                            {myTrips.map(tr => (
+                              <Link key={tr.id} to={createPageUrl('Restaurants') + `?trip_id=${tr.id}`}
+                                className="block px-3 py-2 text-xs text-foreground hover:bg-secondary/40 border-b border-border last:border-0">
+                                {tr.name}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <Link to={createPageUrl('TripsList')}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-xs font-semibold rounded-full">
+                        <CirclePlus className="w-3.5 h-3.5" />{t('profile.createTripFirstCta')}
+                      </Link>
+                    )}
                   </div>
                 ) : (
                   <div className="bg-card border border-border rounded-2xl text-center py-8">

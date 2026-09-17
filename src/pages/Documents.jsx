@@ -218,7 +218,15 @@ export default function Documents() {
   const { data: tickets = [] } = useQuery({
     queryKey: ['tickets', tripId],
     queryFn: () => base44.entities.Ticket.filter({ trip_id: tripId }, '-date'),
-    enabled: !!tripId, staleTime: 0,  // always fresh so new members see docs immediately
+    // José (17 sep 2026) — revisión de seguridad: con el cache persistido en
+    // localStorage (kodo-query-cache), staleTime:0 solo no bastaba para que
+    // esta pantalla mostrase SIEMPRE la lista real nada más montar — la
+    // hidratación del cache persistido pintaba los datos viejos primero y el
+    // refetch por staleness podía tardar en sustituirlos. refetchOnMount:
+    // 'always' fuerza la petición de red en cuanto se monta, sin depender de
+    // ese cálculo de staleness (mismo patrón ya usado para la query 'trip'
+    // en Home.jsx).
+    enabled: !!tripId, staleTime: 0, refetchOnMount: 'always',  // always fresh so new members see docs immediately, and removed members stop seeing them
   });
 
   // Deep-link desde una notificación (bell in-app, o recordatorio local de

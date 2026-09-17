@@ -231,7 +231,13 @@ export default function Home() {
       });
     },
     enabled: !!tripId && !!currentUserEmail,
-    staleTime: 30000,
+    // José (17 sep 2026) — revisión de seguridad: mismo problema que
+    // Documents.jsx (ver comentario ahí) pero en la tarjeta "Hoy" de Home —
+    // un documento ya no accesible (viaje abandonado/expulsión) seguía
+    // apareciendo aquí tras recargar porque el cache persistido se pintaba
+    // antes de que venciera el staleTime de 30s. refetchOnMount:'always'
+    // fuerza la red en cada montaje, mismo patrón que la query 'trip'.
+    staleTime: 30000, refetchOnMount: 'always',
   });
   const { data: allSpots = [] } = useQuery({ queryKey: ['spots', tripId], queryFn: () => base44.entities.Spot.filter({ trip_id: tripId }), enabled: !!tripId, staleTime: 30000 });
   const { data: tripMessages = [] } = useQuery({ queryKey: ['tripMessages', tripId], queryFn: () => base44.entities.TripMessage.filter({ trip_id: tripId }), enabled: !!tripId, staleTime: 10000, refetchInterval: 30000 });
