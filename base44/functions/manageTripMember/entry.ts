@@ -50,7 +50,7 @@ const SYNCED_ENTITIES = [
 // nada al cambiar el rol de alguien (action === "setRole") — así que
 // degradar a un miembro a "viewer" no le quitaba permisos de escritura
 // hasta que además lo expulsaran del viaje.
-const ROLE_AWARE_ENTITIES = ["City", "Expense"];
+const ROLE_AWARE_ENTITIES = ["City", "Expense", "ItineraryDay"];
 
 function computeEditors(members: string[], createdBy: string, roles: Record<string, string>): string[] {
   const createdByNorm = norm(createdBy);
