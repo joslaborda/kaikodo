@@ -36,7 +36,7 @@ const SYNCED_ENTITIES = [
 // -- entidades donde además de trip_members hace falta trip_editors (quién
 // NO es viewer). Un miembro que se une con rol "viewer" no debería poder
 // escribir en el contenido del viaje desde el minuto uno.
-const ROLE_AWARE_ENTITIES = ["City", "Expense"];
+const ROLE_AWARE_ENTITIES = ["City", "Expense", "ItineraryDay"];
 
 function norm(s: unknown): string {
   return typeof s === "string" ? s.trim().toLowerCase() : "";
