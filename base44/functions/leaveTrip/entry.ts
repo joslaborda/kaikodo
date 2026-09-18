@@ -33,7 +33,7 @@ const SYNCED_ENTITIES = [
 ];
 
 // Ver el mismo comentario en manageTripMember/entry.ts y syncTripMembers.js.
-const ROLE_AWARE_ENTITIES = ["City", "Expense"];
+const ROLE_AWARE_ENTITIES = ["City", "Expense", "ItineraryDay"];
 
 function norm(s: unknown): string {
   return typeof s === "string" ? s.trim().toLowerCase() : "";
