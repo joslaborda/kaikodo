@@ -29,7 +29,7 @@ const SYNCED_ENTITIES = [
   "City", "Expense", "Ticket", "TripMessage", "DiaryEntry",
   "PackingItem", "Spot", "ItineraryDay", "TodoItem", "UsefulInfo",
 ];
-const ROLE_AWARE_ENTITIES = ["City", "Expense"];
+const ROLE_AWARE_ENTITIES = ["City", "Expense", "ItineraryDay"];
 
 function norm(s: unknown): string {
   return typeof s === "string" ? s.trim().toLowerCase() : "";
