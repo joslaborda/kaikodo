@@ -427,7 +427,7 @@ export default function PreTripTab({ trip, cities, packingItems, documents, myPr
             <Users className="w-4 h-4" />{t('pretrip.travelers')}
           </p>
         </div>
-        <MemberAvatarRow trip={trip} profiles={profiles} onInvite={onInvite} currentUserEmail={currentUserEmail} />
+        <MemberAvatarRow trip={trip} profiles={profiles} onInvite={onInvite} currentUserEmail={currentUserEmail} tripId={tripId} />
       </div>
     </div>
   );

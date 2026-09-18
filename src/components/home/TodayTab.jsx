@@ -171,7 +171,7 @@ const handleUpdateItemTime = async (item, time) => {
       )}
 
       <div className="bg-card rounded-2xl border border-border overflow-hidden">
-        <MemberAvatarRow trip={trip} profiles={profiles} onInvite={onInvite} currentUserEmail={currentUserEmail} />
+        <MemberAvatarRow trip={trip} profiles={profiles} onInvite={onInvite} currentUserEmail={currentUserEmail} tripId={tripId} />
       </div>
     </div>
   );
