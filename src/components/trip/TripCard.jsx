@@ -78,7 +78,11 @@ export function HeroTripCard({ trip, cities = [] }) {
     : null;
 
   return (
-    <Link to={createPageUrl(`Home?trip_id=${trip.id}`)}>
+    // José (18 sep 2026, en vivo): con 2 viajes activos las tarjetas salían
+    // pegadas -- Link renderiza como <a>, display:inline por defecto, y el
+    // margin-top que le da space-y-4 en TripsList.jsx no hace nada en un
+    // elemento inline. block lo arregla sin tocar el layout interno.
+    <Link to={createPageUrl(`Home?trip_id=${trip.id}`)} className="block">
       <div className="rounded-2xl overflow-hidden border border-border hover:shadow-lg transition-shadow">
         <div className="h-44 relative overflow-hidden" style={{background:"var(--kodo-hero-bg)"}}>
           <img src={coverImage} alt={trip.name}
@@ -143,7 +147,7 @@ export default function TripCard({ trip, cities = [] }) {
       : t('trip.statusActive');
 
   return (
-    <Link to={createPageUrl(`Home?trip_id=${trip.id}`)}>
+    <Link to={createPageUrl(`Home?trip_id=${trip.id}`)} className="block">
       <div className={`bg-card border border-border rounded-2xl p-3 flex items-center gap-3 transition-colors relative shadow-sm ${isPast ? 'opacity-65' : ''}`}>
         <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-secondary flex items-center justify-center text-2xl">
           <img src={coverImage} alt={trip.name}
