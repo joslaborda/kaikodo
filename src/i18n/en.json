@@ -1193,7 +1193,9 @@
     "block": {
       "visited": "Visited",
       "now": "Now",
-      "next": "Upcoming"
+      "next": "Upcoming",
+      "addHotel": "+ Add accommodation",
+      "stayingAt": "Staying at {{name}}"
     },
     "day": {
       "time": "Time",
@@ -1512,7 +1514,7 @@
       "police": "Police",
       "ambulance": "Ambulance",
       "fire": "Fire brigade",
-      "general": "General",
+      "general": "Emergency",
       "noInfo": "We don't have emergency information for this country yet",
       "header": "Emergencies · {{flag}} {{country}}",
       "embassyOf": "Embassy of {{home}} in {{country}}",
