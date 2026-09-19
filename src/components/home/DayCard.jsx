@@ -340,17 +340,26 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
 
   return (
     <div className={`bg-card rounded-2xl border overflow-hidden ${isToday_ ? 'border-orange-200' : 'border-border'}`}>
+      {/* José (18 sep 2026, en vivo): esta fila es un desplegable pero
+          nadie lo nota -- "a menos que sepas que le puedes dar, no pasa
+          nada". El chevron ya estaba, pero pequeño y suelto; ahora tiene
+          más tamaño, un círculo de fondo que lo hace leerse como un
+          control real, y algo más de aire vertical en toda la fila. */}
       <button onClick={() => setOpen(o => !o)}
-        className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${isToday_ ? 'bg-orange-50 hover:bg-orange-100/50' : 'bg-secondary/30 hover:bg-secondary/50'}`}>
+        className={`w-full flex items-center justify-between px-4 py-3.5 transition-colors ${isToday_ ? 'bg-orange-50 hover:bg-orange-100/50' : 'bg-secondary/30 hover:bg-secondary/50'}`}>
         <div className="flex items-center gap-3 min-w-0">
           <span className={`text-xs font-medium uppercase tracking-wider shrink-0 ${isToday_ ? 'text-primary' : 'text-muted-foreground'}`}>{label}</span>
           <span className="text-sm font-medium text-foreground truncate">{city?.name}</span>
           {dateStr && <span className="text-xs text-muted-foreground shrink-0">{format(parseISO(dateStr), 'dd MMM', { locale: dateLocale })}</span>}
         </div>
-        {isToday_ && weather && (
-          <span className="inline-flex items-center gap-1 shrink-0 mr-1">{(() => { const I = WMO_ICON[weather.code] || Thermometer; return <I className="w-3.5 h-3.5 text-muted-foreground" />; })()}<span className="text-xs font-medium text-foreground">{weather.temp}°</span></span>
-        )}
-        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
+        <div className="flex items-center gap-2 shrink-0">
+          {isToday_ && weather && (
+            <span className="inline-flex items-center gap-1 shrink-0 mr-1">{(() => { const I = WMO_ICON[weather.code] || Thermometer; return <I className="w-3.5 h-3.5 text-muted-foreground" />; })()}<span className="text-xs font-medium text-foreground">{weather.temp}°</span></span>
+          )}
+          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full ${isToday_ ? 'bg-orange-100' : 'bg-secondary'}`}>
+            {open ? <ChevronUp className="w-4 h-4 text-foreground" /> : <ChevronDown className="w-4 h-4 text-foreground" />}
+          </span>
+        </div>
       </button>
 
       {(() => {

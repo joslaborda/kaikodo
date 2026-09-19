@@ -223,18 +223,25 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
             // se queda solo el color de fondo + degradado (nunca un hueco roto).
             e.currentTarget.style.display = 'none';
           }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,.75) 0%, rgba(0,0,0,.15) 100%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,.8) 0%, rgba(0,0,0,.3) 100%)' }} />
         {countryMeta?.flag && (
           <div style={{ position: 'absolute', top: 14, right: 16, fontSize: 32, zIndex: 1 }}>{countryMeta.flag}</div>
         )}
+        {/* José (18 sep 2026, en vivo saliendo hacia León): "Hoy es el día"
+            no se leía, y España (subtítulo) tampoco -- el degradado se
+            queda casi transparente hacia abajo (15% negro) y con fotos
+            claras el texto blanco/naranja pierde el contraste. text-shadow
+            es la forma estándar de garantizar legibilidad de texto sobre
+            una foto variable sin depender de lo oscura que sea esa foto en
+            concreto -- las tres líneas lo llevan ahora. */}
         <div style={{ position: 'relative', zIndex: 1, padding: '16px 16px 18px' }}>
-          <p style={{ fontSize: 10, fontWeight: 500, color: 'var(--kodo-hero-eyebrow)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+          <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--kodo-hero-eyebrow)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8, textShadow: '0 1px 4px rgba(0,0,0,.9)' }}>
             {isDeparture ? t('home.departure.today') : t('home.departure.tomorrow')}
           </p>
-          <p style={{ fontSize: 22, fontWeight: 500, color: 'white', lineHeight: 1.2, marginBottom: 6 }}>
+          <p style={{ fontSize: 22, fontWeight: 600, color: 'white', lineHeight: 1.2, marginBottom: 6, textShadow: '0 1px 6px rgba(0,0,0,.85)' }}>
             {heroHeadline}<br/>{t('home.inicio.awaits')}
           </p>
-          <p style={{ fontSize: 11, color: 'rgba(255,255,255,.55)' }}>{heroSubtitle}</p>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,.85)', textShadow: '0 1px 4px rgba(0,0,0,.9)' }}>{heroSubtitle}</p>
         </div>
       </div>
 
