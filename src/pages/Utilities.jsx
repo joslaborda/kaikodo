@@ -926,11 +926,18 @@ function EmergencyContent({ country, homeCountry, secondNationality, meta, activ
 
   // loading/data handled inline below
 
+  // José (18 sep 2026, en vivo saliendo hacia León): el 112 -- el número
+  // general de emergencias, el que de verdad importa -- se ocultaba entero
+  // en España y en cualquier país con policía/ambulancia/bomberos propios,
+  // porque antes solo se mostraba `emergency_general` como reserva cuando
+  // NO había `police`. Ahora va siempre el primero de la lista cuando
+  // existe, y el resto de números específicos se filtran para no repetir
+  // el mismo número dos veces (varios países solo tienen el 112 para todo).
   const numbers = data ? [
-    data.police && { label:t('utilities.emerg.police'), number:data.police, Icon: Shield, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/30' },
-    data.ambulance && data.ambulance !== data.police && { label:t('utilities.emerg.ambulance'), number:data.ambulance, Icon: Cross, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30' },
-    data.fire && data.fire !== data.police && data.fire !== data.ambulance && { label:t('utilities.emerg.fire'), number:data.fire, Icon: Flame, color: 'text-primary', bg: 'bg-orange-50 dark:bg-orange-950/30' },
-    data.emergency_general && !data.police && { label:t('utilities.emerg.general'), number:data.emergency_general, Icon: ShieldAlert, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30' },
+    data.emergency_general && { label:t('utilities.emerg.general'), number:data.emergency_general, Icon: ShieldAlert, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30' },
+    data.police && data.police !== data.emergency_general && { label:t('utilities.emerg.police'), number:data.police, Icon: Shield, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/30' },
+    data.ambulance && data.ambulance !== data.police && data.ambulance !== data.emergency_general && { label:t('utilities.emerg.ambulance'), number:data.ambulance, Icon: Cross, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30' },
+    data.fire && data.fire !== data.police && data.fire !== data.ambulance && data.fire !== data.emergency_general && { label:t('utilities.emerg.fire'), number:data.fire, Icon: Flame, color: 'text-primary', bg: 'bg-orange-50 dark:bg-orange-950/30' },
   ].filter(Boolean) : [];
 
   return (

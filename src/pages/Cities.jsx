@@ -1141,6 +1141,34 @@ function CityBlock({ city, idx, total, allDocs, allSpots, itineraryDays, tripId,
           : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />}
       </button>
 
+      {/* José (19 sep 2026, en vivo): el alojamiento es de toda la parada,
+          no de un día -- por eso el control vive aquí, en la cabecera de la
+          ciudad, no dentro de un día concreto. Usa la misma búsqueda por
+          city_id que ya usa Home (hotelForCity), así que si lo añades aquí
+          o desde el mini-mapa de un día de Home es exactamente el mismo
+          alojamiento -- y en cuanto cambias de parada, si esa ciudad nueva
+          no tiene uno, vuelve a aparecer el link de añadir. Visible aunque
+          el bloque esté plegado, porque es información de la parada, no de
+          un día suelto de dentro. */}
+      {(() => {
+        const hotelSpot = allSpots.find(s => s.city_id === city.id && s.type === 'hotel');
+        return (
+          <div className="flex items-center gap-1.5 pl-9 -mt-1 mb-1">
+            <Hotel className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            {hotelSpot ? (
+              <span className="text-xs text-muted-foreground truncate">{t('cities.block.stayingAt', { name: hotelSpot.title })}</span>
+            ) : (
+              <Link
+                to={createPageUrl('Restaurants') + '?trip_id=' + tripId + '&open_create=hotel&city_id=' + city.id}
+                className="text-xs text-primary font-medium hover:text-primary/80 transition-colors"
+              >
+                {t('cities.block.addHotel')}
+              </Link>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Días sueltos debajo — mismas cards que ciudad única */}
       {open && (
         <div className="flex flex-col gap-2 mt-2">
@@ -1444,27 +1472,48 @@ export default function Cities() {
                   <p className="text-xs text-primary">{t('cities.editTripForDates')}</p>
                 </div>
               );
-              return cityDays.map(dateStr => (
-                <DayRow
-                  key={dateStr}
-                  day={daysByDate[dateStr] || null}
-                  dateStr={dateStr}
-                  allDocs={allDocs}
-                  allSpots={allSpots}
-                  tripId={tripId}
-                  cityId={city.id}
-                  isToday_={dateStr === todayStr}
-                  isTomorrow_={dateStr === tomorrowStr}
-                  queryClient={queryClient}
-                  defaultOpen={dateStr === todayStr}
-                  trip={trip}
-                  cities={cities}
-                  itineraryDays={itineraryDays}
-                  profiles={profiles}
-                  userId={userId}
-                  currentUserEmail={currentUserEmail}
-                />
-              ));
+              // José (19 sep 2026): mismo control de alojamiento por parada
+              // que CityBlock (ver comentario ahí) -- una sola ciudad no
+              // tiene cabecera propia, así que va justo encima de los días.
+              const hotelSpot = allSpots.find(s => s.city_id === city.id && s.type === 'hotel');
+              return (
+                <>
+                  <div className="flex items-center gap-1.5 px-4 pb-2">
+                    <Hotel className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    {hotelSpot ? (
+                      <span className="text-xs text-muted-foreground truncate">{t('cities.block.stayingAt', { name: hotelSpot.title })}</span>
+                    ) : (
+                      <Link
+                        to={createPageUrl('Restaurants') + '?trip_id=' + tripId + '&open_create=hotel&city_id=' + city.id}
+                        className="text-xs text-primary font-medium hover:text-primary/80 transition-colors"
+                      >
+                        {t('cities.block.addHotel')}
+                      </Link>
+                    )}
+                  </div>
+                  {cityDays.map(dateStr => (
+                    <DayRow
+                      key={dateStr}
+                      day={daysByDate[dateStr] || null}
+                      dateStr={dateStr}
+                      allDocs={allDocs}
+                      allSpots={allSpots}
+                      tripId={tripId}
+                      cityId={city.id}
+                      isToday_={dateStr === todayStr}
+                      isTomorrow_={dateStr === tomorrowStr}
+                      queryClient={queryClient}
+                      defaultOpen={dateStr === todayStr}
+                      trip={trip}
+                      cities={cities}
+                      itineraryDays={itineraryDays}
+                      profiles={profiles}
+                      userId={userId}
+                      currentUserEmail={currentUserEmail}
+                    />
+                  ))}
+                </>
+              );
             })()}
           </div>
         ) : (

@@ -1109,7 +1109,11 @@ export default function Restaurants() {
     onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
   });
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Spot.update(id, data),
+    // José (19 sep 2026): guarda única para cualquier edición de spot -- si
+    // alguien cambia el tipo a 'hotel' (o ya lo era y se toca otra cosa),
+    // se limpia assigned_date aquí, en el único sitio por el que pasa
+    // cualquier guardado, en vez de tener que acordarse en cada llamador.
+    mutationFn: ({ id, data }) => base44.entities.Spot.update(id, data.type === 'hotel' ? { ...data, assigned_date: null, day_order: null, assigned_time: null } : data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['spots', tripId] }),
   
     onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
@@ -1262,21 +1266,28 @@ export default function Restaurants() {
         title: form.title, type: form.type, notes: form.notes,
         address: form.address, lat: form.lat, lng: form.lng,
         visibility: form.visibility, source: 'manual',
-        // Si se llegó aquí desde "+ Añadir Spot" de un día concreto en Ruta,
-        // el día ya viene decidido — se asigna directamente, sin pasar por
-        // el modal de "asignar fecha" de siempre.
-        ...(assignDateParam ? { assigned_date: assignDateParam } : {}),
+        // José (19 sep 2026, en vivo): un alojamiento no es un plan de un
+        // día -- es donde te hospedas mientras dura la parada entera en esa
+        // ciudad. hotelForCity() (Home) ya lo busca solo por city_id, sin
+        // mirar ningún día, así que asignarle uno aquí no ayudaba a nada y
+        // además lo duplicaba en el timeline de ESE día como si fuera un
+        // plan más. Si se llegó desde "+ Añadir Spot" de un día concreto en
+        // Ruta pero el tipo es 'hotel' (se puede cambiar el tipo dentro del
+        // propio formulario), se ignora ese día a propósito.
+        ...(assignDateParam && form.type !== 'hotel' ? { assigned_date: assignDateParam } : {}),
       }));
       setLastSavedId(created?.id);
       setShowCreate(false);
       setPinPrefill(null);
       showToastFor({ title: form.title }, city);
-      if (assignDateParam) {
+      if (assignDateParam && form.type !== 'hotel') {
         // Vuelve a Ruta en vez de quedarse en Spots — es donde se pidió el
         // spot, y ya tiene el día asignado, así que no hace falta el modal
         // manual de asignar fecha.
         navigate(createPageUrl('Cities') + '?trip_id=' + tripId + (cityIdFromParam ? '&city_id=' + cityIdFromParam : ''));
-      } else if (created?.id) {
+      } else if (created?.id && form.type !== 'hotel') {
+        // Un alojamiento tampoco pasa por el modal de "asignar fecha" de
+        // después de crear — mismo motivo que arriba, nunca lleva día.
         setAssignDateSpot(created);
       }
       notifyMembers('spot_added', '', form.title, { spotId: created?.id, spotDate: created?.assigned_date });
