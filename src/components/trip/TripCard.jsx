@@ -42,7 +42,8 @@ function formatDateRange(trip) {
 
 function getRouteSubtitle(trip, cities) {
   if (cities.length > 0)
-    return [...cities].sort((a,b)=>(a.order??0)-(b.order??0)).map(c=>c.name).join(' · ');
+    // Por fecha (no solo por `order`): las paradas añadidas desde Ajustes no lo tenían.
+    return [...cities].sort((a,b)=>(a.start_date||'9999').localeCompare(b.start_date||'9999') || (a.order??0)-(b.order??0)).map(c=>c.name).join(' · ');
   return trip.country || trip.destination || '';
 }
 
