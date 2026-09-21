@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { differenceInDays, parseISO, isValid } from 'date-fns';
 import { isDocForUser } from '@/lib/docHolders';
 
+import { useTripDocs } from '@/hooks/useTripDocs';
 /**
  * TripAlerts — componente sin UI propia.
  * Calcula cuántos transportes salen hoy dentro de las próximas 4h y lo reporta
@@ -18,12 +17,7 @@ export default function TripAlerts({ tripId, cities, trip, currentUserEmail, onU
     return () => clearInterval(id);
   }, []);
 
-  const { data: tickets = [] } = useQuery({
-    queryKey: ['tickets', tripId],
-    queryFn: () => base44.entities.Ticket.filter({ trip_id: tripId }),
-    enabled: !!tripId,
-    staleTime: 60000,
-  });
+  const { data: tickets = [] } = useTripDocs(tripId);
 
   useEffect(() => {
     const today = new Date();
