@@ -56,6 +56,18 @@ Spots ───────┘            │
   `user_id`. Cualquier comprobación de "quién lo subió" en el servidor usa esos
   ids, no el email.
 
+- **Billetes sin red y sin archivo** (el momento de "¿dónde está?"):
+  - Los archivos de los billetes de ayer a dentro de 4 días se guardan en el móvil
+    (IndexedDB, `lib/ticketCache.js`, `prefetchTicketFiles` al abrir Home con red;
+    primero los míos, tope de 12 archivos y 40 MB por pasada, respeta el ahorro de
+    datos). `resolveDocViewUrl` abre primero la copia local y solo después pide la
+    URL firmada; sin copia ni red, avisa. Se borran al cerrar sesión.
+  - El próximo billete (Hoy y Salida) aparece **aunque no tenga archivo** y ofrece
+    "Subir billete" en un toque; en la hoja de detalle se puede subir, **cambiar** el
+    archivo o abrir el formulario completo ("Editar documento", que reutiliza
+    `Documents?doc_id=`). Una sola implementación de la subida:
+    `hooks/useDocFileUpload.jsx`.
+
 ### Spots
 - Se guardan en Spots y salen en el mapa de Spots.
 - Con día asignado (`assigned_date`) entran además en Ruta y en los mapas de
@@ -76,6 +88,8 @@ Spots ───────┘            │
   ("Quitar alojamiento").
 
 ### Ruta = tu plan
+- Un documento o spot cuya parada se **borra o se acorta** no desaparece: cae en la
+  primera parada que sí cubre su día (`lib/dayDocs.js`, con pruebas).
 - Muestra, por día: tus documentos + los de **todo el grupo** + tus spots +
   notas.
 - Los documentos de **otros viajeros** de ese día van **plegados** en
