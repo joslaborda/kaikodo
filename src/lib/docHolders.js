@@ -16,10 +16,18 @@ export function docHolders(doc) {
   return doc?.created_by ? [doc.created_by] : [];
 }
 
+// José (21 sep 2026): "Todos" guarda además el marcador '*' en used_by. Una reserva de
+// hotel para "todo el grupo" seguía siéndolo cuando se unía alguien después (sin
+// esto, el amigo que entra el martes veía la reserva "de otros"). '*' = todos los
+// miembros del viaje, los de ahora y los que vengan.
+export const ALL_MEMBERS = '*';
+export const withoutAllMarker = (list = []) => list.filter(e => e !== ALL_MEMBERS);
+
 export function isDocForUser(doc, email) {
   const me = normalizeEmail(email);
   if (!me) return false;
   const holders = docHolders(doc);
+  if (holders.includes(ALL_MEMBERS)) return true;
   // Un documento sin used_by ni created_by (importado o creado por otra vía) no
   // tiene dueño conocido: se trata como de todos, nunca como de nadie (así no
   // queda fuera de la Ruta y del billete destacado de todo el mundo).
@@ -46,7 +54,7 @@ export function displayNameFor(email, profiles) {
 // Devuelve '' si el documento es solo tuyo (nada que aclarar).
 export function otherHoldersLabel(doc, profiles, myEmail, max = 2) {
   const me = normalizeEmail(myEmail);
-  const others = docHolders(doc).filter(e => normalizeEmail(e) !== me);
+  const others = withoutAllMarker(docHolders(doc)).filter(e => normalizeEmail(e) !== me);
   if (!others.length) return '';
   const names = others.map(e => displayNameFor(e, profiles));
   return names.length > max ? names.slice(0, max).join(', ') + ' +' + (names.length - max) : names.join(', ');
@@ -56,6 +64,7 @@ export function otherHoldersLabel(doc, profiles, myEmail, max = 2) {
 // (p. ej. un autobús para todos, la reserva del hotel).
 export function isGroupWideDoc(doc, members = []) {
   if (!members.length) return false;
+  if (docHolders(doc).includes(ALL_MEMBERS)) return true;
   const holders = docHolders(doc).map(normalizeEmail);
   if (holders.length === 0) return true; // sin dueño conocido = de todos
   return members.every(m => holders.includes(normalizeEmail(m)));
@@ -75,7 +84,7 @@ export function holdersSummary(doc, profiles, myEmail, members = [], labels = {}
   if (isGroupWideDoc(doc, members) && members.length > 1) return labels.everyone || '';
   const me = normalizeEmail(myEmail);
   if (docHolders(doc).length === 0) return labels.everyone || '';
-  return docHolders(doc)
+  return withoutAllMarker(docHolders(doc))
     .map(e => (normalizeEmail(e) === me ? (labels.you || e) : displayNameFor(e, profiles)))
     .join(', ');
 }

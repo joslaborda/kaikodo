@@ -174,6 +174,19 @@ export function initPushNotifications() {
           console.log('[push] Inicializando OneSignal…');
           OneSignal.initialize(appId);
           OneSignal.Notifications.requestPermission(true);
+          // José (21 sep 2026): tocar un aviso ("Tren · sale en 4 h") solo abría la app
+          // donde se hubiera quedado. Ahora lleva al Home de ESE viaje, donde está el
+          // billete destacado. Todo va envuelto: si la API del plugin cambia, tocar un
+          // aviso sigue abriendo la app como antes.
+          try {
+            OneSignal.Notifications.addEventListener?.('click', (event) => {
+              try {
+                const data = event?.notification?.additionalData || {};
+                const tripId = data.tripId || data.trip_id;
+                if (tripId) window.location.assign('/Home?trip_id=' + encodeURIComponent(tripId));
+              } catch { /* nada */ }
+            });
+          } catch { /* nada */ }
     });
 }
 
