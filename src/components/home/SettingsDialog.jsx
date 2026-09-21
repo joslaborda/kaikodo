@@ -17,6 +17,7 @@ import { normalizeCountry, getCountryLabel } from '@/lib/countryConfig';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
 import { AlertTriangle } from 'lucide-react';
+import { cityDateSpan, syncTripFromCities } from '@/lib/tripDates';
 import { getOrCreateTripInviteLink, regenerateTripInviteLink, buildTripInviteLinkUrl } from '@/lib/inviteLinks';
 
 // Solo se validaba end_date >= start_date de CADA ciudad por separado — nada
@@ -127,15 +128,19 @@ function SettingsDialog({
   // opciones para elegir en vez de tener que teclearlo bien a pelo.
   const existingCityNames = [...new Set((cities || []).map(c => c.name).filter(Boolean))];
 
+  // Con paradas fechadas, las fechas del viaje se calculan solas (tripDates.js).
+  const stopsSpan = cityDateSpan(cities);
+  const datesFromStops = !!stopsSpan;
+
   // Init form from trip data
   useEffect(() => {
     if (open && trip) {
       setName(trip.name || '');
-      setStartDate(trip.start_date || '');
-      setEndDate(trip.end_date || '');
+      setStartDate(stopsSpan?.start || trip.start_date || '');
+      setEndDate(stopsSpan?.end || trip.end_date || '');
       setEditingCity(null);
     }
-  }, [open, trip]);
+  }, [open, trip, stopsSpan?.start, stopsSpan?.end]);
 
   const totalDays = startDate && endDate
     ? differenceInDays(parseISO(endDate), parseISO(startDate)) + 1
@@ -154,8 +159,8 @@ function SettingsDialog({
     try {
       await base44.entities.Trip.update(tripId, {
         name: name.trim(),
-        start_date: startDate,
-        end_date: endDate,
+        // Con paradas fechadas las fechas no se tocan desde aquí (se calculan).
+        ...(datesFromStops ? {} : { start_date: startDate, end_date: endDate }),
       });
             // Avisa al resto de miembros si el nombre o las fechas cambian de
             // verdad -- antes esto era un cambio silencioso, nadie se enteraba
@@ -257,6 +262,7 @@ function SettingsDialog({
                                   });
                       }
             }
+      await syncTripFromCities(tripId, queryClient);
       queryClient.invalidateQueries({ queryKey: ['cities', tripId] });
       closeCityEdit();
     } catch (e) {
@@ -274,6 +280,7 @@ function SettingsDialog({
       const days = await base44.entities.ItineraryDay.filter({ city_id: cityId });
       await Promise.all(days.map(d => base44.entities.ItineraryDay.delete(d.id)));
       await base44.entities.City.delete(cityId);
+      await syncTripFromCities(tripId, queryClient);
       queryClient.invalidateQueries({ queryKey: ['cities', tripId] });
       queryClient.invalidateQueries({ queryKey: ['itineraryDays', tripId] });
       closeCityEdit();
@@ -321,6 +328,7 @@ function SettingsDialog({
         trip_members: trip.members,
         trip_editors: computeEditors(trip.members, trip),
       });
+      await syncTripFromCities(tripId, queryClient);
       queryClient.invalidateQueries({ queryKey: ['cities', tripId] });
       closeCityEdit();
     } catch (e) {
@@ -365,7 +373,7 @@ function SettingsDialog({
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground mb-1.5">{t('trip.dialog.tripDates')}</p>
-            {isAdmin ? (
+            {isAdmin && !datesFromStops ? (
               <div className="flex items-center gap-2">
                 <Input
                   type="date"
@@ -401,10 +409,13 @@ function SettingsDialog({
                 )}
               </div>
             ) : (
-              <p className="text-sm text-foreground">
-                {startDate || '—'} → {endDate || '—'}
-                {totalDays && <span className="text-xs bg-accent text-primary px-2 py-1 rounded-full font-medium ml-2">{totalDays}d</span>}
-              </p>
+              <div>
+                <p className="text-sm text-foreground">
+                  {startDate ? format(parseISO(startDate), 'dd MMM yyyy', { locale: i18n.language === 'en' ? undefined : es }) : '—'} → {endDate ? format(parseISO(endDate), 'dd MMM yyyy', { locale: i18n.language === 'en' ? undefined : es }) : '—'}
+                  {totalDays && <span className="text-xs bg-accent text-primary px-2 py-1 rounded-full font-medium ml-2">{totalDays}d</span>}
+                </p>
+                {datesFromStops && <p className="text-xs text-muted-foreground mt-1">{t('trip.dialog.datesFromStops')}</p>}
+              </div>
             )}
           </div>
         </div>
@@ -433,8 +444,10 @@ function SettingsDialog({
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground">{city.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {getCountryLabel(city.country, i18n.language)}
-                  {city.start_date && city.end_date && ` · ${format(parseISO(city.start_date), 'dd MMM', { locale: i18n.language === 'en' ? undefined : es })} – ${format(parseISO(city.end_date), 'dd MMM', { locale: i18n.language === 'en' ? undefined : es })}`}
+                  {[
+                    getCountryLabel(city.country, i18n.language),
+                    city.start_date && city.end_date ? `${format(parseISO(city.start_date), 'dd MMM', { locale: i18n.language === 'en' ? undefined : es })} – ${format(parseISO(city.end_date), 'dd MMM', { locale: i18n.language === 'en' ? undefined : es })}` : null,
+                  ].filter(Boolean).join(' · ')}
                 </p>
               </div>
               <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${editingCity === city.id ? 'rotate-180' : ''}`} />

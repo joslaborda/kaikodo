@@ -161,8 +161,10 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
   // transporte con una ubicación guardada (aeropuerto/estación buscados en
   // DocumentForm) — en el mismo orden en que ya aparecen en el timeline de
   // abajo, así el número del pin coincide con la posición de la fila.
+  // La reserva de un hotel NO es una parada: la representa el pin de alojamiento
+  // (si no, salía también como "1" encima del propio pin del hotel).
   const mapItems = timeline.filter(i =>
-    i._kind === 'spot' ? (i.lat && i.lng) : (i._kind === 'doc' && i.location_lat && i.location_lng)
+    i._kind === 'spot' ? (i.lat && i.lng) : (i._kind === 'doc' && i.category !== 'hotel' && i.location_lat && i.location_lng)
   );
 
   // Al soltar un arrastre, se reescribe TODO el orden del día de una vez —
@@ -487,7 +489,7 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
                     <p className="text-sm font-medium text-foreground truncate">{item.title || item.name || t('home.dayCard.noTitle')}</p>
                     {!isDoc && !isNote && item.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.notes}</p>}
                     {isNote && <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.content}</p>}
-                    {isDoc && !hasTime && <p className="text-xs text-muted-foreground mt-0.5">{t('home.dayCard.noTime')}</p>}
+                    {isDoc && !hasTime && <p className="text-xs text-muted-foreground mt-0.5">{(item.category || item.type) === 'hotel' ? t('home.dayCard.checkIn') : t('home.dayCard.noTime')}</p>}
                     {isDoc && !isDocForUser(item, currentUserEmail) && (() => {
                       const who = otherHoldersLabel(item, profiles, currentUserEmail);
                       return who ? <p className="text-xs text-muted-foreground mt-0.5 truncate">{t('documents.forHolders', { names: who })}</p> : null;
