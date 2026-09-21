@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
 import { scheduleTicketReminder, cancelTicketReminder, scheduleSpotReminder } from '@/lib/localReminders';
+import { isStaySpot, getCityHotel } from '@/lib/cityStay';
+import { isDocForUser, isDocInMyRoute } from '@/lib/docHolders';
 
 export default function TodayTab({ trip, cities, tripId, profiles, onInvite, currentUserEmail }) {
   const { t } = useTranslation();
@@ -37,13 +39,18 @@ export default function TodayTab({ trip, cities, tripId, profiles, onInvite, cur
   const { data: allDocs = [] } = useQuery({
     queryKey: ['allDocs', tripId],
     queryFn: () => base44.entities.Ticket.filter({ trip_id: tripId }),
-    enabled: !!tripId, staleTime: 60000,
+    // refetchOnMount:'always' — mismo patrón que la query 'documents' de Home
+    // y que ya se aplicó a 'trip': con el caché persistido en localStorage,
+    // entrar aquí pintaba primero la lista de la última vez (sin el billete
+    // que otro viajero acababa de subir) y no la refrescaba hasta pasar el
+    // staleTime.
+    enabled: !!tripId, staleTime: 60000, refetchOnMount: 'always',
   });
 
   const { data: allSpots = [] } = useQuery({
     queryKey: ['spots', tripId],
     queryFn: () => base44.entities.Spot.filter({ trip_id: tripId }),
-    enabled: !!tripId, staleTime: 30000,
+    enabled: !!tripId, staleTime: 30000, refetchOnMount: 'always',
   });
 
   const { data: itineraryDays = [] } = useQuery({
@@ -52,16 +59,19 @@ export default function TodayTab({ trip, cities, tripId, profiles, onInvite, cur
     enabled: !!tripId, staleTime: 60000,
   });
 
-  const docsForDate  = (dateStr) => allDocs.filter(d => d.date === dateStr || d.valid_from === dateStr || d.start_date === dateStr);
+  // Solo TU itinerario: lo que vas a usar tú + lo de todo el grupo (docHolders.js).
+  const docsForDate  = (dateStr) => allDocs.filter(d => (d.date === dateStr || d.valid_from === dateStr || d.start_date === dateStr) && isDocInMyRoute(d, currentUserEmail, trip?.members || []));
   const spotsForDate = (cityId, dateStr) =>
-    allSpots.filter(s => s.city_id === cityId && s.assigned_date === dateStr)
+    allSpots.filter(s => !isStaySpot(s) && s.city_id === cityId && s.assigned_date === dateStr)
       .sort((a, b) => (a.day_order ?? 999) - (b.day_order ?? 999));
   // El "hotel" no es un campo propio del viaje/ciudad — se modela como un
   // Spot type:'hotel' sin assigned_date, así vale para toda la estancia en
   // esa ciudad en vez de tener que repetirlo cada día. Si el usuario nunca
   // guardó uno, hotelForCity devuelve undefined y el mini-mapa simplemente no
   // dibuja el pin del hotel (ver TodayRouteMap).
-  const hotelForCity = (cityId) => allSpots.find(s => s.city_id === cityId && s.type === 'hotel');
+  // José (21 sep 2026): ahora vía getCityHotel (src/lib/cityStay.js), el mismo
+  // criterio para Hoy, Mañana, Salida y Ruta.
+  const hotelForCity = (cityId) => getCityHotel(allSpots, cityId);
 
   const handleReorder = async (newOrder) => {
     await Promise.all(newOrder.map((spot, idx) =>
@@ -90,7 +100,8 @@ const handleUpdateItemTime = async (item, time) => {
       // del propio dispositivo tampoco se reprogramaba desde aquí.
       if (timeIsChanging) {
         cancelTicketReminder(item.id);
-        scheduleTicketReminder({ ...item, time, trip_id: item.trip_id || tripId });
+        // Solo suena en el móvil de quien va a usar el documento.
+        if (isDocForUser(item, currentUserEmail)) scheduleTicketReminder({ ...item, time, trip_id: item.trip_id || tripId });
       }
       // Edición rápida de hora desde la fila del día (Hoy/Mañana) — mismo
       // hueco que Documents.jsx y Cities.jsx: antes no avisaba a nadie.

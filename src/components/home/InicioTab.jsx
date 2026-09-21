@@ -16,6 +16,8 @@ import { scheduleTicketReminder, cancelTicketReminder, scheduleSpotReminder } fr
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
+import { isStaySpot, getCityHotel } from '@/lib/cityStay';
+import { isDocForUser, isDocInMyRoute } from '@/lib/docHolders';
 
 export default function InicioTab({ trip, cities, documents, packingItems, profiles, tripId, onInvite, currentUserEmail }) {
   const { t } = useTranslation();
@@ -51,7 +53,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
   const { data: allSpots = [] } = useQuery({
     queryKey: ['spots', tripId],
     queryFn: () => base44.entities.Spot.filter({ trip_id: tripId }),
-    enabled: !!tripId, staleTime: 30000,
+    enabled: !!tripId, staleTime: 30000, refetchOnMount: 'always',
   });
   const { data: itineraryDays = [] } = useQuery({
     queryKey: ['itineraryDays', tripId],
@@ -60,10 +62,10 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
   });
   const departureCity = sortedCities[0];
   const hotelForDepartureCity = departureCity
-    ? allSpots.find(s => s.city_id === departureCity.id && s.type === 'hotel')
+    ? getCityHotel(allSpots, departureCity.id)
     : null;
   const departureSpots = departureCity
-    ? allSpots.filter(s => s.city_id === departureCity.id && s.assigned_date === todayStr)
+    ? allSpots.filter(s => !isStaySpot(s) && s.city_id === departureCity.id && s.assigned_date === todayStr)
         .sort((a, b) => (a.day_order ?? 999) - (b.day_order ?? 999))
     : [];
 
@@ -84,7 +86,8 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
       if (timeIsChanging) {
         cancelTicketReminder(item.id);
-        scheduleTicketReminder({ ...item, time, trip_id: item.trip_id || tripId });
+        // Solo suena en el móvil de quien va a usar el documento.
+        if (isDocForUser(item, currentUserEmail)) scheduleTicketReminder({ ...item, time, trip_id: item.trip_id || tripId });
       }
       if ((time || '') !== oldTime && time && item.visibility !== 'personal') {
         const sharedWith = item.visibility === 'selected_users'
@@ -114,7 +117,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
   const TRANSPORT_TYPES = ['flight', 'train', 'bus', 'car'];
   const todayDocs = documents.filter(d => {
     const docDate = d.date || d.valid_from || d.start_date;
-    return docDate === todayStr;
+    return docDate === todayStr && isDocInMyRoute(d, currentUserEmail, trip?.members || []);
   }).sort((a, b) => {
     // Ticket.jsonc guarda el tipo de documento en `category` (ver
     // DocumentForm.jsx), no en `type` — con `.type` (undefined en todo
@@ -127,6 +130,15 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
     return (a.time || '').localeCompare(b.time || '');
   });
 
+  // José (21 sep 2026): "cuando abro la app me interesa que salte MI billete,
+  // no el de Carlos" — si alguien sube 10 billetes individuales para un
+  // grupo de 10, a cada uno le saltaban los 10. La tarjeta de arriba
+  // (destacado + filas) usa solo los documentos que YO voy a usar
+  // (Ticket.used_by, ver src/lib/docHolders.js); los del resto del grupo
+  // siguen visibles en la tarjeta del día de abajo, donde toca buscarlos, pero
+  // ya no compiten por ser "el próximo" de esta persona.
+  const myDocs = todayDocs.filter(d => isDocForUser(d, currentUserEmail));
+
   // Destacado del día: entra en ventana 30min antes de su hora, sigue
   // activo hasta que pasa su margen de gracia (2h transporte, 1h el resto).
   // Si varios están en ventana a la vez, gana el más reciente -- así un
@@ -138,17 +150,17 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
     const toMin = (time) => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    const candidates = todayDocs.filter(d => d.time);
+    const candidates = myDocs.filter(d => d.time);
     const active = candidates.filter(c => {
       const start = toMin(c.time);
       return nowMin >= start - 30 && nowMin < start + graceOf(c.category);
     });
     if (active.length) return active.reduce((a, b) => toMin(b.time) > toMin(a.time) ? b : a);
-    return candidates.filter(c => toMin(c.time) > nowMin).sort((a, b) => toMin(a.time) - toMin(b.time))[0] || todayDocs[0] || null;
+    return candidates.filter(c => toMin(c.time) > nowMin).sort((a, b) => toMin(a.time) - toMin(b.time))[0] || myDocs[0] || null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayDocs, tick]);
+  }, [todayDocs, tick, currentUserEmail]);
 
-  const restDocs = todayDocs.filter(d => d.id !== featuredDoc?.id);
+  const restDocs = myDocs.filter(d => d.id !== featuredDoc?.id);
 
   const firstDoc = featuredDoc;
   const isTransportDoc = firstDoc && TRANSPORT_TYPES.includes(firstDoc.category);
@@ -192,7 +204,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
   // marcha y se oculta (se sigue pudiendo editar desde Utilidades). Sin
   // ningún billete con hora conocida no hay forma de saberlo, así que se
   // mantiene visible el resto del día de salida como hasta ahora.
-  const hasDepartedTransportToday = todayDocs.some(d => {
+  const hasDepartedTransportToday = myDocs.some(d => {
     if (!TRANSPORT_TYPES.includes(d.category) || !d.time) return false;
     const [h, m] = d.time.split(':').map(Number);
     return (h * 60 + m) <= nowMinutes;
@@ -235,9 +247,14 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
             una foto variable sin depender de lo oscura que sea esa foto en
             concreto -- las tres líneas lo llevan ahora. */}
         <div style={{ position: 'relative', zIndex: 1, padding: '16px 16px 18px' }}>
-          <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--kodo-hero-eyebrow)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8, textShadow: '0 1px 4px rgba(0,0,0,.9)' }}>
+          {/* José (21 sep 2026): el eyebrow en naranja claro sobre la foto no se
+              leía ni con text-shadow — el contraste depende de la foto. Ahora
+              es una píldora sólida (primary + texto blanco), legible sobre
+              cualquier imagen y en la misma familia rounded-full del resto de
+              la app. */}
+          <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, color: '#fff', background: 'hsl(var(--primary))', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 10, padding: '4px 10px', borderRadius: 999 }}>
             {isDeparture ? t('home.departure.today') : t('home.departure.tomorrow')}
-          </p>
+          </span>
           <p style={{ fontSize: 22, fontWeight: 600, color: 'white', lineHeight: 1.2, marginBottom: 6, textShadow: '0 1px 6px rgba(0,0,0,.85)' }}>
             {heroHeadline}<br/>{t('home.inicio.awaits')}
           </p>
@@ -320,6 +337,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
           onReorderSpots={handleReorderSpots}
           onUpdateItemTime={handleUpdateItemTime}
           hotelSpot={hotelForDepartureCity}
+          hideFeatured
           trip={trip}
           currentUserEmail={currentUserEmail}
           profiles={profiles}

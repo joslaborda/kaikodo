@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowRight, ChevronDown, ChevronUp, FileText, MapPin , CirclePlus, Thermometer, Route, GripVertical } from 'lucide-react';
+import { ArrowRight, ChevronDown, ChevronUp, FileText, MapPin , CirclePlus, Thermometer, Route, GripVertical, Hotel } from 'lucide-react';
 import PDFViewer from '@/components/PDFViewer';
 import SpotDetailModal from '@/components/trip/SpotDetailModal';
 import ItemDetailSheet from './ItemDetailSheet';
@@ -15,8 +15,10 @@ import { useTranslation } from 'react-i18next';
 import { toast } from '@/components/ui/use-toast';
 import { cancelTicketReminder } from '@/lib/localReminders';
 import { resolveDocViewUrl } from '@/lib/privateFiles';
+import { isStaySpot } from '@/lib/cityStay';
+import { isDocForUser, otherHoldersLabel } from '@/lib/docHolders';
 
-export default function DayCard({ label, city, docs, spots, itineraryDays, tripId, defaultOpen, onReorderSpots, dateStr, onUpdateItemTime, hotelSpot, trip, currentUserEmail, profiles }) {
+export default function DayCard({ label, city, docs, spots, itineraryDays, tripId, defaultOpen, onReorderSpots, dateStr, onUpdateItemTime, hotelSpot, hideFeatured = false, trip, currentUserEmail, profiles }) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language === 'en' ? undefined : es;
   // holidaysDB son ~120 KB: se cargan solo si hay ciudad y fecha.
@@ -94,7 +96,9 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
         content: n.text, time: n.time || null, type: 'note',
         _order: n.order ?? null,
       })));
-    const spotItems = spots.map(s => ({ ...s, _kind: 'spot', time: s.assigned_time || s.time || null, _order: s.day_order ?? null }));
+    // Un alojamiento no es un plan del día (ver src/lib/cityStay.js): aunque le
+    // llegue uno con assigned_date de antes, no entra en el timeline ni en el mapa.
+    const spotItems = spots.filter(s => !isStaySpot(s)).map(s => ({ ...s, time: s.assigned_time || s.time || null, _kind: 'spot', _order: s.day_order ?? null }));
 
     // Todo — docs, notas y spots — se puede arrastrar entre sí, tenga hora o
     // no. En cuanto arrastras cualquier cosa, esa posición se guarda de
@@ -133,13 +137,19 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
   // así un tren de hace rato no tapa la entrada de un museo que ya empezó.
   // Solo aplica a "Hoy" (isToday_) -- en "Mañana" nada está aún en ventana
   // de verdad, así que ahí todo se queda en fila pequeña, sin destacado.
+  // José (21 sep 2026): dos cambios —
+  //  · hideFeatured: la pestaña Salida (InicioTab) ya pinta su propia tarjeta
+  //    "Tu próximo tren" justo encima; sin esto el mismo billete salía dos
+  //    veces (arriba y otra vez dentro de esta tarjeta al desplegar Hoy).
+  //  · solo se destaca un documento que YO voy a usar (Ticket.used_by): el
+  //    tren de Carlos no debe saltarme a mí con su botón "Ver billete".
   const featuredDoc = useMemo(() => {
-    if (!isToday_) return null;
+    if (!isToday_ || hideFeatured) return null;
     const graceOf = (cat) => ['flight', 'train', 'bus'].includes(cat) ? 120 : 60;
     const toMin = (time) => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    const candidates = timeline.filter(i => i._kind === 'doc' && i.time && (i.file_url || i.file_uri));
+    const candidates = timeline.filter(i => i._kind === 'doc' && i.time && (i.file_url || i.file_uri) && isDocForUser(i, currentUserEmail));
     const active = candidates.filter(c => {
       const start = toMin(c.time);
       return nowMin >= start - 30 && nowMin < start + graceOf(c.category || c.type);
@@ -147,7 +157,7 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
     if (active.length) return active.reduce((a, b) => toMin(b.time) > toMin(a.time) ? b : a);
     return candidates.filter(c => toMin(c.time) > nowMin).sort((a, b) => toMin(a.time) - toMin(b.time))[0] || null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeline, isToday_, tick]);
+  }, [timeline, isToday_, tick, hideFeatured, currentUserEmail]);
 
   const [featuredViewLoading, setFeaturedViewLoading] = useState(false);
   const handleViewFeatured = async () => {
@@ -405,26 +415,33 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
 
       {open && (
         <div>
-          {((hotelSpot?.lat && hotelSpot?.lng) || mapItems.length > 0 || !hotelSpot) ? (
-            <div className="border-t border-border px-4 pt-3 pb-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
-                  <Route className="w-3.5 h-3.5 text-primary" />{t('home.dayCard.todayRoute')}
-                </span>
-                {hotelSpot ? (
-                  <span className="text-xs text-muted-foreground">{t('home.dayCard.hotelPlusStops', { count: mapItems.length })}</span>
-                ) : (
-                  <Link
-                    to={createPageUrl('Restaurants') + '?trip_id=' + tripId + '&open_create=hotel&city_id=' + (city?.id || '')}
-                    className="text-xs text-primary font-medium hover:text-primary/80 transition-colors"
-                  >
-                    {t('home.dayCard.addHotel')}
-                  </Link>
-                )}
-              </div>
-              <TodayRouteMap hotelSpot={hotelSpot} items={mapItems} onSelectSpot={setSelected} />
+          {/* José (21 sep 2026): el alojamiento es de toda la estancia — aquí se
+              muestra SIEMPRE que la ciudad tenga uno (antes, en Mañana, no
+              llegaba la prop y pedía "+ Añadir alojamiento" aunque ya
+              estuviera puesto), y solo se pide si de verdad falta. */}
+          <div className="border-t border-border px-4 pt-3 pb-3">
+            <div className="flex items-center justify-between mb-2 gap-3">
+              <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                <Route className="w-3.5 h-3.5 text-primary" />{isToday_ ? t('home.dayCard.todayRoute') : t('home.dayCard.tomorrowRoute')}
+              </span>
+              {!hotelSpot && (
+                <Link
+                  to={createPageUrl('Restaurants') + '?trip_id=' + tripId + '&open_create=hotel&city_id=' + (city?.id || '')}
+                  className="text-xs text-primary font-medium hover:text-primary/80 transition-colors"
+                >
+                  {t('home.dayCard.addHotel')}
+                </Link>
+              )}
             </div>
-          ) : null}
+            {hotelSpot && (
+              <button type="button" onClick={() => setSelected({ ...hotelSpot, _kind: 'spot' })}
+                className="flex items-center gap-1.5 max-w-full mb-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <Hotel className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{t('cities.block.stayingAt', { name: hotelSpot.title })}</span>
+              </button>
+            )}
+            <TodayRouteMap hotelSpot={hotelSpot} items={mapItems} onSelectSpot={setSelected} />
+          </div>
           {hasContent ? (
             timeline.filter(item => item.id !== featuredDoc?.id).map((item, idx, arr) => {
               const isDoc   = item._kind === 'doc';
@@ -496,6 +513,10 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
                     {!isDoc && !isNote && item.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.notes}</p>}
                     {isNote && <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.content}</p>}
                     {isDoc && !hasTime && <p className="text-xs text-muted-foreground mt-0.5">{t('home.dayCard.noTime')}</p>}
+                    {isDoc && !isDocForUser(item, currentUserEmail) && (() => {
+                      const who = otherHoldersLabel(item, profiles, currentUserEmail);
+                      return who ? <p className="text-xs text-muted-foreground mt-0.5 truncate">{t('documents.forHolders', { names: who })}</p> : null;
+                    })()}
                     {isToday_ && isDoc && item.time && ['flight','train','bus'].includes(item.category || item.type) && (() => {
                       const now = new Date();
                       const [h, m] = item.time.split(':').map(Number);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { loadLeaflet } from '@/components/spots/spotsHelpers';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from '@/components/spots/mapTiles';
 import { loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
+import { arePointsTight, SINGLE_POINT_ZOOM, MAX_FIT_ZOOM } from '@/lib/mapFit';
 
 // Mini-mapa de la ruta del dia: hotel (si hay uno guardado como spot type
 // 'hotel' para esta ciudad) + los items del dia con coordenadas, numerados
@@ -113,10 +114,13 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
 
                                                       if (path.length > 1) {
                                                                   new google.maps.Polyline({ path, map, strokeColor: 'hsl(16 75% 45%)', strokeOpacity: 0.85, strokeWeight: 2.5, icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1 }, offset: '0', repeat: '10px' }] });
-                                                                  map.fitBounds(bounds, 24);
+                                                      }
+                                                      if (arePointsTight(path)) {
+                                                                  map.setCenter(bounds.getCenter());
+                                                                  map.setZoom(SINGLE_POINT_ZOOM);
                                                       } else {
-                                                                  map.setCenter(path[0]);
-                                                                  map.setZoom(15);
+                                                                  map.fitBounds(bounds, 24);
+                                                                  google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > MAX_FIT_ZOOM) map.setZoom(MAX_FIT_ZOOM); });
                                                       }
                         }).catch((err) => { console.warn('[TodayRouteMap] Google Maps fallo, cayendo a Leaflet:', err); if (!cancelled) runLeaflet(); });
                         return () => { cancelled = true; };
@@ -157,19 +161,18 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
 
                                  if (points.length > 1) {
                                            L.polyline(points, { color: 'hsl(16 75% 45%)', weight: 2.5, dashArray: '5,6', opacity: 0.85 }).addTo(map);
-                                           map.fitBounds(L.latLngBounds(points), { padding: [24, 24] });
-                                 } else {
-                                           map.setView(points[0], 15);
                                  }
+                                 const leafletTight = arePointsTight(points.map(([lat, lng]) => ({ lat, lng })));
+                                 const fitLeaflet = (m) => {
+                                           if (leafletTight) m.setView(L.latLngBounds(points).getCenter(), SINGLE_POINT_ZOOM);
+                                           else m.fitBounds(L.latLngBounds(points), { padding: [24, 24], maxZoom: MAX_FIT_ZOOM });
+                                 };
+                                 fitLeaflet(map);
 
                                  requestAnimationFrame(() => {
                                            if (cancelled || !mapRef.current) return;
                                            mapRef.current.invalidateSize();
-                                           if (points.length > 1) {
-                                                       mapRef.current.fitBounds(L.latLngBounds(points), { padding: [24, 24] });
-                                           } else {
-                                                       mapRef.current.setView(points[0], 15);
-                                           }
+                                           fitLeaflet(mapRef.current);
                                  });
 
                                  mapRef.current = map;

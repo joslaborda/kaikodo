@@ -5,6 +5,8 @@ import { Calendar } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import DayCard from './DayCard';
 import { useTranslation } from 'react-i18next';
+import { isStaySpot, getCityHotel } from '@/lib/cityStay';
+import { isDocInMyRoute } from '@/lib/docHolders';
 
 export default function TomorrowTab({ trip, cities, tripId, currentUserEmail, profiles }) {
   const { t } = useTranslation();
@@ -25,13 +27,13 @@ export default function TomorrowTab({ trip, cities, tripId, currentUserEmail, pr
   const { data: allDocs = [] } = useQuery({
     queryKey: ['allDocs', tripId],
     queryFn: () => base44.entities.Ticket.filter({ trip_id: tripId }),
-    enabled: !!tripId, staleTime: 60000,
+    enabled: !!tripId, staleTime: 60000, refetchOnMount: 'always',
   });
 
   const { data: allSpots = [] } = useQuery({
     queryKey: ['spots', tripId],
     queryFn: () => base44.entities.Spot.filter({ trip_id: tripId }),
-    enabled: !!tripId, staleTime: 30000,
+    enabled: !!tripId, staleTime: 30000, refetchOnMount: 'always',
   });
 
   const { data: itineraryDays = [] } = useQuery({
@@ -40,9 +42,9 @@ export default function TomorrowTab({ trip, cities, tripId, currentUserEmail, pr
     enabled: !!tripId, staleTime: 60000,
   });
 
-  const tomorrowDocs  = allDocs.filter(d => d.date === tomorrowStr || d.valid_from === tomorrowStr || d.start_date === tomorrowStr);
+  const tomorrowDocs  = allDocs.filter(d => (d.date === tomorrowStr || d.valid_from === tomorrowStr || d.start_date === tomorrowStr) && isDocInMyRoute(d, currentUserEmail, trip?.members || []));
   const tomorrowSpots = tomorrowCity
-    ? allSpots.filter(s => s.city_id === tomorrowCity.id && s.assigned_date === tomorrowStr)
+    ? allSpots.filter(s => !isStaySpot(s) && s.city_id === tomorrowCity.id && s.assigned_date === tomorrowStr)
         .sort((a, b) => (a.day_order ?? 999) - (b.day_order ?? 999))
     : [];
 
@@ -67,6 +69,11 @@ export default function TomorrowTab({ trip, cities, tripId, currentUserEmail, pr
         dateStr={tomorrowStr}
         tripId={tripId}
         defaultOpen={true}
+        // José (21 sep 2026): faltaba esta prop — TodayTab ya la pasaba, pero
+        // esta pestaña no, así que "Mañana" pedía "+ Añadir alojamiento"
+        // aunque la ciudad ya tuviera uno guardado. El alojamiento es de la
+        // estancia entera, no de un día: mañana tiene el mismo que hoy.
+        hotelSpot={getCityHotel(allSpots, tomorrowCity.id)}
         onReorderSpots={async (newOrder) => {
           await Promise.all(newOrder.map((spot, idx) =>
             base44.entities.Spot.update(spot.id, { day_order: idx })
