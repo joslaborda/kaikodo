@@ -204,15 +204,18 @@ Deno.serve(async (req) => {
     //    local si el servidor confirma (callerScheduled); si el servidor no puede
     //    (sin suscripción, error), el aviso local sigue siendo la red de seguridad.
     const byNorm = new Map<string, string>(memberList.map((m) => [norm(m), m]));
-    const recipients = docHolders(ticket)
-      .map(norm)
-      .filter((e) => byNorm.has(e));
+    const holderList = docHolders(ticket).map(norm);
+    // '*' = todo el grupo (los miembros de ahora, incluidos los que se unieron después
+    // de subir el documento).
+    const recipients = holderList.includes("*")
+      ? [...byNorm.keys()]
+      : holderList.filter((e) => byNorm.has(e));
 
     const title = category === "event"
       ? `Evento · empieza en ${humanDuration(minutesLeft)}`
       : `${LABEL[category]} · sale en ${humanDuration(minutesLeft)}`;
     const body = `${ticket.name || LABEL[category]} · ${ticket.time}`;
-    const payload = { tripId: ticket.trip_id, type: "doc_time", refId: ticket.id };
+    const payload = { tripId: ticket.trip_id, type: "doc_reminder", refId: ticket.id };
 
     const ids: string[] = [];
     let callerScheduled = false;
