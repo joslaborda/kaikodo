@@ -2,6 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import i18n from '@/i18n';
 import { createPageUrl } from '@/utils';
+import { isDocForUser } from '@/lib/docHolders';
 
 // Recordatorios locales en el propio dispositivo para vuelos, trenes, bus y
 // actividades con hora asignada. A diferencia de las notificaciones push
@@ -119,6 +120,33 @@ export async function scheduleTicketReminder(ticket) {
     eventAt: dt,
     extra: { kind: 'doc', tripId: ticket.trip_id, docId: ticket.id, expiresAt },
   });
+}
+
+// José (21 sep 2026): "si subes un billete para Carlos, le tiene que saltar A
+// ÉL". Antes el recordatorio solo se programaba en el móvil de quien subía o
+// editaba el documento. Ahora cada móvil, al abrir Home, programa los
+// recordatorios de los documentos que VAN A USAR SU dueño (used_by) — y retira
+// los que ya no le tocan (borrados, reasignados). Solo programa avisos
+// FUTUROS: el atajo de "avisar ya" de scheduleAt no se usa aquí, para no
+// disparar un aviso cada vez que se abre la app con un tren a menos de 4 h.
+export async function syncTicketRemindersForUser(tickets, email, tripId) {
+  if (!Capacitor.isNativePlatform() || !email || !tripId) return;
+  const key = 'kodo_ticket_reminders:' + tripId;
+  let previous = [];
+  try { previous = JSON.parse(localStorage.getItem(key) || '[]'); } catch { previous = []; }
+  const now = Date.now();
+  const keep = [];
+  for (const tk of (tickets || [])) {
+    if (!tk?.id || !['flight', 'train', 'bus', 'event'].includes(tk.category)) continue;
+    if (!isDocForUser(tk, email)) continue;
+    const dt = parseDateTime(tk.date, tk.time);
+    if (!dt || dt.getTime() <= now) continue;
+    keep.push(tk.id);
+    const at = dt.getTime() - (MINUTES_BEFORE[tk.category] ?? MINUTES_BEFORE.default) * 60000;
+    if (at > now) await scheduleTicketReminder({ ...tk, trip_id: tk.trip_id || tripId });
+  }
+  for (const id of previous) if (!keep.includes(id)) await cancelTicketReminder(id);
+  try { localStorage.setItem(key, JSON.stringify(keep)); } catch {}
 }
 
 export async function cancelTicketReminder(ticketId) {
