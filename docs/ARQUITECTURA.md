@@ -44,13 +44,17 @@ Spots ───────┘            │
   subió (`created_by`).
 - **Avisos ("sale tu tren en 4 h")**: los programa el **servidor**
   (`base44/functions/scheduleTicketPush`, OneSignal `send_after`) en cuanto se
-  sube o edita el documento, para cada persona que lo usa y NO es quien lo
-  subió — a la hora exacta, sin que tenga que abrir la app. Al editar se
+  sube o edita el documento, para **todas** las personas que lo usan (incluida
+  quien lo sube), a la hora exacta y sin que tengan que abrir la app. Al editar se
   cancelan y reprograman; al borrar, se cancelan (`Ticket.reminder_push_ids`).
-  Quien sube el documento sigue con el aviso **local** del móvil (funciona sin
-  conexión). Si el servidor ya avisa a una persona, su móvil no programa el
-  local (`hasServerPushFor`), para no duplicar. Límite: no se programa a más de
-  25 días vista; ahí queda solo el aviso local de cada móvil al abrir la app.
+  Si el servidor confirma el aviso de quien guarda, su móvil retira el aviso
+  **local** para no duplicarlo; si no puede (sin suscripción, error, más de 25 días
+  vista) el aviso local de cada móvil (`syncTicketRemindersForUser`, al abrir
+  Home) es la red de seguridad. Un documento sin `used_by` ni creador conocido
+  cuenta como de todos.
+- **Los `Ticket` no traen `created_by` (email)**, solo `created_by_id` y
+  `user_id`. Cualquier comprobación de "quién lo subió" en el servidor usa esos
+  ids, no el email.
 
 ### Spots
 - Se guardan en Spots y salen en el mapa de Spots.
