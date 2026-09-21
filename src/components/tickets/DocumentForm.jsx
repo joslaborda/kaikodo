@@ -174,6 +174,9 @@ export default function DocumentForm({
   const [usedBy, setUsedBy] = useState(() => {
     if (Array.isArray(initialData?.used_by) && initialData.used_by.length) return initialData.used_by;
     if (initialData?.id && initialData?.created_by) return [initialData.created_by];
+    // Un documento ANTIGUO sin dueño conocido es "de todos" (docHolders.js): al editarlo
+    // (subirle un archivo, cambiarle la hora) no debe pasar a ser solo tuyo.
+    if (initialData?.id) return [...(members || [])];
     // Una reserva de hotel nueva es, casi siempre, de todo el grupo.
     if (!initialData?.id && initialData?.category === 'hotel' && (members || []).length) return [...members];
     const me = (members || []).find(e => normalizeEmail(e) === meEmail);
