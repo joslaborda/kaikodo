@@ -172,7 +172,10 @@ export default function DocumentForm({
   const soloTrip = (members || []).length <= 1;
   const [usedByTouched, setUsedByTouched] = useState(false);
   const [usedBy, setUsedBy] = useState(() => {
-    if (Array.isArray(initialData?.used_by) && initialData.used_by.length) return initialData.used_by;
+    if (Array.isArray(initialData?.used_by) && initialData.used_by.length) {
+      // '*' = todo el grupo (docHolders.js): en pantalla son todos los chips marcados.
+      return initialData.used_by.includes('*') ? [...(members || [])] : initialData.used_by;
+    }
     if (initialData?.id && initialData?.created_by) return [initialData.created_by];
     // Un documento ANTIGUO sin dueño conocido es "de todos" (docHolders.js): al editarlo
     // (subirle un archivo, cambiarle la hora) no debe pasar a ser solo tuyo.
@@ -424,7 +427,12 @@ export default function DocumentForm({
       visibility: visibilityOut,
       // en minúsculas: el rls de Ticket compara used_by/shared_with con el email
       // de la sesión tal cual, y trip.members puede venir con otras mayúsculas.
-      used_by: (soloTrip ? (usedBy.length ? usedBy : (currentUserEmail ? [currentUserEmail] : [])) : usedBy).map(normalizeEmail),
+      used_by: (() => {
+        const list = (soloTrip ? (usedBy.length ? usedBy : (currentUserEmail ? [currentUserEmail] : [])) : usedBy).map(normalizeEmail);
+        // Todos marcados (con más de una persona) → también '*': sigue valiendo para quien se una después.
+        const everyone = !soloTrip && members.length > 1 && members.every(m => list.includes(normalizeEmail(m)));
+        return everyone ? [...list, '*'] : list;
+      })(),
       shared_with: sharedOut.map(normalizeEmail),
     });
   };
