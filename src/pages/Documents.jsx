@@ -111,11 +111,10 @@ function DocRow({ticket, onEdit, onDelete, onView, profiles, myEmail, members })
           {routeLabel && <p className="text-xs text-muted-foreground mt-0.5">{routeLabel}</p>}
           {timeLabel && <p className="text-xs text-primary font-semibold mt-0.5">{timeLabel}</p>}
           {/* Para quién es — lo que decide a quién le sale en su Ruta y Home */}
-          {members.length > 1 && (
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-              {t('documents.forHolders', { names: holdersSummary(ticket, profiles, myEmail, members, { you: t('documents.card.you'), everyone: t('documents.card.everyone') }) })}
-            </p>
-          )}
+          {members.length > 1 && (() => {
+            const names = holdersSummary(ticket, profiles, myEmail, members, { you: t('documents.card.you'), everyone: t('documents.card.everyone') });
+            return names ? <p className="text-xs text-muted-foreground mt-0.5 truncate">{t('documents.forHolders', { names })}</p> : null;
+          })()}
         </button>
         <div className="flex items-center gap-1.5 shrink-0">
           {hasFile && (

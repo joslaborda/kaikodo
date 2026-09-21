@@ -513,7 +513,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
   // el de Hoy/Mañana (TodayRouteMap) — antes eran dos (DaySpotsMap y este) con
   // lógica propia, y por eso uno enseñaba el alojamiento y las estaciones y el
   // otro no. Mismos puntos, mismo orden que el timeline de este día.
-  const mapItems = timeline.filter(i => i._kind === 'spot' ? (i.lat && i.lng) : (i._kind === 'doc' && i.location_lat && i.location_lng));
+  const mapItems = timeline.filter(i => i._kind === 'spot' ? (i.lat && i.lng) : (i._kind === 'doc' && i.category !== 'hotel' && i.location_lat && i.location_lng));
   const hasMap = mapItems.length > 0 || !!(hotelSpot?.lat && hotelSpot?.lng);
 
   // Al soltar un arrastre, se reescribe TODO el orden del día de una vez —

@@ -28,6 +28,7 @@ import TomorrowTab from '@/components/home/TomorrowTab';
 import FinishedTab from '@/components/home/FinishedTab';
 import ChatTab from '@/components/home/ChatTab';
 import { syncTicketRemindersForUser } from '@/lib/localReminders';
+import { cityDateSpan, syncTripFromCities } from '@/lib/tripDates';
 import InviteModal from '@/components/home/InviteModal';
 import SettingsDialog from '@/components/home/SettingsDialog';
 
@@ -220,6 +221,15 @@ export default function Home() {
   const { activeCity, activeMeta, countryRoute } = useTripContext(tripId);
 
   const { data: cities = [] } = useQuery({ queryKey: ['cities', tripId], queryFn: () => base44.entities.City.filter({ trip_id: tripId }, 'order'), enabled: !!tripId, staleTime: 30000 });
+  // Autocuración: si las paradas dicen otras fechas que el viaje (p. ej. se
+  // editaron antes de que las fechas se calcularan solas), el admin las
+  // sincroniza al entrar — una sola vez por diferencia.
+  const tripSpan = cityDateSpan(cities);
+  useEffect(() => {
+    if (!isAdmin || !trip || !tripSpan) return;
+    if (trip.start_date !== tripSpan.start || trip.end_date !== tripSpan.end) syncTripFromCities(tripId, queryClient);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, trip?.start_date, trip?.end_date, tripSpan?.start, tripSpan?.end]);
   const { data: expenses = [] } = useQuery({ queryKey: ['expenses', tripId], queryFn: () => base44.entities.Expense.filter({ trip_id: tripId }), enabled: !!tripId, staleTime: 30000 });
   const { data: packingItems = [] } = useQuery({ queryKey: ['packingItems', tripId], queryFn: () => base44.entities.PackingItem.filter({ trip_id: tripId }), enabled: !!tripId, staleTime: 30000 });
   // Los documentos vienen de la consulta única del viaje (useTripDocs). Aquí solo

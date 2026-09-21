@@ -405,6 +405,10 @@ function SpotPinMap({ lat, lng, onMove }) {
 function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, initialLat, initialLng, initialType, dayContextLabel }) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  // José (21 sep 2026): "Añadir alojamiento" abría el formulario genérico de
+  // spots (título "Crear spot", ejemplo de ramen, pastillas de tipo). Con el tipo
+  // forzado a hotel es su propia pantalla: sin elegir tipo y con textos de hotel.
+  const isStayMode = initialType === 'hotel';
   const [title, setTitle] = useState('');
   const [type, setType] = useState(initialType || 'food');
 
@@ -523,7 +527,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
         <div className="flex-shrink-0 px-5 pt-4 pb-4 border-b border-border">
           <div className="w-9 h-1 bg-border rounded-full mx-auto mb-4" />
           <div className="flex items-center justify-between">
-            <p className="font-semibold text-foreground text-base">{t('spots.create.title')}</p>
+            <p className="font-semibold text-foreground text-base">{isStayMode ? t('spots.create.stayTitle') : t('spots.create.title')}</p>
             <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
               <X className="w-4 h-4" />
             </button>
@@ -565,7 +569,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
             </button>
             <div className="relative">
               <Input value={address} onChange={e => { suppressNextSearchRef.current = false; setAddress(e.target.value); }}
-                placeholder={t('spots.create.addressPlaceholder')} className="h-9 text-sm pr-8" />
+                placeholder={isStayMode ? t('spots.create.stayAddressPlaceholder') : t('spots.create.addressPlaceholder')} className="h-9 text-sm pr-8" />
               {addressSearching && (
                 <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin absolute right-2.5 top-1/2 -translate-y-1/2" />
               )}
@@ -602,7 +606,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
             <Input
               value={title}
               onChange={e => setTitle(e.target.value)}
-              placeholder={t('spots.create.namePlaceholder')}
+              placeholder={isStayMode ? t('spots.create.stayNamePlaceholder') : t('spots.create.namePlaceholder')}
               className="h-10 text-sm"
               autoFocus
             />
@@ -617,7 +621,8 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
             )}
           </div>
 
-          {/* Type */}
+          {/* Type — en modo alojamiento el tipo ya está decidido */}
+          {!isStayMode && (
           <div>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('spots.create.type')}</p>
             <div className="flex flex-wrap gap-2">
@@ -634,6 +639,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
               ))}
             </div>
           </div>
+          )}
 
           {/* Notes */}
           <div>
@@ -675,7 +681,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
             onClick={handleSave}
             disabled={!title.trim() || saving}
             className="flex-1 bg-primary hover:bg-primary/90 text-white">
-            {saving ? t('spots.saving') : t('spots.create.save')}
+            {saving ? t('spots.saving') : (isStayMode ? t('spots.create.saveStay') : t('spots.create.save'))}
           </Button>
         </div>
       </div>

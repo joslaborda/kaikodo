@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Map, Plus } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import TripCard, { HeroTripCard, getTripStatus } from '@/components/trip/TripCard';
+import { applyCityDates } from '@/lib/tripDates';
 import NewTripModal from '@/components/trip/NewTripModal';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import CreateProfileModal from '@/components/social/CreateProfileModal';
@@ -209,11 +210,14 @@ export default function TripsList() {
 
   // Classify trips
   const { heroTrips, heroCitiesById, upcomingTrips, pastTrips, singleActiveTripId, heroIsPastFallback } = useMemo(() => {
-    const withStatus = trips.map(tr => ({
-      t: tr,
-      cities: allCities.filter(c => c.trip_id === tr.id),
-      status: getTripStatus(tr),
-    }));
+    // Fechas efectivas: si el viaje tiene paradas con fechas, mandan las de las
+    // paradas (tripDates.js) — el estado activo/finalizado no depende de una
+    // copia que puede haberse quedado atrás.
+    const withStatus = trips.map(tr => {
+      const cs = allCities.filter(c => c.trip_id === tr.id);
+      const eff = applyCityDates(tr, cs);
+      return { t: eff, cities: cs, status: getTripStatus(eff) };
+    });
 
     const active   = withStatus.filter(x => x.status?.type === 'active');
     const upcoming = withStatus.filter(x => x.status?.type === 'upcoming')
