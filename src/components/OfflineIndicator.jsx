@@ -1,29 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { WifiOff, Wifi } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 export default function OfflineIndicator() {
   const { t } = useTranslation();
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const isOnline = useOnlineStatus();
   const [showReconnected, setShowReconnected] = useState(false);
+  const wasOffline = useRef(false);
 
+  // "Conexión restaurada" durante 3 s cuando se vuelve a tener red.
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
+    if (!isOnline) { wasOffline.current = true; setShowReconnected(false); return undefined; }
+    if (wasOffline.current) {
+      wasOffline.current = false;
       setShowReconnected(true);
-      setTimeout(() => setShowReconnected(false), 3000);
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-      setShowReconnected(false);
-    };
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
+      const id = setTimeout(() => setShowReconnected(false), 3000);
+      return () => clearTimeout(id);
+    }
+    return undefined;
+  }, [isOnline]);
 
   if (isOnline && !showReconnected) return null;
 

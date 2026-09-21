@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, CheckCircle, WifiOff } from 'lucide-react';
+import { RefreshCw, CheckCircle, WifiOff, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 
@@ -9,38 +10,36 @@ import { useTranslation } from 'react-i18next';
 // estaba traducido) — un usuario en inglés lo veía en español.
 export default function SyncIndicator() {
   const { t } = useTranslation();
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const isOnline = useOnlineStatus();
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
+  // José (21 sep 2026): esta tarjeta de "Modo offline" no tenía forma de cerrarse y
+  // tapaba la pantalla mientras no hubiera red. Ahora se puede cerrar (X) y se
+  // esconde sola a los 8 s; vuelve a aparecer solo si se pierde y se recupera la red.
+  const [dismissed, setDismissed] = useState(false);
   const queryClient = useQueryClient();
+  const wasOffline = useRef(false);
 
   useEffect(() => {
-    const handleOnline = async () => {
-      setIsOnline(true);
+    if (!isOnline) {
+      wasOffline.current = true;
+      setDismissed(false);
+      const id = setTimeout(() => setDismissed(true), 8000);
+      return () => clearTimeout(id);
+    }
+    if (!wasOffline.current) return undefined;
+    wasOffline.current = false;
+    let cancelled = false;
+    (async () => {
       setIsSyncing(true);
-      
-      // Invalidate all queries to fetch fresh data
-      await queryClient.invalidateQueries();
-      
+      await queryClient.invalidateQueries(); // datos frescos al recuperar la red
+      if (cancelled) return;
       setIsSyncing(false);
       setLastSync(new Date());
-      
-      // Hide success message after 3 seconds
       setTimeout(() => setLastSync(null), 3000);
-    };
-
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [queryClient]);
+    })();
+    return () => { cancelled = true; };
+  }, [isOnline, queryClient]);
 
   // Check what's cached
   const queryCache = queryClient.getQueryCache();
@@ -52,7 +51,7 @@ export default function SyncIndicator() {
 
   return (
     <AnimatePresence>
-      {(!isOnline || isSyncing || lastSync) && (
+      {((!isOnline && !dismissed) || isSyncing || lastSync) && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -66,27 +65,16 @@ export default function SyncIndicator() {
                   <WifiOff className="w-5 h-5 text-primary" />
                 </div>
                 <div className="flex-1">
+                  <button onClick={() => setDismissed(true)} aria-label={t('common.close')}
+                    className="float-right -mt-1 -mr-1 ml-2 w-7 h-7 rounded-full bg-secondary flex items-center justify-center">
+                    <X className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
                   <p className="font-semibold text-foreground dark:text-white text-sm">
                     {t('syncIndicator.offline')}
                   </p>
                   <p className="text-xs text-foreground dark:text-muted-foreground mt-1">
                     {t('syncIndicator.synced', { count: syncedEntities.length })}
                   </p>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {syncedEntities.slice(0, 4).map((entity, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-0.5 bg-secondary dark:bg-muted rounded-full text-xs text-foreground dark:text-muted-foreground"
-                      >
-                        {entity}
-                      </span>
-                    ))}
-                    {syncedEntities.length > 4 && (
-                      <span className="px-2 py-0.5 bg-secondary dark:bg-muted rounded-full text-xs text-foreground dark:text-muted-foreground">
-                        +{syncedEntities.length - 4}
-                      </span>
-                    )}
-                  </div>
                 </div>
               </div>
             )}
