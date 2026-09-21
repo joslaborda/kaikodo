@@ -17,7 +17,7 @@ import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { isStaySpot, getCityHotel } from '@/lib/cityStay';
-import { requestTicketPush, cancelTicketPush, hasServerPushFor } from '@/lib/ticketPush';
+import { requestTicketPush } from '@/lib/ticketPush';
 import { isDocForUser, isDocInMyRoute } from '@/lib/docHolders';
 
 import { invalidateTripDocs } from '@/hooks/useTripDocs';

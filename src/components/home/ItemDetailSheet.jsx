@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { toast } from '@/components/ui/use-toast';
 import { checkUpload, convertHeicIfNeeded } from '@/lib/uploadLimits';
 import { invalidateTripDocs } from '@/hooks/useTripDocs';
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import { createPortal } from 'react-dom';
 import { X, Clock, CirclePlus, Trash2, Upload } from 'lucide-react';
 import { DOC_ICONS, SPOT_ICONS, SPOT_COLORS } from './constants';
@@ -22,14 +23,7 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
   const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
 
-  // Mientras la hoja está abierta, la página de detrás no debe hacer scroll (en
-  // escritorio se podía subir y bajar toda la página con la hoja encima).
-  useEffect(() => {
-    if (!item) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
-  }, [!!item]);
+  useBodyScrollLock(!!item);
 
   if (!item) return null;
 
