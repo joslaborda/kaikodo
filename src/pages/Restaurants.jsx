@@ -281,7 +281,13 @@ function getRecentSearches() {
   try { return JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || '[]'); } catch { return []; }
 }
 function addRecentSearch(query) {
-  const searches = getRecentSearches().filter(s => s.query !== query);
+  // José (21 sep 2026, viendo "liver", "liverpool s", "liverpool stree"… en Recientes):
+  // la búsqueda se lanza mientras se escribe y cada pausa quedaba guardada como una
+  // búsqueda distinta. Ahora se ignora lo muy corto y una búsqueda que AMPLÍA una
+  // anterior ("liver" → "liverpool street") la sustituye en vez de sumarse.
+  if ((query || '').trim().length < 3) return;
+  const q = query.trim().toLowerCase();
+  const searches = getRecentSearches().filter(s => s.query !== query && !q.startsWith((s.query || '').trim().toLowerCase()));
   searches.unshift({ query, date: new Date().toISOString() });
   localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(searches.slice(0, 8)));
 }
