@@ -21,10 +21,12 @@ import { requestTicketPush } from '@/lib/ticketPush';
 import { isDocForUser, isDocInMyRoute } from '@/lib/docHolders';
 
 import { invalidateTripDocs } from '@/hooks/useTripDocs';
+import { useDocFileUpload } from '@/hooks/useDocFileUpload';
 export default function InicioTab({ trip, cities, documents, packingItems, profiles, tripId, onInvite, currentUserEmail }) {
   const { t } = useTranslation();
   const [viewFile, setViewFile] = useState(null);
   const [resolvingId, setResolvingId] = useState(null);
+  const { pickFor: pickTicketFile, uploadingId: uploadingTicketId, input: ticketFileInput } = useDocFileUpload();
   const todayStr  = format(new Date(), 'yyyy-MM-dd');
   const tripStart = trip?.start_date || '';
   const daysLeft  = tripStart ? daysUntil(tripStart) : null;
@@ -285,7 +287,7 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
             </div>
             {firstDoc.time && <p className="text-base font-semibold text-foreground flex-shrink-0">{firstDoc.time}</p>}
           </div>
-          {(firstDoc.file_url || firstDoc.file_uri) && (
+          {(firstDoc.file_url || firstDoc.file_uri) ? (
             <div className="px-4 pb-3">
               <button type="button"
                 onClick={async () => { const url = await resolveDocViewUrl(firstDoc); if (url) setViewFile(url); }}
@@ -293,7 +295,17 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
                 {t('home.inicio.viewTicket')}
               </button>
             </div>
+          ) : (
+            <div className="px-4 pb-3">
+              {/* Sin archivo: subirlo aquí mismo, en un toque (antes no había botón). */}
+              <p className="text-xs text-red-600 font-medium mb-2 text-center">{t('home.dayCard.ticketMissing')}</p>
+              <button type="button" onClick={() => pickTicketFile(firstDoc)} disabled={uploadingTicketId === firstDoc.id}
+                className="block w-full py-2.5 bg-primary text-white text-sm font-medium text-center rounded-full disabled:opacity-60">
+                {uploadingTicketId === firstDoc.id ? t('itemDetail.uploading') : t('home.dayCard.uploadTicket')}
+              </button>
+            </div>
           )}
+          {ticketFileInput}
           {restDocs.map((doc, idx) => {
             const DocRowIcon = DOC_ICON[doc.category] || DOC_ICON.other;
             const hasFile = !!(doc.file_url || doc.file_uri);
@@ -304,20 +316,22 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
               return nowMin >= (h * 60 + m) + grace;
             })();
             return (
-              <button key={doc.id || idx} type="button" disabled={!hasFile || resolvingId === doc.id}
+              <button key={doc.id || idx} type="button" disabled={resolvingId === doc.id || uploadingTicketId === doc.id}
                 onClick={async () => {
-                  if (!hasFile) return;
+                  if (!hasFile) { pickTicketFile(doc); return; }
                   setResolvingId(doc.id);
                   try { const url = await resolveDocViewUrl(doc); if (url) setViewFile(url); }
                   finally { setResolvingId(null); }
                 }}
-                className={`w-full flex items-center gap-2.5 px-4 py-2.5 border-t border-border text-left transition-colors ${hasFile ? 'hover:bg-secondary/20' : ''} ${isPastDoc ? 'opacity-50' : ''}`}>
+                className={`w-full flex items-center gap-2.5 px-4 py-2.5 border-t border-border text-left transition-colors hover:bg-secondary/20 ${isPastDoc ? 'opacity-50' : ''}`}>
                 <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
                   <DocRowIcon className="text-primary" style={{ width: 14, height: 14 }} />
                 </div>
                 <p className="flex-1 min-w-0 text-sm font-medium text-foreground truncate">{doc.title || doc.name}</p>
                 {doc.time && <span className="text-xs font-medium text-muted-foreground shrink-0">{doc.time}</span>}
-                {hasFile && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                {hasFile
+                  ? <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  : <span className="text-xs font-medium text-primary shrink-0">{uploadingTicketId === doc.id ? t('itemDetail.uploading') : t('itemDetail.uploadFile')}</span>}
               </button>
             );
           })}

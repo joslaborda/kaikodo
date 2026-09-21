@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
@@ -9,6 +9,7 @@ import { ArrowRight, ChevronDown, ChevronUp, FileText, MapPin , CirclePlus, Ther
 import PDFViewer from '@/components/PDFViewer';
 import SpotDetailModal from '@/components/trip/SpotDetailModal';
 import ItemDetailSheet from './ItemDetailSheet';
+import { useDocFileUpload } from '@/hooks/useDocFileUpload';
 import TodayRouteMap from './TodayRouteMap';
 import { DOC_ICONS, SPOT_ICONS, SPOT_COLORS, WMO_ICON } from './constants';
 import { useTranslation } from 'react-i18next';
@@ -18,11 +19,12 @@ import { resolveDocViewUrl } from '@/lib/privateFiles';
 import { isStaySpot } from '@/lib/cityStay';
 import { cancelTicketPush } from '@/lib/ticketPush';
 import { orderDayItems, findTimeClash as sharedFindTimeClash } from '@/lib/dayTimeline';
-import { isDocForUser, otherHoldersLabel } from '@/lib/docHolders';
+import { isDocForUser, otherHoldersLabel, holdersSummary } from '@/lib/docHolders';
 
 import { invalidateTripDocs } from '@/hooks/useTripDocs';
 export default function DayCard({ label, city, docs, spots, itineraryDays, tripId, defaultOpen, onReorderSpots, dateStr, onUpdateItemTime, hotelSpot, hideFeatured = false, trip, currentUserEmail, profiles }) {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const dateLocale = i18n.language === 'en' ? undefined : es;
   // holidaysDB son ~120 KB: se cargan solo si hay ciudad y fecha.
   const [holidays, setHolidays] = useState([]);
@@ -135,7 +137,11 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
     const toMin = (time) => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
-    const candidates = timeline.filter(i => i._kind === 'doc' && i.time && (i.file_url || i.file_uri) && isDocForUser(i, currentUserEmail));
+    // José (21 sep 2026): el próximo billete se destaca AUNQUE no tenga archivo (si es
+    // de transporte o un evento): justo cuando llega la hora es cuando hay que poder
+    // subirlo, y antes un billete sin archivo ni aparecía como "próximo".
+    const needsTicket = (i) => ['flight', 'train', 'bus', 'event'].includes(i.category || i.type);
+    const candidates = timeline.filter(i => i._kind === 'doc' && i.time && ((i.file_url || i.file_uri) || needsTicket(i)) && isDocForUser(i, currentUserEmail));
     const active = candidates.filter(c => {
       const start = toMin(c.time);
       return nowMin >= start - 30 && nowMin < start + graceOf(c.category || c.type);
@@ -146,6 +152,7 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
   }, [timeline, isToday_, tick, hideFeatured, currentUserEmail]);
 
   const [featuredViewLoading, setFeaturedViewLoading] = useState(false);
+  const { pickFor: pickTicketFile, uploadingId: uploadingTicketId, input: ticketFileInput } = useDocFileUpload();
   const handleViewFeatured = async () => {
     if (!featuredDoc || featuredViewLoading) return;
     setFeaturedViewLoading(true);
@@ -369,7 +376,10 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
         return (
           <div className="border-t border-border px-4 py-3">
             <div className="bg-orange-50/60 dark:bg-orange-950/20 rounded-2xl border border-orange-200/60 dark:border-orange-900/30 overflow-hidden">
-              <div className="flex items-center gap-3 px-4 py-3">
+              {/* Pulsable: abre el detalle (hora, para quién, editar…). Antes el billete
+                  destacado solo tenía "Ver billete" y, al no estar en la lista del día,
+                  no había forma de tocarlo para cambiar nada. */}
+              <button type="button" onClick={() => setSelected(featuredDoc)} className="w-full flex items-center gap-3 px-4 py-3 text-left">
                 <div className="w-10 h-10 rounded-xl bg-white dark:bg-background flex items-center justify-center shrink-0">
                   {FeaturedIcon && <FeaturedIcon size={18} className="text-primary" />}
                 </div>
@@ -378,12 +388,23 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
                   <p className="text-xs text-muted-foreground mt-0.5">{featuredDoc.time}</p>
                 </div>
                 <p className="text-base font-semibold text-foreground shrink-0">{featuredDoc.time}</p>
-              </div>
+              </button>
               <div className="px-4 pb-3">
-                <button type="button" onClick={handleViewFeatured} disabled={featuredViewLoading}
-                  className="block w-full py-2.5 bg-primary text-white text-sm font-medium text-center rounded-full disabled:opacity-60">
-                  {t('home.inicio.viewTicket')}
-                </button>
+                {(featuredDoc.file_url || featuredDoc.file_uri) ? (
+                  <button type="button" onClick={handleViewFeatured} disabled={featuredViewLoading}
+                    className="block w-full py-2.5 bg-primary text-white text-sm font-medium text-center rounded-full disabled:opacity-60">
+                    {t('home.inicio.viewTicket')}
+                  </button>
+                ) : (
+                  <>
+                    <p className="text-xs text-red-600 font-medium mb-2 text-center">{t('home.dayCard.ticketMissing')}</p>
+                    <button type="button" onClick={() => pickTicketFile(featuredDoc)} disabled={uploadingTicketId === featuredDoc.id}
+                      className="block w-full py-2.5 bg-primary text-white text-sm font-medium text-center rounded-full disabled:opacity-60">
+                      {uploadingTicketId === featuredDoc.id ? t('itemDetail.uploading') : t('home.dayCard.uploadTicket')}
+                    </button>
+                  </>
+                )}
+                {ticketFileInput}
               </div>
             </div>
           </div>
@@ -538,7 +559,11 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
 
       {viewFile && <PDFViewer fileUrl={viewFile} onClose={() => setViewFile(null)} />}
       {selected && selected._kind !== 'spot' && (
-        <ItemDetailSheet item={selected} onClose={() => setSelected(null)} onSaveTime={handleSaveTime} onOpenPdf={(url) => setViewFile(url)} onDelete={handleDeleteItem} />
+        <ItemDetailSheet item={selected} onClose={() => setSelected(null)} onSaveTime={handleSaveTime} onOpenPdf={(url) => setViewFile(url)} onDelete={handleDeleteItem}
+          onEdit={(it) => { setSelected(null); navigate(createPageUrl('Documents') + '?trip_id=' + tripId + '&doc_id=' + it.id); }}
+          holdersLabel={selected?._kind === 'doc' && (trip?.members || []).length > 1
+            ? holdersSummary(selected, profiles, currentUserEmail, trip?.members || [], { you: t('documents.card.you'), everyone: t('documents.card.everyone') })
+            : ''} />
       )}
       {selected && selected._kind === 'spot' && (
         <SpotDetailModal spot={selected} open={true} onClose={() => setSelected(null)} onRemove={handleRemoveSpot} queryClient={queryClient} tripId={tripId} trip={trip} currentUserEmail={currentUserEmail} profiles={profiles} />

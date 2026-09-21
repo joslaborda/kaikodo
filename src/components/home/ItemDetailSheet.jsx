@@ -1,27 +1,22 @@
-import { useState, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
-import { toast } from '@/components/ui/use-toast';
-import { checkUpload, convertHeicIfNeeded } from '@/lib/uploadLimits';
-import { invalidateTripDocs } from '@/hooks/useTripDocs';
+import { useState } from 'react';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import { createPortal } from 'react-dom';
-import { X, Clock, CirclePlus, Trash2, Upload } from 'lucide-react';
+import { X, Clock, CirclePlus, Trash2, Upload, Pencil } from 'lucide-react';
 import { DOC_ICONS, SPOT_ICONS, SPOT_COLORS } from './constants';
 import { useTranslation } from 'react-i18next';
-import { resolveDocViewUrl, uploadDocFile } from '@/lib/privateFiles';
+import { resolveDocViewUrl } from '@/lib/privateFiles';
+import { useDocFileUpload } from '@/hooks/useDocFileUpload';
 
-export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, onDelete }) {
+export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, onDelete, onEdit, holdersLabel }) {
   const { t } = useTranslation();
   const [editingTime, setEditingTime] = useState(false);
   const [time, setTime] = useState(item?.time || '');
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [uploadedUri, setUploadedUri] = useState('');
-  const fileInputRef = useRef(null);
-  const queryClient = useQueryClient();
+  const { pickFor, uploadingId, input: fileInput } = useDocFileUpload({ onUploaded: (_d, uri) => setUploadedUri(uri) });
+  const uploading = uploadingId === item?.id;
 
   useBodyScrollLock(!!item);
 
@@ -50,33 +45,8 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
     setEditingTime(false);
   };
 
-  // José (21 sep 2026): un documento sin archivo (p. ej. la reserva de hotel) enseñaba
-  // "Archivo · Sin archivo" pero no había forma de subirlo desde aquí. Ahora esa
-  // casilla es un botón que sube el archivo (mismo almacenamiento privado que el
-  // formulario) y lo guarda en el documento.
+  // Subir / cambiar el archivo: hook compartido con las tarjetas del próximo billete.
   const hasFile = !!(item.file_url || item.file_uri || uploadedUri);
-  const handleFilePicked = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !item.id) return;
-    const chk = checkUpload(file, { images: false });
-    if (!chk.ok) {
-      toast({ title: t('upload.tooLarge'), description: t('upload.maxMb', { mb: chk.maxMb }), variant: 'destructive' });
-      return;
-    }
-    setUploading(true);
-    try {
-      const uploadFile = await convertHeicIfNeeded(file);
-      const { file_uri } = await uploadDocFile(uploadFile);
-      await base44.entities.Ticket.update(item.id, { file_uri, file_url: '' });
-      setUploadedUri(file_uri);
-      if (item.trip_id) invalidateTripDocs(queryClient, item.trip_id);
-      toast({ title: t('itemDetail.uploaded') });
-    } catch {
-      toast({ title: t('common.error'), description: t('common.tryAgain'), variant: 'destructive' });
-    }
-    setUploading(false);
-  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -156,13 +126,23 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
           )}
 
           {isDoc && item.type && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <div className="bg-secondary rounded-xl p-3 flex-1">
                 <p className="text-xs text-muted-foreground mb-1">{t('itemDetail.type')}</p>
                 <p className="text-sm font-medium text-foreground capitalize">{typeLabel}</p>
               </div>
+              {hasFile && (
+                <div className="bg-secondary rounded-xl p-3 flex-1">
+                  <p className="text-xs text-muted-foreground mb-1">{t('itemDetail.file')}</p>
+                  <p className="text-sm font-medium text-foreground">{t('itemDetail.attached')}</p>
+                  <button type="button" onClick={() => pickFor(item)} disabled={uploading}
+                    className="text-xs text-primary font-medium underline underline-offset-2 mt-1 disabled:opacity-60">
+                    {uploading ? t('itemDetail.uploading') : t('itemDetail.changeFile')}
+                  </button>
+                </div>
+              )}
               {!hasFile && (
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                <button type="button" onClick={() => pickFor(item)} disabled={uploading}
                   className="bg-secondary rounded-xl p-3 flex-1 text-left border border-dashed border-primary/40 hover:bg-orange-50 transition-colors disabled:opacity-60">
                   <p className="text-xs text-muted-foreground mb-1">{t('itemDetail.file')}</p>
                   <p className="text-sm font-medium text-primary flex items-center gap-1.5">
@@ -170,11 +150,30 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
                   </p>
                 </button>
               )}
+              {holdersLabel && (
+                <div className="bg-secondary rounded-xl p-3 w-full">
+                  <p className="text-xs text-muted-foreground mb-1">{t('itemDetail.forWho')}</p>
+                  <p className="text-sm font-medium text-foreground">{holdersLabel}</p>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <input ref={fileInputRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={handleFilePicked} />
+        {/* José (21 sep 2026): desde Home solo se podía cambiar la hora o subir un
+            archivo suelto — sin "para quién", sin quitar/cambiar el archivo, sin
+            corregir nada. "Editar documento" abre el formulario completo de
+            Documentos (la misma vía única de edición que usa Ruta). */}
+        {isDoc && onEdit && (
+          <div className="px-5 pb-3">
+            <button type="button" onClick={() => onEdit(item)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-full border border-border bg-card text-sm font-medium text-foreground hover:bg-secondary/40 transition-colors">
+              <Pencil className="w-4 h-4" />{t('itemDetail.editDocument')}
+            </button>
+          </div>
+        )}
+
+        {fileInput}
 
         {onDelete && confirmDelete && (
           <div className="mx-5 mb-3 flex items-center justify-between gap-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl px-4 py-2.5">
