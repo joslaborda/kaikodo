@@ -28,6 +28,8 @@ import TomorrowTab from '@/components/home/TomorrowTab';
 import FinishedTab from '@/components/home/FinishedTab';
 import ChatTab from '@/components/home/ChatTab';
 import { syncTicketRemindersForUser } from '@/lib/localReminders';
+import { isDocForUser } from '@/lib/docHolders';
+import { prefetchTicketFiles } from '@/lib/privateFiles';
 import { cityDateSpan, syncTripFromCities, applyCityDates } from '@/lib/tripDates';
 import InviteModal from '@/components/home/InviteModal';
 import SettingsDialog from '@/components/home/SettingsDialog';
@@ -261,6 +263,14 @@ export default function Home() {
   // no solo de los que subió él — ver syncTicketRemindersForUser. Solo cuando la
   // lista ya cargó de verdad: una lista vacía por estar cargando retiraría
   // todos los avisos ya programados.
+  // Los archivos de los billetes de los próximos días se guardan en el móvil para
+  // poder abrirlos sin red (estación, aeropuerto, túnel) — ver lib/ticketCache.js.
+  useEffect(() => {
+    if (!documentsLoaded || !currentUserEmail) return;
+    // Primero los billetes míos: el tope de descarga no debe gastarse en los de otros.
+    prefetchTicketFiles([...documents].sort((a, b) => Number(isDocForUser(b, currentUserEmail)) - Number(isDocForUser(a, currentUserEmail))));
+  }, [documents, documentsLoaded, currentUserEmail]);
+
   useEffect(() => {
     if (!documentsLoaded || !tripId || !currentUserEmail) return;
     syncTicketRemindersForUser(documents, currentUserEmail, tripId, currentUserId);

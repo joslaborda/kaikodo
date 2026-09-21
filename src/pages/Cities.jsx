@@ -29,9 +29,10 @@ import LeaveTripModal from '@/components/trip/LeaveTripModal';
 import { enrichTicketDataWithAutoLinks } from '@/lib/autoLinkTickets';
 import { scheduleTicketReminder, cancelTicketReminder } from '@/lib/localReminders';
 import { daysUntil } from '@/lib/tripDays';
-import { isStaySpot, getCityHotel } from '@/lib/cityStay';
+import { getCityHotel } from '@/lib/cityStay';
 import { linkHotelDocToStay } from '@/lib/hotelStay';
 import { applyCityDates } from '@/lib/tripDates';
+import { docsForDay, spotsForDay } from '@/lib/dayDocs';
 import { requestTicketPush, cancelTicketPush } from '@/lib/ticketPush';
 import { orderDayItems, findTimeClash as sharedFindTimeClash } from '@/lib/dayTimeline';
 import { isDocForUser, isDocInMyRoute, otherHoldersLabel } from '@/lib/docHolders';
@@ -973,15 +974,8 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
   // exige también que el documento sea de esta ciudad — como origen
   // (city_id) o como destino de un vuelo/tren (arrival_city_id), mismo
   // criterio que ya usa CityTickets.jsx.
-  const dayDocsAll = useMemo(() =>
-    allDocs.filter(d => {
-      const dd = d.date || d.valid_from || d.start_date;
-      if (dd !== dateStr) return false;
-      if (!d.city_id && !d.arrival_city_id) return true; // sin ciudad asignada, no se pierde
-      return d.city_id === cityId || d.arrival_city_id === cityId;
-    }),
-    [allDocs, dateStr, cityId]
-  );
+  // Documentos de esta fila (ver src/lib/dayDocs.js: ninguno se pierde si su parada se borra o se acorta).
+  const dayDocsAll = useMemo(() => docsForDay({ allDocs, cities, dateStr, cityId }), [allDocs, dateStr, cityId, cities]);
   // José (21 sep 2026): Ruta es TU día — tus documentos y los de todo el
   // grupo. Los de otros viajeros (el tren de Carlos) no se mezclan con los
   // tuyos, pero tampoco desaparecen: van plegados debajo, en "De otros
@@ -990,13 +984,8 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
   const docs = useMemo(() => dayDocsAll.filter(d => isDocInMyRoute(d, currentUserEmail, members_)), [dayDocsAll, currentUserEmail, members_.join(',')]);
   const otherDocs = useMemo(() => dayDocsAll.filter(d => !isDocInMyRoute(d, currentUserEmail, members_)), [dayDocsAll, currentUserEmail, members_.join(',')]);
 
-  const spots = useMemo(() =>
-    allSpots
-      // El alojamiento es de la estancia, no de un día (src/lib/cityStay.js).
-      .filter(s => !isStaySpot(s) && s.assigned_date === dateStr && s.city_id === cityId)
-      .sort((a, b) => (a.day_order ?? 999) - (b.day_order ?? 999)),
-    [allSpots, dateStr, cityId]
-  );
+  // Spots de este día (sin alojamientos; ninguno se pierde si su parada se borra — dayDocs.js).
+  const spots = useMemo(() => spotsForDay({ allSpots, cities, dateStr, cityId }), [allSpots, dateStr, cityId, cities]);
 
   const hasContent = docs.length > 0 || spots.length > 0;
   const isEmpty = !day?.title && !hasContent;
