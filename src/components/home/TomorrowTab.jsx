@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { isStaySpot, getCityHotel } from '@/lib/cityStay';
 import { isDocInMyRoute } from '@/lib/docHolders';
 
+import { useTripDocs } from '@/hooks/useTripDocs';
 export default function TomorrowTab({ trip, cities, tripId, currentUserEmail, profiles }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -24,11 +25,7 @@ export default function TomorrowTab({ trip, cities, tripId, currentUserEmail, pr
     [sortedCities, tomorrowStr]
   );
 
-  const { data: allDocs = [] } = useQuery({
-    queryKey: ['allDocs', tripId],
-    queryFn: () => base44.entities.Ticket.filter({ trip_id: tripId }),
-    enabled: !!tripId, staleTime: 60000, refetchOnMount: 'always',
-  });
+  const { data: allDocs = [] } = useTripDocs(tripId);
 
   const { data: allSpots = [] } = useQuery({
     queryKey: ['spots', tripId],

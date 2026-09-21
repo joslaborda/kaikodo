@@ -16,8 +16,11 @@ import { toast } from '@/components/ui/use-toast';
 import { cancelTicketReminder } from '@/lib/localReminders';
 import { resolveDocViewUrl } from '@/lib/privateFiles';
 import { isStaySpot } from '@/lib/cityStay';
+import { cancelTicketPush } from '@/lib/ticketPush';
+import { orderDayItems, findTimeClash as sharedFindTimeClash } from '@/lib/dayTimeline';
 import { isDocForUser, otherHoldersLabel } from '@/lib/docHolders';
 
+import { invalidateTripDocs } from '@/hooks/useTripDocs';
 export default function DayCard({ label, city, docs, spots, itineraryDays, tripId, defaultOpen, onReorderSpots, dateStr, onUpdateItemTime, hotelSpot, hideFeatured = false, trip, currentUserEmail, profiles }) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language === 'en' ? undefined : es;
@@ -107,25 +110,8 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
     // spot sin hora se puede colar justo entre otros dos que sí la tienen.
     // Lo que aún no se ha tocado nunca se intercala por hora si la tiene, o
     // va al final si no.
-    const all = [...docItems, ...spotItems, ...dayNotes];
-    const pinned = all.filter(i => i._order != null).sort((a, b) => a._order - b._order);
-    const unpinnedTimed = all.filter(i => i._order == null && i.time).sort((a, b) => a.time.localeCompare(b.time));
-    const unpinnedUntimed = all.filter(i => i._order == null && !i.time);
-
-    const merged = [];
-    let ui = 0;
-    for (const item of pinned) {
-      if (item.time) {
-        while (ui < unpinnedTimed.length && unpinnedTimed[ui].time <= item.time) {
-          merged.push(unpinnedTimed[ui]);
-          ui++;
-        }
-      }
-      merged.push(item);
-    }
-    while (ui < unpinnedTimed.length) { merged.push(unpinnedTimed[ui]); ui++; }
-
-    return [...merged, ...unpinnedUntimed];
+    // Orden del día: una sola implementación compartida con Ruta (dayTimeline.js).
+    return orderDayItems([...docItems, ...spotItems, ...dayNotes], i => i.time, i => i._order);
   }, [docs, spots, itineraryDays, city?.id, dateStr]);
 
   const hasContent = timeline.length > 0;
@@ -206,19 +192,7 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
     // movido queda cronologicamente antes del que tiene justo delante (con
     // hora) o despues del que tiene justo detras (con hora) -- el unico
     // choque que de verdad provoca este arrastre en concreto.
-    const findTimeClash = (orderedItems, movedId) => {
-          const idx = orderedItems.findIndex(i => (i.id || '') === movedId);
-          if (idx === -1) return null;
-          const moved = orderedItems[idx];
-          if (!moved.time) return null;
-          let prev = null;
-          for (let k = idx - 1; k >= 0; k--) { if (orderedItems[k].time) { prev = orderedItems[k]; break; } }
-          let next = null;
-          for (let k = idx + 1; k < orderedItems.length; k++) { if (orderedItems[k].time) { next = orderedItems[k]; break; } }
-          if (prev && prev.time > moved.time) return [prev, moved];
-          if (next && next.time < moved.time) return [moved, next];
-          return null;
-    };
+    const findTimeClash = (orderedItems, movedId) => sharedFindTimeClash(orderedItems, movedId, i => i.time);
 
   const reorderTimeline = async (fromId, toId) => {
     if (!fromId || !toId || fromId === toId) return;
@@ -273,7 +247,7 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
         ),
       ]);
       if (spotUpdates.length) queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
-      if (docUpdates.length) queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+      if (docUpdates.length) invalidateTripDocs(queryClient, tripId);
       if (Object.keys(notesByDay).length) queryClient.invalidateQueries({ queryKey: ['itineraryDays', tripId] });
     } catch {
       // Best-effort: reordenar no es destructivo, si falla el próximo
@@ -327,9 +301,10 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
   const handleDeleteItem = async (item) => {
     try {
       if (item._kind === 'doc') {
+        await cancelTicketPush(item.id);
         await base44.entities.Ticket.delete(item.id);
         cancelTicketReminder(item.id);
-        queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+        invalidateTripDocs(queryClient, tripId);
       } else if (item._kind === 'note') {
         const lastDash = item.id.lastIndexOf('-');
         const dayId = item.id.slice(0, lastDash);

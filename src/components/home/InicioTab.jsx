@@ -17,8 +17,10 @@ import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { isStaySpot, getCityHotel } from '@/lib/cityStay';
+import { requestTicketPush, cancelTicketPush, hasServerPushFor } from '@/lib/ticketPush';
 import { isDocForUser, isDocInMyRoute } from '@/lib/docHolders';
 
+import { invalidateTripDocs } from '@/hooks/useTripDocs';
 export default function InicioTab({ trip, cities, documents, packingItems, profiles, tripId, onInvite, currentUserEmail }) {
   const { t } = useTranslation();
   const [viewFile, setViewFile] = useState(null);
@@ -83,11 +85,12 @@ export default function InicioTab({ trip, cities, documents, packingItems, profi
     if (item._kind === 'doc') {
       const oldTime = item.time || '';
       await base44.entities.Ticket.update(item.id, { time, ...(timeIsChanging ? { day_order: null } : {}) });
-      queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+      invalidateTripDocs(queryClient, tripId);
       if (timeIsChanging) {
         cancelTicketReminder(item.id);
         // Solo suena en el móvil de quien va a usar el documento.
         if (isDocForUser(item, currentUserEmail)) scheduleTicketReminder({ ...item, time, trip_id: item.trip_id || tripId });
+        requestTicketPush({ ...item, time });
       }
       if ((time || '') !== oldTime && time && item.visibility !== 'personal') {
         const sharedWith = item.visibility === 'selected_users'

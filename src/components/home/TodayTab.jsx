@@ -11,8 +11,10 @@ import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
 import { scheduleTicketReminder, cancelTicketReminder, scheduleSpotReminder } from '@/lib/localReminders';
 import { isStaySpot, getCityHotel } from '@/lib/cityStay';
+import { requestTicketPush, cancelTicketPush, hasServerPushFor } from '@/lib/ticketPush';
 import { isDocForUser, isDocInMyRoute } from '@/lib/docHolders';
 
+import { useTripDocs, invalidateTripDocs } from '@/hooks/useTripDocs';
 export default function TodayTab({ trip, cities, tripId, profiles, onInvite, currentUserEmail }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -36,16 +38,7 @@ export default function TodayTab({ trip, cities, tripId, profiles, onInvite, cur
     [sortedCities, tomorrowStr]
   );
 
-  const { data: allDocs = [] } = useQuery({
-    queryKey: ['allDocs', tripId],
-    queryFn: () => base44.entities.Ticket.filter({ trip_id: tripId }),
-    // refetchOnMount:'always' — mismo patrón que la query 'documents' de Home
-    // y que ya se aplicó a 'trip': con el caché persistido en localStorage,
-    // entrar aquí pintaba primero la lista de la última vez (sin el billete
-    // que otro viajero acababa de subir) y no la refrescaba hasta pasar el
-    // staleTime.
-    enabled: !!tripId, staleTime: 60000, refetchOnMount: 'always',
-  });
+  const { data: allDocs = [] } = useTripDocs(tripId);
 
   const { data: allSpots = [] } = useQuery({
     queryKey: ['spots', tripId],
@@ -95,13 +88,14 @@ const handleUpdateItemTime = async (item, time) => {
       if (item._kind === 'doc') {
               const oldTime = item.time || '';
               await base44.entities.Ticket.update(item.id, { time, ...(timeIsChanging ? { day_order: null } : {}) });
-      queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+      invalidateTripDocs(queryClient, tripId);
       // Mismo hueco que en Documents.jsx/Cities.jsx: el recordatorio local
       // del propio dispositivo tampoco se reprogramaba desde aquí.
       if (timeIsChanging) {
         cancelTicketReminder(item.id);
         // Solo suena en el móvil de quien va a usar el documento.
         if (isDocForUser(item, currentUserEmail)) scheduleTicketReminder({ ...item, time, trip_id: item.trip_id || tripId });
+        requestTicketPush({ ...item, time });
       }
       // Edición rápida de hora desde la fila del día (Hoy/Mañana) — mismo
       // hueco que Documents.jsx y Cities.jsx: antes no avisaba a nadie.
