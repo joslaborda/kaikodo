@@ -42,6 +42,15 @@ Spots ───────┘            │
   formulario).
 - Un documento sin `used_by` (anterior a este campo) cuenta como de quien lo
   subió (`created_by`).
+- **Avisos ("sale tu tren en 4 h")**: los programa el **servidor**
+  (`base44/functions/scheduleTicketPush`, OneSignal `send_after`) en cuanto se
+  sube o edita el documento, para cada persona que lo usa y NO es quien lo
+  subió — a la hora exacta, sin que tenga que abrir la app. Al editar se
+  cancelan y reprograman; al borrar, se cancelan (`Ticket.reminder_push_ids`).
+  Quien sube el documento sigue con el aviso **local** del móvil (funciona sin
+  conexión). Si el servidor ya avisa a una persona, su móvil no programa el
+  local (`hasServerPushFor`), para no duplicar. Límite: no se programa a más de
+  25 días vista; ahí queda solo el aviso local de cada móvil al abrir la app.
 
 ### Spots
 - Se guardan en Spots y salen en el mapa de Spots.
@@ -87,22 +96,32 @@ Spots ───────┘            │
 | Ruta | `pages/Cities.jsx` | ídem + City | ídem + "De otros viajeros" |
 | Spots | `pages/Restaurants.jsx` | Spot | todos los spots del viaje |
 | Documentos | `pages/Documents.jsx` | Ticket | todo lo visible |
-| Mapas | `TodayRouteMap`, `SpotsMapView`, `DaySpotsMap` | Spot, Ticket (`location_*`) | alojamiento aparte; encuadre en `lib/mapFit.js` |
+| Mapas | `TodayRouteMap` (día), `SpotsMapView` (todo el viaje) | Spot, Ticket (`location_*`) | alojamiento aparte; encuadre en `lib/mapFit.js` |
 
 Funciones compartidas: `lib/cityStay.js` (alojamiento), `lib/docHolders.js`
 (para quién es), `lib/hotelStay.js` (reserva ↔ alojamiento), `lib/mapFit.js`
 (encuadre de mapas), `lib/localReminders.js` (`syncTicketRemindersForUser`).
 
-## 5. Deuda conocida (paso 2 del plan)
+## 5. Unificación (paso 2) — estado
 
-Estas duplicidades son la causa de que un arreglo en una pantalla no llegue a
-otra. El paso 2 las unifica sin cambiar cómo se ve nada:
+Estas duplicidades eran la causa de que un arreglo en una pantalla no llegara a
+otra.
 
-1. `Ticket` se carga desde 6 sitios con 3 cachés distintas (`allDocs`,
-   `documents`, `tickets`) → **una sola consulta compartida**.
-2. Hay dos constructores del timeline del día (`DayCard.jsx` y `Cities.jsx`) →
-   **uno solo**, que reciben Home y Ruta.
-3. Hay tres componentes de mapa con su propia lógica → **uno** con modos.
+1. **Documentos: hecho.** Una sola consulta (`hooks/useTripDocs.js`, clave
+   `['tripDocs', tripId]`) para Home, Hoy, Mañana, Ruta, Documentos y alertas.
+   Todo cambio en un documento invalida con `invalidateTripDocs()`.
+2. **Orden del día: hecho.** `lib/dayTimeline.js` (`orderDayItems`,
+   `findTimeClash`) lo usan Home (`DayCard.jsx`) y Ruta (`Cities.jsx`). Probado
+   contra el algoritmo anterior con 3000 días aleatorios: idéntico.
+3. **Mapas: a medias.** El mapa de un día (Hoy, Mañana y ahora también Ruta)
+   es un único componente, `TodayRouteMap.jsx`: alojamiento + paradas + estaciones.
+   Sigue aparte `SpotsMapView.jsx` (todas las rutas de todos los días + spots
+   sueltos + soltar pin), que hace otra cosa. `spots/DaySpotsMap.jsx` ya no se
+   usa y se puede borrar. Queda pendiente el buscador de pin de
+   `Restaurants.jsx` (`LeafletMap`).
+4. **Pendiente:** un único constructor de los *elementos* del día (hoy Home y
+   Ruta normalizan documentos/notas/spots con nombres de campo distintos;
+   solo el orden y los choques de hora están compartidos).
 
 ## 6. Antes de tocar nada
 
