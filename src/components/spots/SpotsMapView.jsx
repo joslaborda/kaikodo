@@ -7,6 +7,7 @@ import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoM
 import { loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
 import { spotTypeIconSvg } from './spotTypeIcon';
 import { isStaySpot } from '@/lib/cityStay';
+import { stayGoogleIcon, stayLeafletIcon } from './stayIcon';
 import { arePointsTight, SINGLE_POINT_ZOOM, MAX_FIT_ZOOM } from '@/lib/mapFit';
 
 // Antes cada día usaba uno de los 5 --chart-1..5, todos tonos naranja/marrón
@@ -76,7 +77,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
   onSelectSpotRef.current = onSelectSpot;
     const markersRef = useRef([]);
     const polylinesRef = useRef([]);
-    const [useGoogle, setUseGoogle] = useState(false);
+    const [useGoogle, setUseGoogle] = useState(null); // null = aún sin decidir (ver TodayRouteMap)
     useEffect(() => {
         let cancelled = false;
         getGoogleMapsApiKey().then(key => {
@@ -119,7 +120,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
   const visibleUnscheduled = selectedDate ? [] : unscheduledSpots;
 
   useEffect(() => {
-    if (!withCoords.length) return undefined;
+    if (!withCoords.length || useGoogle === null) return undefined;
     let cancelled = false;
 
     const renderLeaflet = () => {
@@ -179,7 +180,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
 
       visibleUnscheduled.forEach(spot => {
         allPoints.push([spot.lat, spot.lng]);
-        const marker = L.marker([spot.lat, spot.lng], { icon: plainIcon(spot) }).addTo(map);
+        const marker = L.marker([spot.lat, spot.lng], { icon: isStaySpot(spot) ? stayLeafletIcon(L) : plainIcon(spot) }).addTo(map);
         marker.on('click', (e) => {
           if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
           if (onSelectSpotRef.current) onSelectSpotRef.current(spot);
@@ -242,7 +243,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
 
                     visibleUnscheduled.forEach(spot => {
                               const pos = { lat: spot.lat, lng: spot.lng };
-                              const marker = new google.maps.Marker({ position: pos, map, icon: plainSvgIcon(google, spot) });
+                              const marker = new google.maps.Marker({ position: pos, map, icon: isStaySpot(spot) ? stayGoogleIcon(google) : plainSvgIcon(google, spot) });
                               marker.addListener('click', () => { if (onSelectSpotRef.current) onSelectSpotRef.current(spot); });
                               markersRef.current.push(marker);
                               bounds.extend(pos); anyPoints = true;
