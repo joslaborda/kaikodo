@@ -377,7 +377,8 @@
       "deleteStopWarning": "Se eliminará {{city}} y los días de su itinerario. Esta acción no se puede deshacer.",
       "deleteStopError": "No se pudo eliminar la parada",
       "endBeforeStart": "La fecha de fin no puede ser anterior a la de inicio",
-      "datesOverlap": "Estas fechas se solapan con otra parada del viaje"
+      "datesOverlap": "Estas fechas se solapan con otra parada del viaje",
+      "datesFromStops": "Se calculan a partir de tus paradas. Para cambiarlas, edita las fechas de una parada."
     },
     "loadingTrip": "Cargando viaje...",
     "travelersCount_one": "{{count}} viajero",
@@ -648,7 +649,8 @@
       "hotelPlusStops": "Alojamiento + {{count}} paradas",
       "stopsCount": "{{count}} paradas",
       "addHotel": "+ Añadir alojamiento",
-      "tomorrowRoute": "Ruta de mañana"
+      "tomorrowRoute": "Ruta de mañana",
+      "checkIn": "Check-in"
     },
     "tomorrow": {
       "emptyTitle": "Nada planificado para mañana",
@@ -720,7 +722,11 @@
       "tripOnly": "Solo mi viaje",
       "publicHint": "Otros viajeros podrán descubrirlo y guardarlo",
       "privateHint": "Solo tú y tu grupo lo verán",
-      "save": "Guardar spot"
+      "save": "Guardar spot",
+      "stayTitle": "Añadir alojamiento",
+      "stayAddressPlaceholder": "Busca tu hotel por nombre o dirección…",
+      "stayNamePlaceholder": "Nombre del hotel",
+      "saveStay": "Guardar alojamiento"
     },
     "assign": {
       "saved": "¡Guardado!",
@@ -1018,7 +1024,8 @@
       "everyone": "Todos",
       "seenBy": "Lo verá: {{who}}",
       "change": "Cambiar",
-      "hotelHint": "Búscalo y quedará también como tu alojamiento en la ciudad"
+      "hotelHint": "Búscalo y quedará también como tu alojamiento en la ciudad",
+      "usedByHintStay": "Quiénes se alojan aquí. Puede ser más de una persona."
     },
     "card": {
       "view": "Ver",

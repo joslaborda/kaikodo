@@ -377,7 +377,8 @@
       "deleteStopWarning": "{{city}} and its itinerary days will be deleted. This action cannot be undone.",
       "deleteStopError": "Couldn't delete the stop",
       "endBeforeStart": "The end date can't be before the start date",
-      "datesOverlap": "These dates overlap with another stop on the trip"
+      "datesOverlap": "These dates overlap with another stop on the trip",
+      "datesFromStops": "Calculated from your stops. To change them, edit the dates of a stop."
     },
     "loadingTrip": "Loading trip...",
     "travelersCount_one": "{{count}} traveler",
@@ -648,7 +649,8 @@
       "hotelPlusStops": "Accommodation + {{count}} stops",
       "stopsCount": "{{count}} stops",
       "addHotel": "+ Add accommodation",
-      "tomorrowRoute": "Tomorrow's route"
+      "tomorrowRoute": "Tomorrow's route",
+      "checkIn": "Check-in"
     },
     "tomorrow": {
       "emptyTitle": "Nothing planned for tomorrow",
@@ -720,7 +722,11 @@
       "tripOnly": "My trip only",
       "publicHint": "Other travelers can discover and save it",
       "privateHint": "Only you and your group will see it",
-      "save": "Save spot"
+      "save": "Save spot",
+      "stayTitle": "Add accommodation",
+      "stayAddressPlaceholder": "Search your hotel by name or address…",
+      "stayNamePlaceholder": "Hotel name",
+      "saveStay": "Save accommodation"
     },
     "assign": {
       "saved": "Saved!",
@@ -1018,7 +1024,8 @@
       "everyone": "Everyone",
       "seenBy": "Seen by: {{who}}",
       "change": "Change",
-      "hotelHint": "Search it and it will also be your accommodation in the city"
+      "hotelHint": "Search it and it will also be your accommodation in the city",
+      "usedByHintStay": "Who is staying here. Can be more than one person."
     },
     "card": {
       "view": "View",
