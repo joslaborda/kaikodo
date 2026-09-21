@@ -134,8 +134,16 @@ Deno.serve(async (req) => {
 
     // Quien llama tiene que tener acceso real al documento (mismo criterio que
     // el rls de Ticket.jsonc) — no basta con ser miembro del viaje.
+    // OJO (probando con dos cuentas, 21 sep 2026): los Ticket NO traen `created_by`
+    // (email) — solo `created_by_id` y `user_id`. Comparar solo por email dejaba
+    // fuera a quien sube un documento "solo para otra persona" (ni es titular ni
+    // está en shared_with): 403 y ningún aviso programado.
+    const isCreator =
+      (!!ticket.created_by_id && ticket.created_by_id === user.id) ||
+      (!!ticket.user_id && ticket.user_id === user.id) ||
+      norm(ticket.created_by) === callerEmail;
     const canTouch =
-      norm(ticket.created_by) === callerEmail ||
+      isCreator ||
       (ticket.used_by || []).map(norm).includes(callerEmail) ||
       (ticket.visibility === "shared") ||
       (ticket.visibility === "selected_users" && (ticket.shared_with || []).map(norm).includes(callerEmail));
