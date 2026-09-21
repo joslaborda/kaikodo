@@ -31,6 +31,7 @@ import { scheduleTicketReminder, cancelTicketReminder } from '@/lib/localReminde
 import { daysUntil } from '@/lib/tripDays';
 import { isStaySpot, getCityHotel } from '@/lib/cityStay';
 import { linkHotelDocToStay } from '@/lib/hotelStay';
+import { applyCityDates } from '@/lib/tripDates';
 import { requestTicketPush, cancelTicketPush, hasServerPushFor } from '@/lib/ticketPush';
 import { orderDayItems, findTimeClash as sharedFindTimeClash } from '@/lib/dayTimeline';
 import { isDocForUser, isDocInMyRoute, otherHoldersLabel } from '@/lib/docHolders';
@@ -1382,9 +1383,10 @@ export default function Cities() {
     c.start_date && c.end_date && todayStr >= c.start_date && todayStr <= c.end_date
   )?.id || null;
 
-  // Progress
-  const tripStart = trip?.start_date;
-  const tripEnd = trip?.end_date;
+  // Progress — con las fechas efectivas (las de las paradas), no la copia del Trip
+  const tripEff = applyCityDates(trip, cities);
+  const tripStart = tripEff?.start_date;
+  const tripEnd = tripEff?.end_date;
   const totalDays = tripStart && tripEnd ? differenceInDays(parseISO(tripEnd), parseISO(tripStart)) + 1 : null;
   const dayNumber = tripStart && todayStr >= tripStart ? differenceInDays(parseISO(todayStr), parseISO(tripStart)) + 1 : null;
   const progress = totalDays && dayNumber ? Math.min(100, Math.round((dayNumber / totalDays) * 100)) : 0;
@@ -1559,7 +1561,7 @@ export default function Cities() {
                   isActive={isActive}
                   isPast={isPast}
                   queryClient={queryClient}
-                  trip={trip}
+                  trip={tripEff}
                   cities={cities}
                   profiles={profiles}
                   userId={userId}

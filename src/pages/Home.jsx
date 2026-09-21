@@ -28,7 +28,7 @@ import TomorrowTab from '@/components/home/TomorrowTab';
 import FinishedTab from '@/components/home/FinishedTab';
 import ChatTab from '@/components/home/ChatTab';
 import { syncTicketRemindersForUser } from '@/lib/localReminders';
-import { cityDateSpan, syncTripFromCities } from '@/lib/tripDates';
+import { cityDateSpan, syncTripFromCities, applyCityDates } from '@/lib/tripDates';
 import InviteModal from '@/components/home/InviteModal';
 import SettingsDialog from '@/components/home/SettingsDialog';
 
@@ -159,12 +159,18 @@ export default function Home() {
   // src/lib/tripImage.js) sin actualizar. refetchOnMount: 'always' fuerza
   // comprobar la verdad del servidor cada vez que se entra a un viaje,
   // sin esperar a que venza el staleTime.
-  const { data: trip, isLoading } = useQuery({
+  const { data: cities = [] } = useQuery({ queryKey: ['cities', tripId], queryFn: () => base44.entities.City.filter({ trip_id: tripId }, 'order'), enabled: !!tripId, staleTime: 30000 });
+  const { data: tripRaw, isLoading } = useQuery({
     queryKey: ['trip', tripId],
     queryFn: () => tripId ? base44.entities.Trip.get(tripId) : null,
     enabled: !!tripId, staleTime: 30000, refetchOnMount: 'always',
 
   });
+  // Las fechas del viaje son las de sus paradas (tripDates.js). Un Editor que
+  // cambia una parada no puede actualizar el Trip (solo admin), así que la
+  // copia guardada puede ir atrasada: Home, las pestañas Hoy/Mañana y todo lo
+  // que cuelga de `trip` usan siempre las fechas efectivas.
+  const trip = useMemo(() => applyCityDates(tripRaw, cities), [tripRaw, cities]);
 
   // Tab inicial inteligente según estado del viaje
   useEffect(() => {
@@ -220,16 +226,15 @@ export default function Home() {
 
   const { activeCity, activeMeta, countryRoute } = useTripContext(tripId);
 
-  const { data: cities = [] } = useQuery({ queryKey: ['cities', tripId], queryFn: () => base44.entities.City.filter({ trip_id: tripId }, 'order'), enabled: !!tripId, staleTime: 30000 });
   // Autocuración: si las paradas dicen otras fechas que el viaje (p. ej. se
   // editaron antes de que las fechas se calcularan solas), el admin las
   // sincroniza al entrar — una sola vez por diferencia.
   const tripSpan = cityDateSpan(cities);
   useEffect(() => {
-    if (!isAdmin || !trip || !tripSpan) return;
-    if (trip.start_date !== tripSpan.start || trip.end_date !== tripSpan.end) syncTripFromCities(tripId, queryClient);
+    if (!isAdmin || !tripRaw || !tripSpan) return;
+    if (tripRaw.start_date !== tripSpan.start || tripRaw.end_date !== tripSpan.end) syncTripFromCities(tripId, queryClient);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, trip?.start_date, trip?.end_date, tripSpan?.start, tripSpan?.end]);
+  }, [isAdmin, tripRaw?.start_date, tripRaw?.end_date, tripSpan?.start, tripSpan?.end]);
   const { data: expenses = [] } = useQuery({ queryKey: ['expenses', tripId], queryFn: () => base44.entities.Expense.filter({ trip_id: tripId }), enabled: !!tripId, staleTime: 30000 });
   const { data: packingItems = [] } = useQuery({ queryKey: ['packingItems', tripId], queryFn: () => base44.entities.PackingItem.filter({ trip_id: tripId }), enabled: !!tripId, staleTime: 30000 });
   // Los documentos vienen de la consulta única del viaje (useTripDocs). Aquí solo

@@ -6,6 +6,7 @@ import { notify, resolveUserIds } from '@/lib/notifications';
 import { scheduleTicketReminder, cancelTicketReminder } from '@/lib/localReminders';
 import { isDocForUser, holdersSummary } from '@/lib/docHolders';
 import { linkHotelDocToStay } from '@/lib/hotelStay';
+import { applyCityDates } from '@/lib/tripDates';
 import { requestTicketPush, cancelTicketPush, hasServerPushFor } from '@/lib/ticketPush';
 import { Car, ChevronDown, ChevronUp, CirclePlus, FileText, Hotel, Lock, Pencil, Plus, Shield, Ticket, Train, Trash2, User, Users } from 'lucide-react';
 import { PlaneIcon, BusFront } from '@/lib/icons';
@@ -523,7 +524,7 @@ export default function Documents() {
           <div className="px-5 py-4 overflow-y-auto flex-1">
             <DocumentForm key={addInitial?.spot_id || 'new'} initialData={addInitial} cities={cities} itineraryDays={itineraryDays} members={members} profiles={profilesByEmail} tripCities={cities}
               currentUserEmail={currentUserEmail}
-              minDate={trip?.start_date || undefined} maxDate={trip?.end_date || undefined}
+              minDate={applyCityDates(trip, cities)?.start_date || undefined} maxDate={applyCityDates(trip, cities)?.end_date || undefined}
               onSave={(d) => createMutation.mutate(d)} onCancel={() => { setAddOpen(false); setAddInitial(null); }} saving={createMutation.isPending}
               onView={(url) => { setEditDoc(null); setTimeout(() => setViewFile(url), 150); }} />
           </div>
@@ -541,7 +542,7 @@ export default function Documents() {
               <DocumentForm cities={cities} itineraryDays={itineraryDays} members={members} profiles={profilesByEmail} tripCities={cities}
                 currentUserEmail={currentUserEmail}
                 initialData={editDoc}
-                minDate={trip?.start_date || undefined} maxDate={trip?.end_date || undefined}
+                minDate={applyCityDates(trip, cities)?.start_date || undefined} maxDate={applyCityDates(trip, cities)?.end_date || undefined}
                 onSave={(d) => updateMutation.mutate({ id: editDoc.id, data: d, oldDoc: editDoc })}
                 onCancel={() => setEditDoc(null)}
                 onDelete={() => { setDeleteDoc(editDoc); setEditDoc(null); }}
