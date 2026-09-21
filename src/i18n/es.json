@@ -1432,7 +1432,10 @@
     "noFile": "Sin archivo",
     "viewDocument": "Ver documento",
     "viewOnMap": "Ver en mapa",
-    "deleteConfirm": "¿Eliminar esto? No se puede deshacer."
+    "deleteConfirm": "¿Eliminar esto? No se puede deshacer.",
+    "uploadFile": "Subir archivo",
+    "uploading": "Subiendo…",
+    "uploaded": "Archivo subido"
   },
   "membersPanel": {
     "travelersCount": "Viajeros ({{count}})",
@@ -1785,7 +1788,9 @@
   },
   "offline": {
     "restored": "Conexión restaurada",
-    "offline": "Sin conexión · Viendo datos guardados"
+    "offline": "Sin conexión · Viendo datos guardados",
+    "mapUnavailable": "Mapa no disponible sin conexión",
+    "mapUnavailableHint": "Tus sitios siguen aquí. Con \"Cómo llegar\" se abre la app de mapas del móvil."
   },
   "publish": {
     "published": "Publicado",

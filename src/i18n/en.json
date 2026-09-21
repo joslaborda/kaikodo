@@ -1432,7 +1432,10 @@
     "noFile": "No file",
     "viewDocument": "View document",
     "viewOnMap": "View on map",
-    "deleteConfirm": "Delete this? This can't be undone."
+    "deleteConfirm": "Delete this? This can't be undone.",
+    "uploadFile": "Upload file",
+    "uploading": "Uploading…",
+    "uploaded": "File uploaded"
   },
   "membersPanel": {
     "travelersCount": "Travellers ({{count}})",
@@ -1785,7 +1788,9 @@
   },
   "offline": {
     "restored": "Connection restored",
-    "offline": "Offline · Viewing saved data"
+    "offline": "Offline · Viewing saved data",
+    "mapUnavailable": "Map not available offline",
+    "mapUnavailableHint": "Your places are still here. \"Directions\" opens your phone's maps app."
   },
   "publish": {
     "published": "Published",
