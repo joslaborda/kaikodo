@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import { X, MapPin, Navigation, Star, Clock, Phone, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
@@ -77,6 +78,7 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
     }
   }, [spot?.id]);
 
+  useBodyScrollLock(!!open && !!spot);
   if (!open || !spot) return null;
 
   const tc = TYPE_CONFIG[spot.type] || TYPE_CONFIG.custom;
@@ -118,8 +120,8 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
 
   return (
     <>
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 pb-[80px]" onClick={onClose}>
-      <div className="bg-card w-full max-w-lg rounded-t-3xl flex flex-col" style={{ maxHeight: 'calc(85vh - 80px)' }} onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-card w-full max-w-lg rounded-t-3xl flex flex-col" style={{ maxHeight: '90vh', paddingBottom: 'env(safe-area-inset-bottom)' }} onClick={e => e.stopPropagation()}>
         {/* Handle + Header — fixed */}
         <div className="flex-shrink-0">
           <div className="w-9 h-1 bg-border rounded-full mx-auto mt-4 mb-3" />
