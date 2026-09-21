@@ -114,7 +114,9 @@
     },
     "placeInfo": {
       "ratings": "valoraciones"
-    }
+    },
+    "removeStay": "Quitar alojamiento",
+    "removeStayConfirm": "Sí, quitar"
   },
   "darkMode": {
     "switchToLight": "Cambiar a modo claro",
@@ -645,7 +647,8 @@
       "todayRoute": "Ruta de hoy",
       "hotelPlusStops": "Alojamiento + {{count}} paradas",
       "stopsCount": "{{count}} paradas",
-      "addHotel": "+ Añadir alojamiento"
+      "addHotel": "+ Añadir alojamiento",
+      "tomorrowRoute": "Ruta de mañana"
     },
     "tomorrow": {
       "emptyTitle": "Nada planificado para mañana",
@@ -887,6 +890,14 @@
       "addTime": "Añadir hora",
       "addNote": "Añadir nota...",
       "openInMaps": "Abrir en Maps"
+    },
+    "stayInfo": "Alojamiento de toda la estancia: no se asigna a un día ni a una hora.",
+    "stayBadge": "Alojamiento",
+    "stayDoc": {
+      "title": "¿Tienes la reserva?",
+      "body": "Puedes subir la reserva de {{name}} ahora y quedará enlazada a este alojamiento. Es opcional.",
+      "upload": "Subir reserva",
+      "skip": "Ahora no"
     }
   },
   "documents": {
@@ -964,7 +975,7 @@
       "fields": {
         "origin": "Origen",
         "destination": "Destino",
-        "location": "Aeropuerto / estación",
+        "location": "Sale desde",
         "airline": "Compañía / Nº vuelo",
         "city": "Ciudad",
         "arrivalCity": "Ciudad de llegada",
@@ -973,13 +984,17 @@
         "endTime": "Hora llegada",
         "endDate": "Fecha de salida / fin",
         "notes": "Notas",
-        "noteTime": "Hora de la nota"
+        "noteTime": "Hora de la nota",
+        "hotelPlace": "Hotel",
+        "checkIn": "Entrada",
+        "checkOut": "Salida"
       },
       "locationHint": "Para que aparezca en el mini-mapa del día",
       "ph": {
         "name": "Ej. Vuelo Madrid-Tokyo",
         "location": "Busca p. ej. \"Atocha\" o \"Barajas\"",
-        "notes": "Notas adicionales..."
+        "notes": "Notas adicionales...",
+        "hotel": "Nombre del hotel"
       },
       "vis": {
         "onlyMe": "Solo yo",
@@ -987,15 +1002,33 @@
         "group": "Todo el grupo",
         "groupDesc": "Visible para todos",
         "choose": "Elegir",
-        "chooseDesc": "Selecciona quién lo ve"
-      }
+        "chooseDesc": "Selecciona quién lo ve",
+        "holders": "Solo quien lo usa",
+        "holdersDesc": "Lo ven solo las personas para las que es"
+      },
+      "usedBy": "¿Quién lo va a usar?",
+      "usedByHint": "A quién le saltará el billete en Home y el aviso. Puede ser más de una persona.",
+      "usedByRequired": "Elige al menos una persona",
+      "me": "Yo",
+      "usesItSoSees": "Lo usa, así que lo ve",
+      "requiredTitle": "Faltan datos",
+      "requiredDesc": "Indica quién va a usar el documento y quién puede verlo.",
+      "holdersNeedAccessTitle": "No cuadra la visibilidad",
+      "holdersNeedAccessDesc": "Si otra persona va a usar el documento, tiene que poder verlo. Elige \"Todo el grupo\" o \"Elegir\".",
+      "everyone": "Todos",
+      "seenBy": "Lo verá: {{who}}",
+      "change": "Cambiar",
+      "hotelHint": "Búscalo y quedará también como tu alojamiento en la ciudad"
     },
     "card": {
       "view": "Ver",
-      "noFile": "Sin archivo"
+      "noFile": "Sin archivo",
+      "you": "ti",
+      "everyone": "todo el grupo"
     },
     "dayDocs": "Documentos del día",
-    "otherDocs": "Otros documentos"
+    "otherDocs": "Otros documentos",
+    "forHolders": "Para {{names}}"
   },
   "continents": {
     "europe": "Europa",
@@ -1227,7 +1260,8 @@
       "spotsCount_one": "{{count}} spot",
       "spotsCount_other": "{{count}} spots",
       "notesCount_one": "{{count}} nota",
-      "notesCount_other": "{{count}} notas"
+      "notesCount_other": "{{count}} notas",
+      "othersDocs": "De otros viajeros ({{count}})"
     },
     "doc": {
       "view": "Ver documento",
