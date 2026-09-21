@@ -6,6 +6,8 @@ import { Check, Eye } from 'lucide-react';
 import { Hotel, Train, Ticket, Shield, CirclePlus, Trash2, Search, X, MapPin, Loader2 } from 'lucide-react';
 import { PlaneIcon, BusFront } from '@/lib/icons';
 import { useTranslation } from 'react-i18next';
+import { format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue } from '@/lib/tripDays';
 import { useToast } from '@/components/ui/use-toast';
 import { checkUpload, convertHeicIfNeeded } from '@/lib/uploadLimits';
@@ -154,7 +156,9 @@ const PERSONAL_CATEGORIES = ['personal'];
 
 export default function DocumentForm({
   initialData, cities, itineraryDays, members, profiles, tripCities, minDate, maxDate, onSave, onCancel, onDelete, saving, onView, currentUserEmail }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // "jue 24 sep" en vez de "2026-09-24" en el desplegable de días.
+  const dayLabel = (iso) => { try { return format(parseISO(iso), 'EEE d MMM', { locale: i18n.language === 'en' ? undefined : es }); } catch { return iso; } };
   const { toast } = useToast();
   const [category, setCategory]     = useState(initialData?.category || 'flight');
   // José (21 sep 2026): "¿Para quién es?" es lo más importante del formulario
@@ -166,9 +170,12 @@ export default function DocumentForm({
   // acceso a él (además de esta lógica, lo garantiza el rls de Ticket.jsonc).
   const meEmail = normalizeEmail(currentUserEmail);
   const soloTrip = (members || []).length <= 1;
+  const [usedByTouched, setUsedByTouched] = useState(false);
   const [usedBy, setUsedBy] = useState(() => {
     if (Array.isArray(initialData?.used_by) && initialData.used_by.length) return initialData.used_by;
     if (initialData?.id && initialData?.created_by) return [initialData.created_by];
+    // Una reserva de hotel nueva es, casi siempre, de todo el grupo.
+    if (!initialData?.id && initialData?.category === 'hotel' && (members || []).length) return [...members];
     const me = (members || []).find(e => normalizeEmail(e) === meEmail);
     return me ? [me] : (currentUserEmail ? [currentUserEmail] : []);
   });
@@ -185,6 +192,14 @@ export default function DocumentForm({
   });
   const [showAudience, setShowAudience] = useState(false);
   const audience = audienceChoice || defaultAudienceFor(category);
+  // Cambiar el tipo a Hotel (sin haber tocado "para quién") lo deja en todos; y
+  // volver a otro tipo, en yo.
+  useEffect(() => {
+    if (usedByTouched || initialData?.id || soloTrip) return;
+    const me = (members || []).find(e => normalizeEmail(e) === meEmail);
+    setUsedBy(category === 'hotel' ? [...(members || [])] : (me ? [me] : (currentUserEmail ? [currentUserEmail] : [])));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [category]);
   const [sharedWith, setSharedWith] = useState(initialData?.shared_with || []);
   const [fileUploading, setFileUploading] = useState(false);
   const [fields, setFields]         = useState({
@@ -287,12 +302,14 @@ export default function DocumentForm({
   const setField = (k, v) => setFields(prev => ({ ...prev, [k]: v }));
 
   const toggleUsedBy = (email) => {
+    setUsedByTouched(true);
     setUsedBy(prev => prev.some(e => normalizeEmail(e) === normalizeEmail(email))
       ? prev.filter(e => normalizeEmail(e) !== normalizeEmail(email))
       : [...prev, email]);
   };
 
   const toggleAllUsers = () => {
+    setUsedByTouched(true);
     const all = members || [];
     const allOn = all.length > 0 && all.every(m => usedBy.some(e => normalizeEmail(e) === normalizeEmail(m)));
     if (allOn) {
@@ -552,7 +569,7 @@ export default function DocumentForm({
                 >
                   <option value="">{t('documents.form.selectDay')}</option>
                   {tripDayOptions.map(d => (
-                    <option key={tripDayOptionValue(d)} value={tripDayOptionValue(d)}>{d.date} · {d.city}</option>
+                    <option key={tripDayOptionValue(d)} value={tripDayOptionValue(d)}>{dayLabel(d.date)} · {d.city}</option>
                   ))}
                 </select>
               ) : (
@@ -638,7 +655,7 @@ export default function DocumentForm({
       {!soloTrip && (
         <div>
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">{t('documents.form.usedBy')}</p>
-          <p className="text-xs text-muted-foreground/70 mb-2">{t('documents.form.usedByHint')}</p>
+          <p className="text-xs text-muted-foreground/70 mb-2">{category === 'hotel' ? t('documents.form.usedByHintStay') : t('documents.form.usedByHint')}</p>
           <div className="flex flex-wrap gap-2">
             {members.map((email) => {
               const p = profileFor(email, profiles);
@@ -658,7 +675,7 @@ export default function DocumentForm({
                 </button>
               );
             })}
-            {members.length > 2 && (
+            {members.length > 1 && (
               <button type="button" onClick={toggleAllUsers}
                 className={`inline-flex items-center px-3 py-1.5 rounded-full border text-sm transition-colors ${
                   members.every(m => usedBy.some(e => normalizeEmail(e) === normalizeEmail(m)))
