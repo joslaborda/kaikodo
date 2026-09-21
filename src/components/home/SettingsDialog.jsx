@@ -421,7 +421,7 @@ function SettingsDialog({
         </div>
         {!isAdmin && (
           <div className="px-5 py-2 border-b border-border bg-secondary/30">
-            <p className="text-xs text-muted-foreground">{t('trip.dialog.adminOnlyEdit')}</p>
+            <p className="text-xs text-muted-foreground">{t(datesFromStops ? 'trip.dialog.adminOnlyEditName' : 'trip.dialog.adminOnlyEdit')}</p>
           </div>
         )}
 
