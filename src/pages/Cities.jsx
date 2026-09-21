@@ -32,7 +32,7 @@ import { daysUntil } from '@/lib/tripDays';
 import { isStaySpot, getCityHotel } from '@/lib/cityStay';
 import { linkHotelDocToStay } from '@/lib/hotelStay';
 import { applyCityDates } from '@/lib/tripDates';
-import { requestTicketPush, cancelTicketPush, hasServerPushFor } from '@/lib/ticketPush';
+import { requestTicketPush, cancelTicketPush } from '@/lib/ticketPush';
 import { orderDayItems, findTimeClash as sharedFindTimeClash } from '@/lib/dayTimeline';
 import { isDocForUser, isDocInMyRoute, otherHoldersLabel } from '@/lib/docHolders';
 import { useTranslation } from 'react-i18next';

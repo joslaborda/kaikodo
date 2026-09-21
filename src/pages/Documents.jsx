@@ -7,7 +7,7 @@ import { scheduleTicketReminder, cancelTicketReminder } from '@/lib/localReminde
 import { isDocForUser, holdersSummary } from '@/lib/docHolders';
 import { linkHotelDocToStay } from '@/lib/hotelStay';
 import { applyCityDates } from '@/lib/tripDates';
-import { requestTicketPush, cancelTicketPush, hasServerPushFor } from '@/lib/ticketPush';
+import { requestTicketPush, cancelTicketPush } from '@/lib/ticketPush';
 import { Car, ChevronDown, ChevronUp, CirclePlus, FileText, Hotel, Lock, Pencil, Plus, Shield, Ticket, Train, Trash2, User, Users } from 'lucide-react';
 import { PlaneIcon, BusFront } from '@/lib/icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';

@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { normalizeEmail } from '@/lib/utils';
 import { isStaySpot } from '@/lib/cityStay';
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import { useTripContext } from '@/hooks/useTripContext';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { searchUserProfiles } from '@/lib/userProfiles';
@@ -409,6 +410,7 @@ function SpotPinMap({ lat, lng, onMove }) {
 
 // ── Create spot bottom sheet ──────────────────────────────────────────────────
 function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, initialLat, initialLng, initialType, dayContextLabel }) {
+  useBodyScrollLock(!!open);
   const { t } = useTranslation();
   const { toast } = useToast();
   // José (21 sep 2026): "Añadir alojamiento" abría el formulario genérico de
@@ -527,8 +529,8 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
   const defaultLng = pinLng || 139.6503;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 pb-[80px]" onClick={onClose}>
-      <div className="bg-card w-full max-w-lg rounded-t-3xl flex flex-col max-h-[92vh]" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-card w-full max-w-lg rounded-t-3xl flex flex-col max-h-[92vh]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} onClick={e => e.stopPropagation()}>
         {/* Handle + header — fixed */}
         <div className="flex-shrink-0 px-5 pt-4 pb-4 border-b border-border">
           <div className="w-9 h-1 bg-border rounded-full mx-auto mb-4" />
@@ -723,6 +725,7 @@ function PlaceResultCard({ place, onSave, saving, isDuplicate }) {
 
 // ── Assign date modal (shown after saving a spot) ─────────────────────────────
 function AssignDateModal({ spot, tripCities = [], onAssign, onSkip, onUndo }) {
+  useBodyScrollLock(true);
   const { t } = useTranslation();
   const [selectedDate, setSelectedDate] = useState('');
   // Ciudad explícitamente elegida en el <select> — ver comentario junto al
@@ -765,7 +768,7 @@ function AssignDateModal({ spot, tripCities = [], onAssign, onSkip, onUndo }) {
   const isAllowed = (date) => tripDates.size === 0 || tripDates.has(date);
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 pb-[80px]">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40">
       <div className="bg-card w-full max-w-md rounded-t-3xl flex flex-col relative" style={{ paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}>
         <div className="p-5">
           <div className="w-9 h-1 bg-border rounded-full mx-auto mb-4" />
@@ -981,6 +984,7 @@ export default function Restaurants() {
   const [stateFilter, setStateFilter] = useState('all');
   const [assignDateSpot, setAssignDateSpot] = useState(null); // spot to assign date after saving
   const [stayDocPrompt, setStayDocPrompt] = useState(null);   // alojamiento recién guardado → ofrecer subir la reserva
+  useBodyScrollLock(!!stayDocPrompt);
   const [selectedCity, setSelectedCity] = useState('');
   // Los chips de "Lima", "Oxapampa"... antes solo guardaban el NOMBRE elegido
   // (selectedCity). Si el viaje repite ciudad (varias paradas con el mismo
@@ -1976,7 +1980,7 @@ export default function Restaurants() {
       {/* Alojamiento guardado → ¿subir la reserva? (opcional) */}
       {stayDocPrompt && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40" onClick={() => setStayDocPrompt(null)}>
-          <div className="bg-card w-full max-w-md rounded-t-2xl p-5 pb-8" onClick={e => e.stopPropagation()}>
+          <div className="bg-card w-full max-w-md rounded-t-2xl p-5" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }} onClick={e => e.stopPropagation()}>
             <div className="w-9 h-1 bg-border rounded-full mx-auto mb-4" />
             <p className="font-semibold text-foreground text-sm mb-1">{t('spots.stayDoc.title')}</p>
             <p className="text-xs text-muted-foreground mb-5">{t('spots.stayDoc.body', { name: stayDocPrompt.title })}</p>
