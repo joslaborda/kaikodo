@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Check } from 'lucide-react';
+import { Check, Eye } from 'lucide-react';
 import { Hotel, Train, Ticket, Shield, CirclePlus, Trash2, Search, X, MapPin, Loader2 } from 'lucide-react';
 import { PlaneIcon, BusFront } from '@/lib/icons';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,7 @@ import { getTripDays, tripDayOptionValue, parseTripDayOptionValue } from '@/lib/
 import { useToast } from '@/components/ui/use-toast';
 import { checkUpload, convertHeicIfNeeded } from '@/lib/uploadLimits';
 import { normalizeEmail } from '@/lib/utils';
+import { profileFor, displayNameFor } from '@/lib/docHolders';
 import { uploadDocFile, resolveDocViewUrl } from '@/lib/privateFiles';
 import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
 
@@ -38,21 +39,31 @@ const CATEGORIES = [
   { key: 'other',    Icon: CirclePlus, labelKey: 'documents.types.other'    },
 ];
 
-const VISIBILITY_OPTS = [
-  { key: 'personal',       tk: 'documents.form.vis.onlyMe', dk: 'documents.form.vis.onlyMeDesc' },
-  { key: 'shared',         tk: 'documents.form.vis.group',  dk: 'documents.form.vis.groupDesc'  },
-  { key: 'selected_users', tk: 'documents.form.vis.choose', dk: 'documents.form.vis.chooseDesc' },
-];
-
+// José (21 sep 2026): un formulario mucho más corto. Se quitaron origen,
+// destino, compañía/nº de vuelo, hora de llegada y hora de la nota (los
+// documentos que ya los tienen los conservan, solo dejan de pedirse). El
+// único dato de lugar que importa es DÓNDE tienes que estar (el buscador, que
+// da nombre y pin en el mapa). En un hotel ese mismo buscador es el hotel, y
+// al guardar deja el alojamiento puesto en la ciudad (src/lib/hotelStay.js).
 const SHOW_FIELDS = {
-  flight:   ['name','origin','destination','location','airline','date','time','end_time','notes','note_time'],
-  hotel:    ['name','date','time','end_date','notes','note_time'],
-  train:    ['name','origin','destination','location','date','time','end_time','notes','note_time'],
-  bus:      ['name','origin','destination','location','date','time','end_time','notes','note_time'],
-  event:    ['name','date','time','notes','note_time'],
-  personal: ['name','date','end_date','notes','note_time'],
-  other:    ['name','date','time','notes','note_time'],
+  flight:   ['name','location','date','time','notes'],
+  train:    ['name','location','date','time','notes'],
+  bus:      ['name','location','date','time','notes'],
+  hotel:    ['name','location','date','end_date','notes'],
+  event:    ['name','date','time','notes'],
+  personal: ['name','date','end_date','notes'],
+  other:    ['name','date','time','notes'],
 };
+
+// Quién VE el documento (independiente de quién lo USA). Por defecto todo el
+// grupo en billetes/eventos/hotel (así cualquiera lo encuentra si hace
+// falta), y solo quien lo usa en seguros y "otro" (pasaporte, etc.).
+const AUDIENCE_OPTS = [
+  { key: 'group',   tk: 'documents.form.vis.group',   dk: 'documents.form.vis.groupDesc'   },
+  { key: 'holders', tk: 'documents.form.vis.holders', dk: 'documents.form.vis.holdersDesc' },
+  { key: 'choose',  tk: 'documents.form.vis.choose',  dk: 'documents.form.vis.chooseDesc'  },
+];
+const defaultAudienceFor = (cat) => (cat === 'personal' || cat === 'other') ? 'holders' : 'group';
 
 // Buscador de ubicacion (aeropuerto/estacion) para vuelos y trenes. Usa
 // Google Places API (New, Text Search) cuando hay una API key configurada
@@ -146,7 +157,34 @@ export default function DocumentForm({
   const { t } = useTranslation();
   const { toast } = useToast();
   const [category, setCategory]     = useState(initialData?.category || 'flight');
-  const [visibility, setVisibility] = useState(initialData?.visibility || 'shared');
+  // José (21 sep 2026): "¿Para quién es?" es lo más importante del formulario
+  // — decide a quién le sale el billete en SU Ruta y en Home, y en qué móvil
+  // suena el aviso (used_by). Viene "Yo" marcado (lo normal es subir tu propio
+  // billete) y siempre se ve en pantalla; subir el de otro es un gesto
+  // deliberado. Quién puede VERLO es una segunda decisión, plegada debajo, con
+  // un valor por defecto según el tipo. Quien usa un documento SIEMPRE tiene
+  // acceso a él (además de esta lógica, lo garantiza el rls de Ticket.jsonc).
+  const meEmail = normalizeEmail(currentUserEmail);
+  const soloTrip = (members || []).length <= 1;
+  const [usedBy, setUsedBy] = useState(() => {
+    if (Array.isArray(initialData?.used_by) && initialData.used_by.length) return initialData.used_by;
+    if (initialData?.id && initialData?.created_by) return [initialData.created_by];
+    const me = (members || []).find(e => normalizeEmail(e) === meEmail);
+    return me ? [me] : (currentUserEmail ? [currentUserEmail] : []);
+  });
+  // null = el usuario aún no ha tocado "quién lo verá" → se deriva del tipo.
+  const [audienceChoice, setAudienceChoice] = useState(() => {
+    if (!initialData?.id) return null;
+    const v = initialData.visibility;
+    if (v === 'shared') return 'group';
+    if (v === 'selected_users') {
+      const holders = (Array.isArray(initialData.used_by) && initialData.used_by.length ? initialData.used_by : [initialData.created_by]).map(normalizeEmail);
+      return (initialData.shared_with || []).some(e => !holders.includes(normalizeEmail(e))) ? 'choose' : 'holders';
+    }
+    return 'holders';
+  });
+  const [showAudience, setShowAudience] = useState(false);
+  const audience = audienceChoice || defaultAudienceFor(category);
   const [sharedWith, setSharedWith] = useState(initialData?.shared_with || []);
   const [fileUploading, setFileUploading] = useState(false);
   const [fields, setFields]         = useState({
@@ -172,6 +210,7 @@ export default function DocumentForm({
     city_id:     initialData?.city_id     || '',
     arrival_city_id: initialData?.arrival_city_id || '',
     location_name: initialData?.location_name || '',
+    spot_id:       initialData?.spot_id       || '',
     location_lat:  initialData?.location_lat  || '',
     location_lng:  initialData?.location_lng  || '',
   });
@@ -247,6 +286,23 @@ export default function DocumentForm({
 
   const setField = (k, v) => setFields(prev => ({ ...prev, [k]: v }));
 
+  const toggleUsedBy = (email) => {
+    setUsedBy(prev => prev.some(e => normalizeEmail(e) === normalizeEmail(email))
+      ? prev.filter(e => normalizeEmail(e) !== normalizeEmail(email))
+      : [...prev, email]);
+  };
+
+  const toggleAllUsers = () => {
+    const all = members || [];
+    const allOn = all.length > 0 && all.every(m => usedBy.some(e => normalizeEmail(e) === normalizeEmail(m)));
+    if (allOn) {
+      const me = all.find(e => normalizeEmail(e) === meEmail);
+      setUsedBy(me ? [me] : []);
+    } else setUsedBy([...all]);
+  };
+
+  const canSave = !!fields.name.trim() && (soloTrip || usedBy.length > 0);
+
   const toggleSharedWith = (email) => {
     setSharedWith(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email]);
   };
@@ -288,6 +344,24 @@ export default function DocumentForm({
 
   const handleSave = () => {
     if (!fields.name.trim()) return;
+    if (!soloTrip && usedBy.length === 0) {
+      toast({ title: t('documents.form.requiredTitle'), description: t('documents.form.requiredDesc'), variant: 'destructive' });
+      return;
+    }
+    // Quien va a usar un documento SIEMPRE puede verlo: se traduce la opción
+    // elegida a visibility/shared_with metiendo siempre a los que lo usan.
+    const othersUse = usedBy.filter(e => normalizeEmail(e) !== meEmail);
+    let visibilityOut = 'personal';
+    let sharedOut = [];
+    if (!soloTrip) {
+      if (audience === 'group') {
+        visibilityOut = 'shared';
+      } else {
+        const extra = audience === 'choose' ? sharedWith : [];
+        const all = [...new Set([...extra, ...othersUse])];
+        if (all.length) { visibilityOut = 'selected_users'; sharedOut = all; }
+      }
+    }
     // Nada validaba que la fecha de fin (checkout de hotel, fin de seguro...)
     // fuera posterior a la de inicio — igual que el bug ya corregido en
     // NewTripModal.jsx (viaje con end_date < start_date). Aquí se podía
@@ -305,6 +379,7 @@ export default function DocumentForm({
     // sin ubicación buscada. Los omitimos del payload si no son números.
     const { location_lat, location_lng, ...rest } = fields;
     const payload = { ...rest };
+    if (!payload.spot_id) delete payload.spot_id;
     // El campo "Ciudad" (texto libre) se quitó del formulario -- era
     // redundante con la fecha, que ya lleva la ciudad del día embebida
     // (fields.city_id, elegido en el desplegable de FECHA). Se resuelve
@@ -326,8 +401,11 @@ export default function DocumentForm({
     onSave({
       ...payload,
       category,
-      visibility,
-      shared_with: visibility === 'selected_users' ? sharedWith : [],
+      visibility: visibilityOut,
+      // en minúsculas: el rls de Ticket compara used_by/shared_with con el email
+      // de la sesión tal cual, y trip.members puede venir con otras mayúsculas.
+      used_by: (soloTrip ? (usedBy.length ? usedBy : (currentUserEmail ? [currentUserEmail] : [])) : usedBy).map(normalizeEmail),
+      shared_with: sharedOut.map(normalizeEmail),
     });
   };
 
@@ -381,9 +459,9 @@ export default function DocumentForm({
       {hasField('location') && (
         <div>
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-            {t('documents.form.fields.location')} <span className="font-normal normal-case tracking-normal text-muted-foreground">{t('documents.form.optional')}</span>
+            {category === 'hotel' ? t('documents.form.fields.hotelPlace') : t('documents.form.fields.location')} <span className="font-normal normal-case tracking-normal text-muted-foreground">{t('documents.form.optional')}</span>
           </p>
-          <p className="text-xs text-muted-foreground/70 mb-1.5">{t('documents.form.locationHint')}</p>
+          <p className="text-xs text-muted-foreground/70 mb-1.5">{category === 'hotel' ? t('documents.form.hotelHint') : t('documents.form.locationHint')}</p>
           {fields.location_lat && fields.location_lng ? (
             <div className="flex items-center gap-2 bg-secondary/40 border border-border rounded-xl px-3 py-2.5">
               <MapPin className="w-4 h-4 text-primary shrink-0" />
@@ -398,7 +476,7 @@ export default function DocumentForm({
               <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
                 <Search className="w-4 h-4 text-muted-foreground shrink-0" />
                 <input value={locationQuery} onChange={e => setLocationQuery(e.target.value)}
-                  placeholder={t('documents.form.ph.location')} className="flex-1 text-sm outline-none bg-transparent text-foreground min-w-0" />
+                  placeholder={category === 'hotel' ? t('documents.form.ph.hotel') : t('documents.form.ph.location')} className="flex-1 text-sm outline-none bg-transparent text-foreground min-w-0" />
                 {locationSearching && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
               </div>
               {locationResults.length > 0 && (
@@ -406,7 +484,7 @@ export default function DocumentForm({
                   {locationResults.map(r => (
                     <button key={r.id} type="button" disabled={resolvingLocationId === r.id} onClick={async () => {
                                             if (r.lat && r.lng) {
-                                                                      setFields(prev => ({ ...prev, location_name: r.name, location_lat: r.lat, location_lng: r.lng }));
+                                                                      setFields(prev => ({ ...prev, location_name: r.name, location_lat: r.lat, location_lng: r.lng, ...(category === 'hotel' && !prev.name.trim() ? { name: r.name } : {}) }));
                                                                       setLocationQuery(r.name);
                                                                       setLocationResults([]);
                                                                       return;
@@ -419,7 +497,7 @@ export default function DocumentForm({
                                           try {
                                                                   const details = await fetchGooglePlaceDetails(r._placeId, apiKey, resolveAbortRef.current.signal);
                                                                   if (details?.lat && details?.lng) {
-                                                                                            setFields(prev => ({ ...prev, location_name: details.name || r.name, location_lat: details.lat, location_lng: details.lng }));
+                                                                                            setFields(prev => ({ ...prev, location_name: details.name || r.name, location_lat: details.lat, location_lng: details.lng, ...(category === 'hotel' && !prev.name.trim() ? { name: details.name || r.name } : {}) }));
                                                                                             setLocationQuery(details.name || r.name);
                                                                                             setLocationResults([]);
                                                                   } else {
@@ -462,7 +540,7 @@ export default function DocumentForm({
         <div className={`grid gap-3 ${hasField('date') && hasField('time') ? 'grid-cols-2' : 'grid-cols-1'}`}>
           {hasField('date') && (
             <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('documents.form.fields.date')}</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{category === 'hotel' ? t('documents.form.fields.checkIn') : t('documents.form.fields.date')}</p>
               {useTripDays ? (
                 <select
                   value={selectedDayOption ? tripDayOptionValue(selectedDayOption) : ''}
@@ -485,7 +563,7 @@ export default function DocumentForm({
           {hasField('time') && (
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-                {hasField('end_time') ? t('documents.form.fields.time') : t('common.time')}
+                {['flight', 'train', 'bus'].includes(category) ? t('documents.form.fields.time') : t('common.time')}
               </p>
               <Input type="time" value={fields.time} onChange={e => setField('time', e.target.value)} className="h-10 text-sm" />
             </div>
@@ -500,7 +578,7 @@ export default function DocumentForm({
           siempre quedaba null, así que ese documento solo aparecía bajo la
           ciudad de origen elegida arriba, nunca bajo la de llegada. Opcional:
           si no se elige, se mantiene el comportamiento anterior (solo city_id). */}
-      {(category === 'flight' || category === 'train') && (cities || []).length > 1 && (
+      {(category === 'flight' || category === 'train' || category === 'bus') && (cities || []).length > 1 && (
         <div>
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
             {t('documents.form.fields.arrivalCity')} <span className="font-normal normal-case tracking-normal text-muted-foreground">{t('documents.form.optional')}</span>
@@ -531,7 +609,7 @@ export default function DocumentForm({
       {/* End date */}
       {hasField('end_date') && (
         <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('documents.form.fields.endDate')}</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{category === 'hotel' ? t('documents.form.fields.checkOut') : t('documents.form.fields.endDate')}</p>
           <Input type="date" value={fields.end_date} onChange={e => setField('end_date', e.target.value)} className="h-10 text-sm" min={minDate || undefined} max={maxDate || undefined} />
         </div>
       )}
@@ -555,71 +633,99 @@ export default function DocumentForm({
         </div>
       )}
 
-      {/* Visibility — stacked with description */}
-      <div>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('documents.form.visibility')}</p>
-        <div className="flex flex-col gap-2">
-          {VISIBILITY_OPTS.map(opt => (
-            <button key={opt.key} onClick={() => setVisibility(opt.key)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                visibility === opt.key ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200' : 'bg-card border-border hover:bg-secondary/30'
-              }`}>
-              
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${visibility === opt.key ? 'text-primary' : 'text-foreground'}`}>{t(opt.tk)}</p>
-                <p className={`text-xs mt-0.5 ${visibility === opt.key ? 'text-primary/70' : 'text-muted-foreground'}`}>{t(opt.dk)}</p>
-              </div>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                visibility === opt.key ? 'bg-primary border-primary' : 'border-border'
-              }`}>
-                {visibility === opt.key && <Check className="w-3 h-3 text-white" />}
-              </div>
-            </button>
-          ))}
-        </div>
-
-        {/* User picker when "selected_users" */}
-        {visibility === 'selected_users' && members.length > 0 && (
-          <div className="mt-3 flex flex-col gap-2">
-            {members.map((email, i) => {
-              const profile = profiles?.[email] || null;
-              const name = profile?.display_name || profile?.username || email;
-              const initials = (profile?.display_name?.[0] || profile?.username?.[0] || email?.[0] || '?').toUpperCase();
-              const colors = ['bg-orange-100 text-primary','bg-violet-100 text-violet-700','bg-blue-100 text-blue-700','bg-green-100 text-green-700'];
-              // Antes "quién eres tú / siempre incluido" se decidía por
-              // posición en el array (i === 0, que solo es el creador del
-              // viaje) — para cualquier otro miembro, la UI etiquetaba al
-              // creador como "Tú" y bloqueaba su casilla, mientras que la
-              // persona real que compartía el documento no quedaba marcada.
-              const isYou = currentUserEmail ? normalizeEmail(email) === normalizeEmail(currentUserEmail) : i === 0;
-              const selected = sharedWith.includes(email) || isYou;
-
+      {/* ¿Para quién es? — lo más importante del formulario. No sale en un
+          viaje de una sola persona (no hay nadie más a quien asignárselo). */}
+      {!soloTrip && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">{t('documents.form.usedBy')}</p>
+          <p className="text-xs text-muted-foreground/70 mb-2">{t('documents.form.usedByHint')}</p>
+          <div className="flex flex-wrap gap-2">
+            {members.map((email) => {
+              const p = profileFor(email, profiles);
+              const name = displayNameFor(email, profiles);
+              const isMe = normalizeEmail(email) === meEmail;
+              const on = usedBy.some(e => normalizeEmail(e) === normalizeEmail(email));
               return (
-                <button key={email}
-                  onClick={() => !isYou && toggleSharedWith(email)}
-                  disabled={isYou}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
-                    selected ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200' : 'bg-card border-border hover:bg-secondary/20'
-                  } ${isYou ? 'cursor-default' : ''}`}>
-                  {profile?.avatar_url
-                    ? <img src={profile.avatar_url} alt={name} className="w-8 h-8 rounded-full object-cover shrink-0" />
-                    : <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${colors[i % colors.length]}`}>{initials}</div>
-                  }
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className={`text-sm font-medium truncate ${selected ? 'text-primary' : 'text-foreground'}`}>{name}</p>
-                    {isYou && <p className="text-xs text-muted-foreground">{t('documents.form.alwaysIncluded')}</p>}
-                  </div>
-                  <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
-                    selected ? 'bg-primary' : 'bg-secondary border border-border'
+                <button key={email} type="button" onClick={() => toggleUsedBy(email)}
+                  className={`inline-flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border text-sm transition-colors ${
+                    on ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 text-primary font-medium' : 'bg-card border-border text-foreground hover:bg-secondary/30'
                   }`}>
-                    {selected && <Check className="w-3 h-3 text-white" />}
-                  </div>
+                  {p?.avatar_url
+                    ? <img src={p.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                    : <span className="w-6 h-6 rounded-full bg-orange-100 text-primary flex items-center justify-center text-xs font-semibold shrink-0">{(name?.[0] || '?').toUpperCase()}</span>}
+                  <span className="truncate max-w-[9rem]">{isMe ? t('documents.form.me') : name}</span>
+                  {on && <Check className="w-3.5 h-3.5 shrink-0" />}
                 </button>
               );
             })}
+            {members.length > 2 && (
+              <button type="button" onClick={toggleAllUsers}
+                className={`inline-flex items-center px-3 py-1.5 rounded-full border text-sm transition-colors ${
+                  members.every(m => usedBy.some(e => normalizeEmail(e) === normalizeEmail(m)))
+                    ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 text-primary font-medium'
+                    : 'bg-card border-border text-foreground hover:bg-secondary/30'
+                }`}>
+                {t('documents.form.everyone')}
+              </button>
+            )}
           </div>
-        )}
-      </div>
+          {usedBy.length === 0 && <p className="text-xs text-red-500 mt-2">{t('documents.form.usedByRequired')}</p>}
+
+          {/* Quién lo verá — plegado, con valor por defecto según el tipo */}
+          <div className="mt-3">
+            <button type="button" onClick={() => setShowAudience(s => !s)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Eye className="w-3.5 h-3.5 shrink-0" />
+              <span>{t('documents.form.seenBy', { who: t(AUDIENCE_OPTS.find(o => o.key === audience)?.tk).toLowerCase() })}</span>
+              <span className="text-primary font-medium underline underline-offset-2">{showAudience ? t('common.close') : t('documents.form.change')}</span>
+            </button>
+            {showAudience && (
+              <div className="mt-2 flex flex-col gap-2">
+                {AUDIENCE_OPTS.map(opt => (
+                  <button key={opt.key} type="button" onClick={() => setAudienceChoice(opt.key)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
+                      audience === opt.key ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200' : 'bg-card border-border hover:bg-secondary/30'
+                    }`}>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium ${audience === opt.key ? 'text-primary' : 'text-foreground'}`}>{t(opt.tk)}</p>
+                      <p className={`text-xs mt-0.5 ${audience === opt.key ? 'text-primary/70' : 'text-muted-foreground'}`}>{t(opt.dk)}</p>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${audience === opt.key ? 'bg-primary border-primary' : 'border-border'}`}>
+                      {audience === opt.key && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                  </button>
+                ))}
+                {audience === 'choose' && (
+                  <div className="flex flex-col gap-2">
+                    {members.map((email) => {
+                      const name = displayNameFor(email, profiles);
+                      const isYou = normalizeEmail(email) === meEmail;
+                      const isHolder = usedBy.some(e => normalizeEmail(e) === normalizeEmail(email));
+                      const selected = sharedWith.includes(email) || isYou || isHolder;
+                      return (
+                        <button key={email} type="button"
+                          onClick={() => !isYou && !isHolder && toggleSharedWith(email)}
+                          disabled={isYou || isHolder}
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
+                            selected ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200' : 'bg-card border-border hover:bg-secondary/20'
+                          } ${(isYou || isHolder) ? 'cursor-default' : ''}`}>
+                          <div className="flex-1 min-w-0 text-left">
+                            <p className={`text-sm font-medium truncate ${selected ? 'text-primary' : 'text-foreground'}`}>{isYou ? t('documents.form.me') : name}</p>
+                            {(isYou || isHolder) && <p className="text-xs text-muted-foreground">{isYou ? t('documents.form.alwaysIncluded') : t('documents.form.usesItSoSees')}</p>}
+                          </div>
+                          <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${selected ? 'bg-primary' : 'bg-secondary border border-border'}`}>
+                            {selected && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* File upload + preview */}
       <div>
@@ -676,7 +782,7 @@ export default function DocumentForm({
       )}
       <div className="flex gap-3 pt-2">
         <Button variant="outline" onClick={onCancel} className="flex-1">{t('common.cancel')}</Button>
-        <Button onClick={handleSave} disabled={!fields.name.trim() || saving} className="flex-1 bg-primary hover:bg-primary/90 text-white">
+        <Button onClick={handleSave} disabled={!canSave || saving} className="flex-1 bg-primary hover:bg-primary/90 text-white">
           {saving ? t('documents.form.saving') : t('common.save')}
         </Button>
       </div>
