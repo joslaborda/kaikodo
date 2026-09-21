@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { differenceInDays, parseISO, isValid } from 'date-fns';
+import { isDocForUser } from '@/lib/docHolders';
 
 /**
  * TripAlerts — componente sin UI propia.
@@ -9,7 +10,7 @@ import { differenceInDays, parseISO, isValid } from 'date-fns';
  * vía onUrgentCount (alimenta el indicador del tab "Hoy" en OTabBar).
  * Las tarjetas de alerta visibles viven en los tabs Hoy/Inicio.
  */
-export default function TripAlerts({ tripId, cities, trip, onUrgentCount }) {
+export default function TripAlerts({ tripId, cities, trip, currentUserEmail, onUrgentCount }) {
   // Tick cada minuto para que la ventana de 4h se mantenga fresca
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -27,7 +28,9 @@ export default function TripAlerts({ tripId, cities, trip, onUrgentCount }) {
   useEffect(() => {
     const today = new Date();
     const urgentCount = tickets
-      .filter(t => ['flight', 'train', 'bus'].includes(t.category) && t.date && t.time)
+      // Solo billetes que YO voy a usar (used_by) — el tren de otro viajero no
+      // debe encender mi indicador de "sale pronto".
+      .filter(t => ['flight', 'train', 'bus'].includes(t.category) && t.date && t.time && (!currentUserEmail || isDocForUser(t, currentUserEmail)))
       .reduce((count, t) => {
         const d = parseISO(t.date);
         if (!isValid(d)) return count;
@@ -39,7 +42,7 @@ export default function TripAlerts({ tripId, cities, trip, onUrgentCount }) {
         return (diffMin >= 0 && diffMin <= 240) ? count + 1 : count;
       }, 0);
     onUrgentCount?.(urgentCount);
-  }, [tickets, onUrgentCount]);
+  }, [tickets, onUrgentCount, currentUserEmail]);
 
   return null;
 }

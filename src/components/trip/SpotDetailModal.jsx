@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
+import { toast } from '@/components/ui/use-toast';
 import { scheduleSpotReminder, cancelSpotReminder } from '@/lib/localReminders';
 
 // Antes 'hotel' y las variantes de transporte (aeropuerto/tren/bus) no
@@ -56,6 +57,8 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
   const [editingTime, setEditingTime]   = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [saving, setSaving]       = useState(false);
+  const [confirmRemoveStay, setConfirmRemoveStay] = useState(false);
+  const [removingStay, setRemovingStay] = useState(false);
 
   const { data: tripCities = [] } = useQuery({
     queryKey: ['cities', tripId],
@@ -96,6 +99,22 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
 
   if (!open || !spot) return null;
 
+  // Un alojamiento es de toda la estancia: ni día ni hora ni "quitar del día"
+  // (src/lib/cityStay.js). Solo notas y abrir en Maps.
+  const isStay = spot.type === 'hotel';
+  // Mismo criterio que "Eliminar spot" en Spots: quien lo creó, o un spot sin
+  // creador (los que vienen del buscador de Google).
+  const canRemoveStay = isStay && (!spot.created_by || normalizeEmail(spot.created_by) === normalizeEmail(currentUserEmail));
+  const handleRemoveStay = async () => {
+    setRemovingStay(true);
+    try {
+      await base44.entities.Spot.delete(spot.id);
+      if (queryClient && tripId) queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
+      onClose();
+    } catch (e) {
+      toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' });
+    } finally { setRemovingStay(false); setConfirmRemoveStay(false); }
+  };
   const IconComp = SPOT_ICONS[spot.type] || null;
   const typeLabel = (TYPE_LABEL_KEYS[spot.type] ? t(TYPE_LABEL_KEYS[spot.type]) : null) || spot.type || 'Spot';
 
@@ -140,7 +159,9 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
                 // en el timeline de Ruta/Hoy -- se quedaba en la posicion del ultimo
                 // drag en vez de reordenarse solo. Se limpia el pin cuando hora o
                 // fecha cambian de verdad, para que caiga en su hueco cronologico.
-                await base44.entities.Spot.update(spot.id, {
+                await base44.entities.Spot.update(spot.id, isStay
+                  ? { notes: notes.trim() || null, assigned_time: null, assigned_date: null, day_order: null }
+                  : {
                           notes: notes.trim() || null,
                           assigned_time: time || null,
                           assigned_date: nextDate || null,
@@ -150,9 +171,9 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
       if (queryClient && tripId) {
         queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
       }
-      if (timeChanged && time) notifyTimeChange(time);
+      if (!isStay && timeChanged && time) notifyTimeChange(time);
       cancelSpotReminder(spot.id);
-      scheduleSpotReminder({ id: spot.id, title: spot.title, assigned_date: nextDate || null, assigned_time: time || null });
+      if (!isStay) scheduleSpotReminder({ id: spot.id, title: spot.title, assigned_date: nextDate || null, assigned_time: time || null });
       if (onSave) onSave(spot, notes, time);
       setEditingTime(false);
       setEditingNotes(false);
@@ -250,7 +271,8 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
           )}
 
           {/* Día */}
-          {tripDayOptions.length > 0 && (
+          {isStay && <p className="text-xs text-muted-foreground bg-secondary/50 rounded-xl px-3 py-2.5">{t('spots.stayInfo')}</p>}
+          {!isStay && tripDayOptions.length > 0 && (
             <div>
               <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">{t('spots.sheet.day')}</p>
               <select
@@ -280,6 +302,7 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
           )}
 
           {/* Hora */}
+          {!isStay && (
           <div>
             <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">{t('spots.sheet.time')}</p>
             {editingTime ? (
@@ -307,6 +330,7 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
               </div>
             )}
           </div>
+          )}
 
           {/* Notas */}
           <div>
@@ -336,11 +360,24 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
 
         {/* Actions */}
         <div className="flex gap-3 px-5 pb-8 pt-3 border-t border-border">
-          {onRemove && (
+          {onRemove && !isStay && (
             <button onClick={() => onRemove(spot)}
               className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors">
               <Trash2 className="w-3.5 h-3.5" />{t('cities.day.removeFromDay')}
             </button>
+          )}
+          {canRemoveStay && (
+            confirmRemoveStay ? (
+              <span className="flex items-center gap-2 text-xs">
+                <button onClick={() => setConfirmRemoveStay(false)} className="text-muted-foreground">{t('common.cancel')}</button>
+                <button onClick={handleRemoveStay} disabled={removingStay} className="text-red-500 font-medium disabled:opacity-50">{t('spotDetail.removeStayConfirm')}</button>
+              </span>
+            ) : (
+              <button onClick={() => setConfirmRemoveStay(true)}
+                className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors">
+                <Trash2 className="w-3.5 h-3.5" />{t('spotDetail.removeStay')}
+              </button>
+            )
           )}
           <div className="flex-1" />
           <a href={getMapsUrl(spot)} target="_blank" rel="noopener noreferrer"
