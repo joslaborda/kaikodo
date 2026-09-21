@@ -4,6 +4,8 @@ import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { scheduleTicketReminder, cancelTicketReminder } from '@/lib/localReminders';
+import { isDocForUser, holdersSummary } from '@/lib/docHolders';
+import { linkHotelDocToStay } from '@/lib/hotelStay';
 import { Car, ChevronDown, ChevronUp, CirclePlus, FileText, Hotel, Lock, Pencil, Plus, Shield, Ticket, Train, Trash2, User, Users } from 'lucide-react';
 import { PlaneIcon, BusFront } from '@/lib/icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -58,7 +60,7 @@ const VIS = {
 };
 
 // ── Doc row ───────────────────────────────────────────────────────────────────
-function DocRow({ticket, onEdit, onDelete, onView }) {
+function DocRow({ticket, onEdit, onDelete, onView, profiles, myEmail, members }) {
   const { t, i18n } = useTranslation();
   // Locale dinámico según idioma activo — antes esta fila mostraba siempre
   // nombres de mes en español aunque el usuario tuviera la app en inglés.
@@ -106,6 +108,12 @@ function DocRow({ticket, onEdit, onDelete, onView }) {
           <p className="text-sm font-medium text-foreground leading-snug line-clamp-2">{displayName}</p>
           {routeLabel && <p className="text-xs text-muted-foreground mt-0.5">{routeLabel}</p>}
           {timeLabel && <p className="text-xs text-primary font-semibold mt-0.5">{timeLabel}</p>}
+          {/* Para quién es — lo que decide a quién le sale en su Ruta y Home */}
+          {members.length > 1 && (
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+              {t('documents.forHolders', { names: holdersSummary(ticket, profiles, myEmail, members, { you: t('documents.card.you'), everyone: t('documents.card.everyone') }) })}
+            </p>
+          )}
         </button>
         <div className="flex items-center gap-1.5 shrink-0">
           {hasFile && (
@@ -200,6 +208,7 @@ export default function Documents() {
   const { toast } = useToast();
   const tripId = new URLSearchParams(window.location.search).get('trip_id');
   const deepLinkDocId = new URLSearchParams(window.location.search).get('doc_id');
+  const staySpotParam = new URLSearchParams(window.location.search).get('stay_spot_id');
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
   // normalizeEmail() en ambos lados de cualquier comparación de email — el
@@ -211,6 +220,7 @@ export default function Documents() {
 
   const [catFilter, setCatFilter]   = useState('all');
   const [addOpen, setAddOpen]       = useState(false);
+  const [addInitial, setAddInitial] = useState(null); // reserva de hotel prellenada desde un alojamiento
   const [editDoc, setEditDoc]       = useState(null);
   const [deleteDoc, setDeleteDoc]   = useState(null);
   const [viewFile, setViewFile]     = useState(null);
@@ -248,6 +258,26 @@ export default function Documents() {
     queryFn: () => base44.entities.City.filter({ trip_id: tripId }, 'order'), // misma queryKey ['cities', tripId] que otras pantallas — unificado para no compartir caché con fetches distintos
     enabled: !!tripId, staleTime: 30000,
   });
+  // Spots solo para la reserva de hotel que llega desde "Añadir alojamiento".
+  const { data: tripSpots = [] } = useQuery({
+    queryKey: ['spots', tripId],
+    queryFn: () => base44.entities.Spot.filter({ trip_id: tripId }),
+    enabled: !!tripId && !!staySpotParam, staleTime: 30000,
+  });
+  useEffect(() => {
+    if (!staySpotParam || !tripSpots.length) return;
+    const stay = tripSpots.find(s => s.id === staySpotParam);
+    if (stay) {
+      setAddInitial({
+        category: 'hotel', name: stay.title, spot_id: stay.id, city_id: stay.city_id || '',
+        location_name: stay.title, location_lat: stay.lat ?? '', location_lng: stay.lng ?? '',
+      });
+      setAddOpen(true);
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete('stay_spot_id');
+    window.history.replaceState({}, '', url);
+  }, [staySpotParam, tripSpots]);
   const { data: itineraryDays = [] } = useQuery({
     queryKey: ['itineraryDays', tripId],
     queryFn: () => base44.entities.ItineraryDay.filter({ trip_id: tripId }, 'date'),
@@ -326,8 +356,11 @@ export default function Documents() {
     onSuccess: (newDoc, data) => {
       queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
-      setAddOpen(false);
-      scheduleTicketReminder({ ...data, id: newDoc?.id, trip_id: tripId });
+      setAddOpen(false); setAddInitial(null);
+      // Una reserva de hotel deja puesto el alojamiento de la ciudad (hotelStay.js).
+      if (data.category === 'hotel') linkHotelDocToStay({ doc: { ...data, id: newDoc?.id }, tripId, trip, cities, userEmail: currentUser?.email, userId, queryClient });
+      // Solo suena en el móvil de quien va a usar el documento (used_by).
+      if (isDocForUser({ created_by: currentUserEmail, ...data }, currentUserEmail)) scheduleTicketReminder({ ...data, id: newDoc?.id, trip_id: tripId });
       // Notify members about new doc
       if (data.visibility !== 'personal') {
         const sharedWith = data.visibility === 'selected_users'
@@ -358,8 +391,9 @@ export default function Documents() {
       queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
       setEditDoc(null);
+      if (data.category === 'hotel') linkHotelDocToStay({ doc: { ...data, id: oldDoc?.id, spot_id: data.spot_id || oldDoc?.spot_id }, tripId, trip, cities, userEmail: currentUser?.email, userId, queryClient });
       cancelTicketReminder(oldDoc?.id);
-      scheduleTicketReminder({ ...data, id: oldDoc?.id, trip_id: tripId });
+      if (isDocForUser({ created_by: oldDoc?.created_by, ...data }, currentUserEmail)) scheduleTicketReminder({ ...data, id: oldDoc?.id, trip_id: tripId });
       // Antes editar la hora de un ticket (vuelo/tren/etc.) no avisaba a
       // nadie — solo se notificaba al CREAR el documento. Mismo criterio de
       // destinatarios que doc_added (respeta visibility), pero disparado
@@ -403,7 +437,7 @@ export default function Documents() {
   // Filter
   const filtered = useMemo(() => tickets.filter(ticket => {
     const vis = ticket.visibility || 'personal';
-    const isOwner = normalizeEmail(ticket.created_by) === currentUserEmail || ticket.user_id === userId;
+    const isOwner = normalizeEmail(ticket.created_by) === currentUserEmail || ticket.user_id === userId || (ticket.used_by || []).some(e => normalizeEmail(e) === currentUserEmail);
     // personal: only owner sees it
     if (vis === 'personal' && !isOwner) return false;
     // selected_users: owner or explicitly shared
@@ -483,23 +517,23 @@ export default function Documents() {
           <div key={date} className="mb-6">
             <p className={`text-xs font-semibold uppercase tracking-wide mb-3 px-1 ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>{label}</p>
             {items.map(ticket => (
-              <DocRow key={ticket.id} ticket={ticket} onEdit={setEditDoc} onDelete={setDeleteDoc} onView={setViewFile} />
+              <DocRow key={ticket.id} ticket={ticket} onEdit={setEditDoc} onDelete={setDeleteDoc} onView={setViewFile} profiles={profilesByEmail} myEmail={currentUserEmail} members={members} />
             ))}
           </div>
         ))}
       </div>
 
       {/* Add dialog */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setAddInitial(null); }}>
         <DialogContent className="bg-card border-border max-w-lg max-h-[92vh] p-0 gap-0 flex flex-col">
           <DialogHeader className="px-5 py-4 border-b border-border flex-shrink-0">
             <DialogTitle className="text-base font-semibold">{t('documents.add')}</DialogTitle>
           </DialogHeader>
           <div className="px-5 py-4 overflow-y-auto flex-1">
-            <DocumentForm cities={cities} itineraryDays={itineraryDays} members={members} profiles={profilesByEmail} tripCities={cities}
+            <DocumentForm key={addInitial?.spot_id || 'new'} initialData={addInitial} cities={cities} itineraryDays={itineraryDays} members={members} profiles={profilesByEmail} tripCities={cities}
               currentUserEmail={currentUserEmail}
               minDate={trip?.start_date || undefined} maxDate={trip?.end_date || undefined}
-              onSave={(d) => createMutation.mutate(d)} onCancel={() => setAddOpen(false)} saving={createMutation.isPending}
+              onSave={(d) => createMutation.mutate(d)} onCancel={() => { setAddOpen(false); setAddInitial(null); }} saving={createMutation.isPending}
               onView={(url) => { setEditDoc(null); setTimeout(() => setViewFile(url), 150); }} />
           </div>
         </DialogContent>

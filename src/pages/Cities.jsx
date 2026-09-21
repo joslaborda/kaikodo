@@ -29,6 +29,9 @@ import LeaveTripModal from '@/components/trip/LeaveTripModal';
 import { enrichTicketDataWithAutoLinks } from '@/lib/autoLinkTickets';
 import { scheduleTicketReminder, cancelTicketReminder } from '@/lib/localReminders';
 import { daysUntil } from '@/lib/tripDays';
+import { isStaySpot, getCityHotel } from '@/lib/cityStay';
+import { linkHotelDocToStay } from '@/lib/hotelStay';
+import { isDocForUser, isDocInMyRoute, otherHoldersLabel } from '@/lib/docHolders';
 import { useTranslation } from 'react-i18next';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -238,9 +241,10 @@ function DocViewerModal({ doc, open, onClose, onEdit, onOpenFile }) {
 }
 
 // ── Day expanded content ──────────────────────────────────────────────────────
-function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomorrow_, isEmpty, onReorderSpots, queryClient, trip, cities, itineraryDays, profiles, userId, currentUserEmail }) {
+function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, isToday_, isTomorrow_, isEmpty, onReorderSpots, queryClient, trip, cities, itineraryDays, profiles, userId, currentUserEmail }) {
   const { t } = useTranslation();
   const [editingSpot, setEditingSpot] = useState(null);   // spot object — view+edit modal
+  const [showOthers, setShowOthers] = useState(false);       // "De otros viajeros" plegado
   const [viewingDoc,  setViewingDoc]  = useState(null);   // doc object — view modal
   const [viewingFile, setViewingFile] = useState(null);   // file url — PDFViewer
   const [editingDoc,  setEditingDoc]  = useState(null);   // doc object — edit modal
@@ -379,10 +383,12 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
       queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
       queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
       setEditingDoc(null);
+      if (enriched.category === 'hotel') linkHotelDocToStay({ doc: { ...enriched, id: oldDoc?.id, spot_id: enriched.spot_id || oldDoc?.spot_id }, tripId, trip, cities, userEmail: currentUserEmail, userId, queryClient });
       // Mismo hueco que en Documents.jsx: editar un documento desde Ruta
       // nunca reprogramaba el recordatorio local del propio dispositivo.
       cancelTicketReminder(oldDoc?.id);
-      scheduleTicketReminder({ ...enriched, id: oldDoc?.id, trip_id: tripId });
+      // Solo suena en el móvil de quien va a usar el documento.
+      if (isDocForUser({ created_by: oldDoc?.created_by, ...enriched }, currentUserEmail)) scheduleTicketReminder({ ...enriched, id: oldDoc?.id, trip_id: tripId });
       // Mismo hueco que se cerró en Documents.jsx: editar la hora de un
       // ticket (vuelo/tren/etc.) desde Ruta tampoco avisaba a nadie.
       const timeChanged = (data.time || '') !== (oldDoc?.time || '') || (data.end_time || '') !== (oldDoc?.end_time || '');
@@ -444,10 +450,11 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
       queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
       queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
       setAddingDoc(false);
+      if (payload.category === 'hotel') linkHotelDocToStay({ doc: { ...payload, id: newDoc?.id }, tripId, trip, cities, userEmail: currentUserEmail, userId, queryClient });
       // Mismo hueco que ya se cerró en Documents.jsx: crear un vuelo/tren/
       // evento desde aquí (Ruta) nunca programaba el recordatorio local del
       // propio dispositivo -- solo la vía de Documents.jsx lo hacía.
-      scheduleTicketReminder({ ...payload, id: newDoc?.id });
+      if (isDocForUser({ created_by: currentUserEmail, ...payload }, currentUserEmail)) scheduleTicketReminder({ ...payload, id: newDoc?.id });
     } finally { setSavingNewDoc(false); }
   };
 
@@ -480,7 +487,7 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
   // cualquier otro, tenga hora o no. Antes solo los items sin hora eran
   // arrastrables, y solo entre ellos.
   const timeline = useMemo(() => {
-    const docItems  = dayDocs.map(d  => ({ ...d,  _kind: 'doc',  _time: d.time || null, _order: d.day_order ?? null, _title: d.name || d.title || t('cities.day.docFallback'), _sub: d.origin && d.destination ? `${d.origin} → ${d.destination}` : null }));
+    const docItems  = dayDocs.map(d  => ({ ...d,  _kind: 'doc',  _time: d.time || null, _order: d.day_order ?? null, _title: d.name || d.title || t('cities.day.docFallback'), _sub: [d.origin && d.destination ? `${d.origin} → ${d.destination}` : null, !isDocForUser(d, currentUserEmail) ? (otherHoldersLabel(d, profiles, currentUserEmail) ? t('documents.forHolders', { names: otherHoldersLabel(d, profiles, currentUserEmail) }) : null) : null].filter(Boolean).join(' · ') || null }));
     const spotItems = spots.map(s => ({ ...s,  _kind: 'spot', _time: s.assigned_time || null, _order: s.day_order ?? null, _title: s.title || t('cities.day.spotFallback'), _sub: s.notes || null }));
     // _noteIdx debe ser la posición REAL en notesList, no en la lista ya
     // filtrada por texto no vacío — antes se calculaba después del filter()
@@ -746,6 +753,29 @@ function DayContent({day, dayDate, docs, spots, tripId, cityId, isToday_, isTomo
       {/* Timeline */}
       {timeline.map((item, idx) => renderItem(item, idx))}
 
+      {/* Documentos de otros viajeros de este día — plegados, para no
+          mezclarlos con lo tuyo pero tenerlos a mano. */}
+      {otherDocs.length > 0 && (
+        <div className="border-t border-border">
+          <button onClick={() => setShowOthers(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-muted-foreground hover:bg-secondary/20 transition-colors">
+            <span>{t('cities.day.othersDocs', { count: otherDocs.length })}</span>
+            {showOthers ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+          {showOthers && otherDocs.map(d => (
+            <button key={d.id}
+              onClick={() => { if (d.file_url) setViewingFile(d.file_url); else setViewingDoc(d); }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 border-t border-border/60 hover:bg-secondary/20 transition-colors text-left">
+              <div className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center shrink-0"><FileText size={13} className="text-muted-foreground" /></div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-foreground truncate">{d.name || d.title || t('cities.day.docFallback')}</p>
+                <p className="text-xs text-muted-foreground truncate">{[d.time, t('documents.forHolders', { names: otherHoldersLabel(d, profiles, currentUserEmail) })].filter(Boolean).join(' · ')}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Add actions */}
       <div className="flex border-t border-border">
         <button onClick={() => setAddingDoc(true)}
@@ -962,7 +992,7 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
   // exige también que el documento sea de esta ciudad — como origen
   // (city_id) o como destino de un vuelo/tren (arrival_city_id), mismo
   // criterio que ya usa CityTickets.jsx.
-  const docs = useMemo(() =>
+  const dayDocsAll = useMemo(() =>
     allDocs.filter(d => {
       const dd = d.date || d.valid_from || d.start_date;
       if (dd !== dateStr) return false;
@@ -971,10 +1001,18 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
     }),
     [allDocs, dateStr, cityId]
   );
+  // José (21 sep 2026): Ruta es TU día — tus documentos y los de todo el
+  // grupo. Los de otros viajeros (el tren de Carlos) no se mezclan con los
+  // tuyos, pero tampoco desaparecen: van plegados debajo, en "De otros
+  // viajeros". Y siguen enteros en Documentos.
+  const members_ = trip?.members || [];
+  const docs = useMemo(() => dayDocsAll.filter(d => isDocInMyRoute(d, currentUserEmail, members_)), [dayDocsAll, currentUserEmail, members_.join(',')]);
+  const otherDocs = useMemo(() => dayDocsAll.filter(d => !isDocInMyRoute(d, currentUserEmail, members_)), [dayDocsAll, currentUserEmail, members_.join(',')]);
 
   const spots = useMemo(() =>
     allSpots
-      .filter(s => s.assigned_date === dateStr && s.city_id === cityId)
+      // El alojamiento es de la estancia, no de un día (src/lib/cityStay.js).
+      .filter(s => !isStaySpot(s) && s.assigned_date === dateStr && s.city_id === cityId)
       .sort((a, b) => (a.day_order ?? 999) - (b.day_order ?? 999)),
     [allSpots, dateStr, cityId]
   );
@@ -997,12 +1035,16 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
   return (
     <div className="mb-2">
       {/* Card */}
-      <div className={`bg-card rounded-2xl border overflow-hidden ${isToday_ ? 'border-orange-200' : 'border-border'}`}>
+      <div className={`relative bg-card rounded-2xl border overflow-hidden ${isToday_ ? 'border-orange-200' : 'border-border'}`}>
+        {/* José (21 sep 2026): la franja de "hoy" era un w-1 solo dentro del
+            header, así que la caja tenía un borde grueso arriba y uno fino
+            (1px) en cuanto se desplegaba el día — "dos grosores". Ahora es
+            una sola pieza absoluta a toda la altura de la tarjeta, recortada
+            por el redondeo (overflow-hidden). */}
+        {isToday_ && <div aria-hidden className="absolute left-0 top-0 bottom-0 w-1 bg-primary z-10 pointer-events-none" />}
         {/* Header */}
         <button onClick={() => setOpen(o => !o)}
           className="w-full flex items-stretch gap-0 text-left">
-          {/* Franja lateral */}
-          <div className={`w-1 self-stretch rounded-l-2xl flex-shrink-0 ${isToday_ ? 'bg-primary' : 'bg-transparent'}`} />
           {/* Contenido header */}
           <div className="flex items-center gap-3 px-4 py-3 flex-1 min-w-0">
             {/* Fecha */}
@@ -1045,6 +1087,7 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
           day={day}
           dayDate={dateStr}
           docs={docs}
+          otherDocs={otherDocs}
           spots={spots}
           tripId={tripId}
           cityId={cityId}
@@ -1067,7 +1110,7 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
 }
 
 // ── City block ────────────────────────────────────────────────────────────────
-function CityBlock({ city, idx, total, allDocs, allSpots, itineraryDays, tripId, isActive, isPast, queryClient, trip, cities, profiles, userId, forceOpenCityId, currentUserEmail }) {
+function CityBlock({ city, idx, total, allDocs, allSpots, itineraryDays, tripId, isActive, isPast, queryClient, trip, cities, profiles, userId, forceOpenCityId, currentUserEmail, onSelectStay }) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language === 'en' ? undefined : es;
   // Al venir de "Abrir <ciudad>" en Home (ver DayCard.jsx), llega el id
@@ -1151,12 +1194,14 @@ function CityBlock({ city, idx, total, allDocs, allSpots, itineraryDays, tripId,
           el bloque esté plegado, porque es información de la parada, no de
           un día suelto de dentro. */}
       {(() => {
-        const hotelSpot = allSpots.find(s => s.city_id === city.id && s.type === 'hotel');
+        const hotelSpot = getCityHotel(allSpots, city.id);
         return (
           <div className="flex items-center gap-1.5 pl-9 -mt-1 mb-1">
             <Hotel className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             {hotelSpot ? (
-              <span className="text-xs text-muted-foreground truncate">{t('cities.block.stayingAt', { name: hotelSpot.title })}</span>
+              // Pulsable: abre la ficha del alojamiento (notas, cómo llegar y
+              // "Quitar alojamiento" si te equivocaste).
+              <button type="button" onClick={() => onSelectStay?.(hotelSpot)} className="text-xs text-muted-foreground hover:text-foreground truncate text-left">{t('cities.block.stayingAt', { name: hotelSpot.title })}</button>
             ) : (
               <Link
                 to={createPageUrl('Restaurants') + '?trip_id=' + tripId + '&open_create=hotel&city_id=' + city.id}
@@ -1318,7 +1363,10 @@ export default function Cities() {
   const { data: allDocs = [] } = useQuery({
     queryKey: ['allDocs', tripId],
     queryFn: () => base44.entities.Ticket.filter({ trip_id: tripId }),
-    enabled: !!tripId, staleTime: 60000,
+    // refetchOnMount:'always': el caché persistido pintaba la lista de la
+    // última visita (sin el billete que otro viajero acababa de subir) hasta
+    // que vencía el staleTime. Mismo patrón que Home.
+    enabled: !!tripId, staleTime: 60000, refetchOnMount: 'always',
   });
 
   // UserProfile.read se cerró en el rls (exponía email/nationality de todo
@@ -1337,7 +1385,7 @@ export default function Cities() {
   const { data: allSpots = [] } = useQuery({
     queryKey: ['spots', tripId],
     queryFn: () => base44.entities.Spot.filter({ trip_id: tripId }),
-    enabled: !!tripId, staleTime: 30000,
+    enabled: !!tripId, staleTime: 30000, refetchOnMount: 'always',
   });
 
   const sortedCities = useMemo(() =>
@@ -1475,13 +1523,13 @@ export default function Cities() {
               // José (19 sep 2026): mismo control de alojamiento por parada
               // que CityBlock (ver comentario ahí) -- una sola ciudad no
               // tiene cabecera propia, así que va justo encima de los días.
-              const hotelSpot = allSpots.find(s => s.city_id === city.id && s.type === 'hotel');
+              const hotelSpot = getCityHotel(allSpots, city.id);
               return (
                 <>
                   <div className="flex items-center gap-1.5 px-4 pb-2">
                     <Hotel className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     {hotelSpot ? (
-                      <span className="text-xs text-muted-foreground truncate">{t('cities.block.stayingAt', { name: hotelSpot.title })}</span>
+                      <button type="button" onClick={() => setRouteMapSpot(hotelSpot)} className="text-xs text-muted-foreground hover:text-foreground truncate text-left">{t('cities.block.stayingAt', { name: hotelSpot.title })}</button>
                     ) : (
                       <Link
                         to={createPageUrl('Restaurants') + '?trip_id=' + tripId + '&open_create=hotel&city_id=' + city.id}
@@ -1541,6 +1589,7 @@ export default function Cities() {
                   userId={userId}
                   currentUserEmail={currentUserEmail}
                   forceOpenCityId={focusCityId}
+                  onSelectStay={setRouteMapSpot}
                 />
               );
             })}

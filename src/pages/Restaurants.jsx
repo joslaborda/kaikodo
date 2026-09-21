@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { normalizeEmail } from '@/lib/utils';
+import { isStaySpot } from '@/lib/cityStay';
 import { useTripContext } from '@/hooks/useTripContext';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { searchUserProfiles } from '@/lib/userProfiles';
@@ -966,6 +967,7 @@ export default function Restaurants() {
   const [savingId, setSavingId] = useState(null);
   const [stateFilter, setStateFilter] = useState('all');
   const [assignDateSpot, setAssignDateSpot] = useState(null); // spot to assign date after saving
+  const [stayDocPrompt, setStayDocPrompt] = useState(null);   // alojamiento recién guardado → ofrecer subir la reserva
   const [selectedCity, setSelectedCity] = useState('');
   // Los chips de "Lima", "Oxapampa"... antes solo guardaban el NOMBRE elegido
   // (selectedCity). Si el viaje repite ciudad (varias paradas con el mismo
@@ -1113,7 +1115,14 @@ export default function Restaurants() {
     // alguien cambia el tipo a 'hotel' (o ya lo era y se toca otra cosa),
     // se limpia assigned_date aquí, en el único sitio por el que pasa
     // cualquier guardado, en vez de tener que acordarse en cada llamador.
-    mutationFn: ({ id, data }) => base44.entities.Spot.update(id, data.type === 'hotel' ? { ...data, assigned_date: null, day_order: null, assigned_time: null } : data),
+    // 21 sep: la guarda miraba solo data.type, pero el modal de "¿cuándo?"
+    // envía únicamente fecha/hora (sin type) — por ahí se colaba el día en un
+    // hotel. Ahora también se mira el tipo que YA tiene el spot guardado.
+    mutationFn: ({ id, data }) => {
+      const existing = spots.find(s => s.id === id);
+      const isStay = (data.type ?? existing?.type) === 'hotel';
+      return base44.entities.Spot.update(id, isStay ? { ...data, assigned_date: null, day_order: null, assigned_time: null } : data);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['spots', tripId] }),
   
     onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
@@ -1251,7 +1260,12 @@ export default function Restaurants() {
       // se trata como una excepción a avisar — mismo toast de guardado de
       // siempre, tanto si `dup` es true como si no.
       showToastFor({ title: place.name }, city);
-      if (created?.id) setAssignDateSpot(created);
+      // Un alojamiento no pide día ni hora (src/lib/cityStay.js): es de toda la
+      // estancia. Antes este camino (buscador de Google) abría igualmente el
+      // "¿Cuándo quieres visitar este spot?" y, al confirmar, le colaba un
+      // assigned_date que lo duplicaba dentro de ese día.
+      if (created?.id && !isStaySpot(created) && !isStaySpot(resolved)) setAssignDateSpot(created);
+      else if (created?.id) setStayDocPrompt(created);
       notifyMembers('spot_added', '', place.name, { spotId: created?.id, spotDate: created?.assigned_date });
     } catch(e) {
       console.error('Error al guardar spot:', e);
@@ -1289,6 +1303,10 @@ export default function Restaurants() {
         // Un alojamiento tampoco pasa por el modal de "asignar fecha" de
         // después de crear — mismo motivo que arriba, nunca lleva día.
         setAssignDateSpot(created);
+      } else if (created?.id) {
+        // Un alojamiento no pide día ni hora: en su lugar se ofrece subir la
+        // reserva (opcional), que queda enlazada a este mismo alojamiento.
+        setStayDocPrompt(created);
       }
       notifyMembers('spot_added', '', form.title, { spotId: created?.id, spotDate: created?.assigned_date });
     } finally { setSavingId(null); }
@@ -1367,7 +1385,7 @@ export default function Restaurants() {
       });
       setLastSavedId(created?.id);
       showToastFor({ title: spot.title }, selectedCity || city);
-      if (created?.id) setAssignDateSpot(created);
+      if (created?.id && !isStaySpot(created) && !isStaySpot(spot)) setAssignDateSpot(created);
     } finally { setSavingId(null); }
   };
 
@@ -1439,8 +1457,10 @@ export default function Restaurants() {
 
   const filteredSpots = useMemo(() => {
     let result = spots.filter(s => {
-      if (stateFilter === 'assigned') return !!s.assigned_date;
-      if (stateFilter === 'unassigned') return !s.assigned_date;
+      // Un alojamiento nunca se asigna a un día — no cuenta ni como asignado ni
+      // como "sin asignar" pendiente.
+      if (stateFilter === 'assigned') return !isStaySpot(s) && !!s.assigned_date;
+      if (stateFilter === 'unassigned') return !isStaySpot(s) && !s.assigned_date;
       if (stateFilter === 'created') return s.created_by === user?.email || s.created_by_user_id === user?.id;
       if (stateFilter === 'saved') return Array.isArray(s.saved_by) && s.saved_by.includes(user?.email) && s.created_by !== user?.email;
       return true;
@@ -1923,6 +1943,22 @@ export default function Restaurants() {
           userId={user?.id}
           currentUserEmail={normalizeEmail(currentUser?.email)}
         />
+      )}
+
+      {/* Alojamiento guardado → ¿subir la reserva? (opcional) */}
+      {stayDocPrompt && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40" onClick={() => setStayDocPrompt(null)}>
+          <div className="bg-card w-full max-w-md rounded-t-2xl p-5 pb-8" onClick={e => e.stopPropagation()}>
+            <div className="w-9 h-1 bg-border rounded-full mx-auto mb-4" />
+            <p className="font-semibold text-foreground text-sm mb-1">{t('spots.stayDoc.title')}</p>
+            <p className="text-xs text-muted-foreground mb-5">{t('spots.stayDoc.body', { name: stayDocPrompt.title })}</p>
+            <div className="flex gap-3">
+              <button onClick={() => setStayDocPrompt(null)} className="flex-1 py-3 rounded-full border border-border text-sm text-muted-foreground">{t('spots.stayDoc.skip')}</button>
+              <button onClick={() => { const id = stayDocPrompt.id; setStayDocPrompt(null); navigate(createPageUrl('Documents') + '?trip_id=' + tripId + '&stay_spot_id=' + id); }}
+                className="flex-1 py-3 rounded-full bg-primary text-white text-sm font-medium">{t('spots.stayDoc.upload')}</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Assign date modal */}
