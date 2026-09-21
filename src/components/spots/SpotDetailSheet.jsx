@@ -80,6 +80,8 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
   if (!open || !spot) return null;
 
   const tc = TYPE_CONFIG[spot.type] || TYPE_CONFIG.custom;
+  // Un alojamiento es de toda la estancia: ni día ni hora (src/lib/cityStay.js).
+  const isStay = spot.type === 'hotel';
 
   const handleSave = async () => {
     setSaving(true);
@@ -95,15 +97,17 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
       ? { city_id: assignedCityId }
       : {};
     try {
-      await base44.entities.Spot.update(spot.id, {
-        notes,
-        assigned_date: assignedDate || null,
-        assigned_time: assignedTime || null,
-        ...(timeChanged || dateChanged ? { day_order: null } : {}),
-        ...cityIdUpdate,
-      });
+      await base44.entities.Spot.update(spot.id, isStay
+        ? { notes, assigned_date: null, assigned_time: null, day_order: null }
+        : {
+          notes,
+          assigned_date: assignedDate || null,
+          assigned_time: assignedTime || null,
+          ...(timeChanged || dateChanged ? { day_order: null } : {}),
+          ...cityIdUpdate,
+        });
       queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
-      if (timeChanged && assignedTime) onNotify?.('spot_time', null, spot.title, { time: assignedTime });
+      if (!isStay && timeChanged && assignedTime) onNotify?.('spot_time', null, spot.title, { time: assignedTime });
       onClose();
     } catch (e) {
       toast({ title: t('common.saveError'), description: e.message, variant: 'destructive' });
@@ -209,7 +213,10 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
             />
           </div>
 
-          {/* Day + Hour assignment */}
+          {/* Day + Hour assignment — no aplica a un alojamiento */}
+          {isStay ? (
+            <p className="text-xs text-muted-foreground bg-secondary/50 rounded-xl px-3 py-2.5">{t('spots.stayInfo')}</p>
+          ) : (
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('spots.sheet.day')}</p>
@@ -258,6 +265,7 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
               </select>
             </div>
           </div>
+          )}
 
           {/* Delete — solo quien lo creó, y con confirmación (antes borraba al instante) */}
           {canDelete && (

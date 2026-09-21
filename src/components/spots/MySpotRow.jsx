@@ -12,7 +12,9 @@ function MySpotRow({ spot, onTap, userId }) {
   const tc = TYPE_CONFIG[spot.type] || TYPE_CONFIG.custom;
   const { isLiked, count: likeCount, toggle: toggleLike } = useLikeSimple(spot.id, userId);
 
-  const hasDate = !!spot.assigned_date;
+  // Un alojamiento no se asigna a un día (src/lib/cityStay.js): nunca "Sin día".
+  const isStay = spot.type === 'hotel';
+  const hasDate = !isStay && !!spot.assigned_date;
 
   return (
     <div className="bg-card border-b border-border last:border-0">
@@ -48,6 +50,8 @@ function MySpotRow({ spot, onTap, userId }) {
         <div className="flex items-center gap-2 shrink-0">
           {spot.visited ? (
             <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">{t('spots.card.visited')}</span>
+          ) : isStay ? (
+            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">{t('spots.stayBadge')}</span>
           ) : hasDate ? (
             <span className="text-xs bg-orange-100 text-primary px-2 py-0.5 rounded-full font-medium">{t('spots.assigned')}</span>
           ) : (

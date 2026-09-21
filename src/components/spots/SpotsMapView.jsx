@@ -6,6 +6,8 @@ import { loadLeaflet } from './spotsHelpers';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from './mapTiles';
 import { loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
 import { spotTypeIconSvg } from './spotTypeIcon';
+import { isStaySpot } from '@/lib/cityStay';
+import { arePointsTight, SINGLE_POINT_ZOOM, MAX_FIT_ZOOM } from '@/lib/mapFit';
 
 // Antes cada día usaba uno de los 5 --chart-1..5, todos tonos naranja/marrón
 // muy parecidos entre sí ("los colores... no son suficientemente
@@ -87,7 +89,11 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
 
   const withCoords = spots.filter(s => s?.lat && s?.lng);
 
-  const distinctDates = [...new Set(withCoords.map(s => s.assigned_date).filter(Boolean))].sort();
+  // Un alojamiento es de toda la estancia, no de un día (ver
+  // src/lib/cityStay.js): aunque uno antiguo conserve un assigned_date, aquí
+  // se trata siempre como pin suelto — nunca forma parte de la ruta de un día
+  // ni crea un chip de fecha propio.
+  const distinctDates = [...new Set(withCoords.filter(s => !isStaySpot(s)).map(s => s.assigned_date).filter(Boolean))].sort();
   const dayColor = (date) => date ? TUBE_COLORS[distinctDates.indexOf(date) % TUBE_COLORS.length] : 'hsl(var(--muted-foreground) / .35)';
 
   // Mismo orden que ya usa el timeline de Home/Ruta: day_order primero
@@ -105,9 +111,9 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
   const dayRoutes = distinctDates.map(d => ({
     date: d,
     color: dayColor(d),
-    spots: sortByDayOrder(withCoords.filter(s => s.assigned_date === d)),
+    spots: sortByDayOrder(withCoords.filter(s => !isStaySpot(s) && s.assigned_date === d)),
   }));
-  const unscheduledSpots = withCoords.filter(s => !s.assigned_date);
+  const unscheduledSpots = withCoords.filter(s => isStaySpot(s) || !s.assigned_date);
 
   const visibleRoutes = selectedDate ? dayRoutes.filter(r => r.date === selectedDate) : dayRoutes;
   const visibleUnscheduled = selectedDate ? [] : unscheduledSpots;
@@ -182,8 +188,8 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
 
       const fitToPoints = () => {
         if (!mapRef.current || allPoints.length === 0) return;
-        if (allPoints.length > 1) mapRef.current.fitBounds(L.latLngBounds(allPoints), { padding: [42, 42] });
-        else mapRef.current.setView(allPoints[0], 15);
+        if (!arePointsTight(allPoints.map(([lat, lng]) => ({ lat, lng })))) mapRef.current.fitBounds(L.latLngBounds(allPoints), { padding: [42, 42], maxZoom: MAX_FIT_ZOOM });
+        else mapRef.current.setView(L.latLngBounds(allPoints).getCenter(), SINGLE_POINT_ZOOM);
       };
 
       mapRef.current = map;
@@ -243,8 +249,11 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
                     });
 
                     if (anyPoints) {
-                              if (markersRef.current.length > 1) map.fitBounds(bounds, 42);
-                              else { map.setCenter(bounds.getCenter()); map.setZoom(15); }
+                              const boundPoints = markersRef.current.map(m => { const p = m.getPosition(); return { lat: p.lat(), lng: p.lng() }; });
+                              if (!arePointsTight(boundPoints)) {
+                                        map.fitBounds(bounds, 42);
+                                        google.maps.event.addListenerOnce(map, 'idle', () => { if (map.getZoom() > MAX_FIT_ZOOM) map.setZoom(MAX_FIT_ZOOM); });
+                              } else { map.setCenter(bounds.getCenter()); map.setZoom(SINGLE_POINT_ZOOM); }
                     }
             }).catch((err) => { console.warn('[SpotsMapView] Google Maps fallo, cayendo a Leaflet:', err); if (!cancelled) renderLeaflet(); });
       } else {
@@ -260,7 +269,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
   }, [
     selectedDate,
         useGoogle,
-    withCoords.map(s => s.id + '@' + (s.assigned_date || '') + '@' + (s.day_order ?? '') + '@' + (s.assigned_time || '')).join(','),
+    withCoords.map(s => s.id + '@' + (isStaySpot(s) ? '' : (s.assigned_date || '')) + '@' + (s.day_order ?? '') + '@' + (s.assigned_time || '')).join(','),
   ]);
 
   if (!withCoords.length) {
@@ -273,7 +282,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
 
   return (
     <div>
-      <div ref={containerRef} style={{ height, borderRadius: 16, overflow: 'hidden', cursor: 'crosshair' }} className="border border-border kodo-map-warm" />
+      <div ref={containerRef} style={{ height, borderRadius: 16, overflow: 'hidden', cursor: onCreatePin ? 'crosshair' : undefined }} className="border border-border kodo-map-warm" />
 
       {/* Selector de día debajo del mapa, igual que el resto de selectores
           de chip de la app (sin scroll lateral, envuelve en varias líneas
@@ -305,13 +314,17 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
         <p className="text-xs text-muted-foreground mt-2 px-1">{t('spots.map.dayRouteHint')}</p>
       ) : (
         <>
-          {unscheduledSpots.length > 0 && distinctDates.length > 0 && (
+          {unscheduledSpots.some(s => !isStaySpot(s)) && distinctDates.length > 0 && (
             <div className="flex items-center gap-1.5 mt-2 px-1 text-xs text-muted-foreground">
               <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-muted-foreground/35" />
               {t('spots.map.noDate')}
             </div>
           )}
-          <p className="text-xs text-muted-foreground mt-2 px-1">{t('spots.map.tapHint')}</p>
+          {/* José (21 sep 2026): esta pista salía también en el mapa de Ruta,
+              donde tocar el mapa no hace nada (Cities.jsx no pasa
+              onCreatePin) — prometía algo que no existe. Solo se muestra
+              donde de verdad se puede soltar un pin (pestaña Spots). */}
+          {onCreatePin && <p className="text-xs text-muted-foreground mt-2 px-1">{t('spots.map.tapHint')}</p>}
         </>
       )}
     </div>
