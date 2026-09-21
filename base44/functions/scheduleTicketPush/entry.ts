@@ -18,9 +18,9 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  *    Ticket.reminder_push_ids) y se programan de nuevo — así editar la hora o
  *    reasignar el billete no deja avisos huérfanos.
  *  · Destinatarios: los que usan el documento (used_by; sin used_by, quien lo
- *    subió), miembros del viaje, SIN quien llama (su propio móvil ya
- *    programa el aviso local, que funciona incluso sin conexión) y respetando
- *    el interruptor notif_enabled de su perfil.
+ *    subió), miembros del viaje —incluido quien llama— y respetando el
+ *    interruptor notif_enabled de su perfil. Si el aviso de quien llama queda
+ *    programado (callerScheduled) su móvil retira el local para no duplicarlo.
  *  · La hora del billete es "hora local del lugar" sin zona: el cliente manda
  *    tzOffsetMinutes (Date.getTimezoneOffset() de su móvil para esa fecha) y el
  *    servidor la convierte a UTC — mismo criterio que el recordatorio local.
@@ -196,11 +196,17 @@ Deno.serve(async (req) => {
     const immediate = fireAt <= now;
     const minutesLeft = immediate ? Math.max(1, Math.round((departure - now) / 60000)) : minutesBefore;
 
-    // 3) Destinatarios: quienes lo usan, miembros, menos quien llama.
+    // 3) Destinatarios: TODOS los que lo usan (miembros del viaje), incluido quien
+    //    llama. Antes se excluía a quien sube el documento porque su móvil ya
+    //    programaba el aviso local; pero si edita desde la web (o si el móvil no
+    //    llega a abrir la app) se quedaba sin ninguno — un aviso retirado y nada en
+    //    su lugar. Ahora el servidor es la fuente única y el cliente retira su aviso
+    //    local si el servidor confirma (callerScheduled); si el servidor no puede
+    //    (sin suscripción, error), el aviso local sigue siendo la red de seguridad.
     const byNorm = new Map<string, string>(memberList.map((m) => [norm(m), m]));
     const recipients = docHolders(ticket)
       .map(norm)
-      .filter((e) => byNorm.has(e) && e !== callerEmail);
+      .filter((e) => byNorm.has(e));
 
     const title = category === "event"
       ? `Evento · empieza en ${humanDuration(minutesLeft)}`
@@ -209,6 +215,7 @@ Deno.serve(async (req) => {
     const payload = { tripId: ticket.trip_id, type: "doc_time", refId: ticket.id };
 
     const ids: string[] = [];
+    let callerScheduled = false;
     for (const email of recipients) {
       try {
         const found: any[] = await service.entities.User.filter({ email: byNorm.get(email) });
@@ -219,13 +226,16 @@ Deno.serve(async (req) => {
         try { profile = (await service.entities.UserProfile.filter({ user_id: recipient.id }))[0] || null; } catch { profile = null; }
         if (profile?.notif_enabled === false) continue;
         const nid = await schedulePush(recipient.id, trip.name || "Kaikōdo", `${title} — ${body}`, payload, immediate ? null : new Date(fireAt));
-        if (nid) ids.push(`${recipient.id}:${nid}`);
+        if (nid) {
+          ids.push(`${recipient.id}:${nid}`);
+          if (email === callerEmail) callerScheduled = true;
+        }
       } catch {
         // un destinatario que falla no debe impedir los demás
       }
     }
     await save(ids);
-    return Response.json({ ok: true, scheduled: ids.length, immediate });
+    return Response.json({ ok: true, scheduled: ids.length, immediate, callerScheduled });
   } catch (error) {
     return Response.json({ error: (error as Error).message }, { status: 500 });
   }
