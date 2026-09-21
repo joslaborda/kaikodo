@@ -3,6 +3,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import i18n from '@/i18n';
 import { createPageUrl } from '@/utils';
 import { isDocForUser } from '@/lib/docHolders';
+import { hasServerPushFor } from '@/lib/ticketPush';
 
 // Recordatorios locales en el propio dispositivo para vuelos, trenes, bus y
 // actividades con hora asignada. A diferencia de las notificaciones push
@@ -129,7 +130,7 @@ export async function scheduleTicketReminder(ticket) {
 // los que ya no le tocan (borrados, reasignados). Solo programa avisos
 // FUTUROS: el atajo de "avisar ya" de scheduleAt no se usa aquí, para no
 // disparar un aviso cada vez que se abre la app con un tren a menos de 4 h.
-export async function syncTicketRemindersForUser(tickets, email, tripId) {
+export async function syncTicketRemindersForUser(tickets, email, tripId, userId) {
   if (!Capacitor.isNativePlatform() || !email || !tripId) return;
   const key = 'kodo_ticket_reminders:' + tripId;
   let previous = [];
@@ -139,6 +140,9 @@ export async function syncTicketRemindersForUser(tickets, email, tripId) {
   for (const tk of (tickets || [])) {
     if (!tk?.id || !['flight', 'train', 'bus', 'event'].includes(tk.category)) continue;
     if (!isDocForUser(tk, email)) continue;
+    // Si el servidor ya tiene programado el aviso para esta persona (billete
+    // subido por otro), no se programa también el local: saldrían dos.
+    if (hasServerPushFor(tk, userId)) continue;
     const dt = parseDateTime(tk.date, tk.time);
     if (!dt || dt.getTime() <= now) continue;
     keep.push(tk.id);

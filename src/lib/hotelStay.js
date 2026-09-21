@@ -1,6 +1,7 @@
 import { base44 } from '@/api/base44Client';
 import { isStaySpot } from '@/lib/cityStay';
 
+import { invalidateTripDocs } from '@/hooks/useTripDocs';
 // José (21 sep 2026): el alojamiento y su reserva son UNA sola cosa vista
 // desde dos puertas —
 //   · subes la reserva (documento de tipo Hotel) → queda puesto el
@@ -58,9 +59,7 @@ export async function linkHotelDocToStay({ doc, tripId, trip, cities = [], userE
     if (stay?.id && doc.spot_id !== stay.id) await base44.entities.Ticket.update(doc.id, { spot_id: stay.id });
     if (queryClient) {
       queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['documents', tripId] });
+      invalidateTripDocs(queryClient, tripId);
     }
     return stay || null;
   } catch (e) {
