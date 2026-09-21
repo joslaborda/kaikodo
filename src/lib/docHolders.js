@@ -19,7 +19,12 @@ export function docHolders(doc) {
 export function isDocForUser(doc, email) {
   const me = normalizeEmail(email);
   if (!me) return false;
-  return docHolders(doc).some(e => normalizeEmail(e) === me);
+  const holders = docHolders(doc);
+  // Un documento sin used_by ni created_by (importado o creado por otra vía) no
+  // tiene dueño conocido: se trata como de todos, nunca como de nadie (así no
+  // queda fuera de la Ruta y del billete destacado de todo el mundo).
+  if (holders.length === 0) return true;
+  return holders.some(e => normalizeEmail(e) === me);
 }
 
 // Nombre para mostrar de un email: display_name -> username -> email
@@ -52,6 +57,7 @@ export function otherHoldersLabel(doc, profiles, myEmail, max = 2) {
 export function isGroupWideDoc(doc, members = []) {
   if (!members.length) return false;
   const holders = docHolders(doc).map(normalizeEmail);
+  if (holders.length === 0) return true; // sin dueño conocido = de todos
   return members.every(m => holders.includes(normalizeEmail(m)));
 }
 
@@ -68,6 +74,7 @@ export function isDocInMyRoute(doc, email, members = []) {
 export function holdersSummary(doc, profiles, myEmail, members = [], labels = {}) {
   if (isGroupWideDoc(doc, members) && members.length > 1) return labels.everyone || '';
   const me = normalizeEmail(myEmail);
+  if (docHolders(doc).length === 0) return labels.everyone || '';
   return docHolders(doc)
     .map(e => (normalizeEmail(e) === me ? (labels.you || e) : displayNameFor(e, profiles)))
     .join(', ');

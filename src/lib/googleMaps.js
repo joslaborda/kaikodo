@@ -83,15 +83,22 @@ export function loadGoogleMaps() {
 export const KODO_GOOGLE_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#f8f6f3' }] },
   { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8a8478' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#6b655b' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#f8f6f3' }] },
   { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e8e3dc' }] },
   { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#e8e3dc' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#f0ebe4' }] },
-  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#8a8478' }] },
+  // 21 sep 2026 (probando en Chrome): las calles apenas se distinguían del
+  // fondo (blanco sobre crema con un borde casi igual). Ahora el terreno es un
+  // tono más oscuro que las calles y estas llevan un borde definido, para que
+  // el trazado de la ciudad se lea de un vistazo sin volver el mapa pesado.
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#f1ede7' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#d6cfc3' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#c9c1b3' }] },
+  { featureType: 'road.arterial', elementType: 'geometry.stroke', stylers: [{ color: '#cfc7ba' }] },
+  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#5f594f' }] },
   { featureType: 'transit', stylers: [{ visibility: 'off' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#dce7ea' }] },
   ];
