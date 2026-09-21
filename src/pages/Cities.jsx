@@ -21,7 +21,7 @@ import DocumentForm from '@/components/tickets/DocumentForm';
 import PDFViewer from '@/components/PDFViewer';
 import { resolveDocViewUrl } from '@/lib/privateFiles';
 import SpotDetailModal from '@/components/trip/SpotDetailModal';
-import DaySpotsMap from '@/components/spots/DaySpotsMap';
+import TodayRouteMap from '@/components/home/TodayRouteMap';
 import SpotsMapView from '@/components/spots/SpotsMapView';
 import SettingsDialog from '@/components/home/SettingsDialog';
 import DeleteTripModal from '@/components/trip/DeleteTripModal';
@@ -31,9 +31,12 @@ import { scheduleTicketReminder, cancelTicketReminder } from '@/lib/localReminde
 import { daysUntil } from '@/lib/tripDays';
 import { isStaySpot, getCityHotel } from '@/lib/cityStay';
 import { linkHotelDocToStay } from '@/lib/hotelStay';
+import { requestTicketPush, cancelTicketPush, hasServerPushFor } from '@/lib/ticketPush';
+import { orderDayItems, findTimeClash as sharedFindTimeClash } from '@/lib/dayTimeline';
 import { isDocForUser, isDocInMyRoute, otherHoldersLabel } from '@/lib/docHolders';
 import { useTranslation } from 'react-i18next';
 
+import { useTripDocs, invalidateTripDocs } from '@/hooks/useTripDocs';
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DOC_ICON_MAP = {
   flight: PlaneIcon, hotel: Hotel, train: Train,
@@ -241,7 +244,7 @@ function DocViewerModal({ doc, open, onClose, onEdit, onOpenFile }) {
 }
 
 // ── Day expanded content ──────────────────────────────────────────────────────
-function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, isToday_, isTomorrow_, isEmpty, onReorderSpots, queryClient, trip, cities, itineraryDays, profiles, userId, currentUserEmail }) {
+function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripId, cityId, isToday_, isTomorrow_, isEmpty, onReorderSpots, queryClient, trip, cities, itineraryDays, profiles, userId, currentUserEmail }) {
   const { t } = useTranslation();
   const [editingSpot, setEditingSpot] = useState(null);   // spot object — view+edit modal
   const [showOthers, setShowOthers] = useState(false);       // "De otros viajeros" plegado
@@ -268,7 +271,6 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
   const [deletingDoc, setDeletingDoc] = useState(false);
   const [order, setOrder]             = useState(null);   // manual drag order for no-time items
   const [showMap, setShowMap]          = useState(false);  // mapa colapsable del día (lazy: no carga nada hasta desplegar)
-  const hasMappableSpots = spots.some(s => s.lat && s.lng);
 
   // Notes
   const parseNotes = (raw) => {
@@ -300,7 +302,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
       if (day?.id) await base44.entities.ItineraryDay.update(day.id, payload);
       else await base44.entities.ItineraryDay.create({ city_id: cityId, trip_id: tripId, date: dayDate, title: '', ...payload, order: 0, trip_members: trip.members });
       queryClient.invalidateQueries({ queryKey: ['itineraryDays', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+      invalidateTripDocs(queryClient, tripId);
     } catch (e) {
       // José (17 sep 2026) — revisión de seguridad: handleAddNote/handleDeleteNote/
       // handleSaveNote actualizan notesList de forma optimista ANTES de llamar
@@ -379,8 +381,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
               // hora cambia de verdad para que vuelva a ordenarse por hora.
               const docTimeIsChanging = (data.time || '') !== (oldDoc?.time || '');
               await base44.entities.Ticket.update(oldDoc.id, { ...enriched, ...(docTimeIsChanging ? { day_order: null } : {}) });
-      queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
+      invalidateTripDocs(queryClient, tripId);
       queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
       setEditingDoc(null);
       if (enriched.category === 'hotel') linkHotelDocToStay({ doc: { ...enriched, id: oldDoc?.id, spot_id: enriched.spot_id || oldDoc?.spot_id }, tripId, trip, cities, userEmail: currentUserEmail, userId, queryClient });
@@ -389,6 +390,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
       cancelTicketReminder(oldDoc?.id);
       // Solo suena en el móvil de quien va a usar el documento.
       if (isDocForUser({ created_by: oldDoc?.created_by, ...enriched }, currentUserEmail)) scheduleTicketReminder({ ...enriched, id: oldDoc?.id, trip_id: tripId });
+      requestTicketPush({ ...enriched, id: oldDoc?.id, reminder_push_ids: oldDoc?.reminder_push_ids });
       // Mismo hueco que se cerró en Documents.jsx: editar la hora de un
       // ticket (vuelo/tren/etc.) desde Ruta tampoco avisaba a nadie.
       const timeChanged = (data.time || '') !== (oldDoc?.time || '') || (data.end_time || '') !== (oldDoc?.end_time || '');
@@ -426,10 +428,10 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
     if (!deleteDoc || deletingDoc) return;
     setDeletingDoc(true);
     try {
+    await cancelTicketPush(deleteDoc.id);
     await base44.entities.Ticket.delete(deleteDoc.id);
     cancelTicketReminder(deleteDoc.id);
-    queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
-    queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
+    invalidateTripDocs(queryClient, tripId);
     setDeleteDoc(null);
     setEditingDoc(null);
     } finally {
@@ -447,14 +449,14 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
       const enriched = enrichTicketDataWithAutoLinks(data, itineraryDays || [], data.city_id);
       const payload = { ...enriched, trip_id: tripId, user_id: userId, date: enriched.date || dayDate, trip_members: trip.members };
       const newDoc = await base44.entities.Ticket.create(payload);
-      queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
+      invalidateTripDocs(queryClient, tripId);
       setAddingDoc(false);
       if (payload.category === 'hotel') linkHotelDocToStay({ doc: { ...payload, id: newDoc?.id }, tripId, trip, cities, userEmail: currentUserEmail, userId, queryClient });
       // Mismo hueco que ya se cerró en Documents.jsx: crear un vuelo/tren/
       // evento desde aquí (Ruta) nunca programaba el recordatorio local del
       // propio dispositivo -- solo la vía de Documents.jsx lo hacía.
       if (isDocForUser({ created_by: currentUserEmail, ...payload }, currentUserEmail)) scheduleTicketReminder({ ...payload, id: newDoc?.id });
+      requestTicketPush({ ...payload, id: newDoc?.id });
     } finally { setSavingNewDoc(false); }
   };
 
@@ -503,26 +505,16 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
       .map((n) => ({
         id: 'note-' + n._origIdx, _kind: 'note', _time: n.time || null, _order: n.order ?? null, _title: n.text, _sub: null, _noteIdx: n._origIdx,
       }));
-    const all = [...docItems, ...spotItems, ...noteItems];
-    const pinned = all.filter(i => i._order != null).sort((a, b) => a._order - b._order);
-    const unpinnedTimed = all.filter(i => i._order == null && i._time).sort((a, b) => a._time.localeCompare(b._time));
-    const unpinnedUntimed = all.filter(i => i._order == null && !i._time);
-
-    const merged = [];
-    let ui = 0;
-    for (const item of pinned) {
-      if (item._time) {
-        while (ui < unpinnedTimed.length && unpinnedTimed[ui]._time <= item._time) {
-          merged.push(unpinnedTimed[ui]);
-          ui++;
-        }
-      }
-      merged.push(item);
-    }
-    while (ui < unpinnedTimed.length) { merged.push(unpinnedTimed[ui]); ui++; }
-
-    return [...merged, ...unpinnedUntimed];
+    // Orden del día: una sola implementación compartida con Home (dayTimeline.js).
+    return orderDayItems([...docItems, ...spotItems, ...noteItems], i => i._time, i => i._order);
   }, [dayDocs, spots, notesList]);
+
+  // José (21 sep 2026): el mapa del día de Ruta es AHORA el mismo componente que
+  // el de Hoy/Mañana (TodayRouteMap) — antes eran dos (DaySpotsMap y este) con
+  // lógica propia, y por eso uno enseñaba el alojamiento y las estaciones y el
+  // otro no. Mismos puntos, mismo orden que el timeline de este día.
+  const mapItems = timeline.filter(i => i._kind === 'spot' ? (i.lat && i.lng) : (i._kind === 'doc' && i.location_lat && i.location_lng));
+  const hasMap = mapItems.length > 0 || !!(hotelSpot?.lat && hotelSpot?.lng);
 
   // Al soltar un arrastre, se reescribe TODO el orden del día de una vez —
   // spots y docs vía day_order, notas vía el campo "order" dentro de su
@@ -549,19 +541,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
     // cualquier parte del dia bloqueaba cualquier arrastre nuevo aunque no
     // tuviera nada que ver. Ahora solo compara el item movido contra el
     // item con hora justo antes/despues de su nueva posicion.
-    const findTimeClash = (orderedItems, movedId) => {
-          const idx = orderedItems.findIndex(i => i.id === movedId);
-          if (idx === -1) return null;
-          const moved = orderedItems[idx];
-          if (!moved._time) return null;
-          let prev = null;
-          for (let k = idx - 1; k >= 0; k--) { if (orderedItems[k]._time) { prev = orderedItems[k]; break; } }
-          let next = null;
-          for (let k = idx + 1; k < orderedItems.length; k++) { if (orderedItems[k]._time) { next = orderedItems[k]; break; } }
-          if (prev && prev._time > moved._time) return [prev, moved];
-          if (next && next._time < moved._time) return [moved, next];
-          return null;
-    };
+    const findTimeClash = (orderedItems, movedId) => sharedFindTimeClash(orderedItems, movedId, i => i._time);
 
   const reorderTimeline = async (fromId, toId) => {
     if (!fromId || !toId || fromId === toId) return;
@@ -599,7 +579,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
 
     try {
       await Promise.all([...spotUpdates, ...docUpdates]);
-      if (docUpdates.length) queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+      if (docUpdates.length) invalidateTripDocs(queryClient, tripId);
       if (spotUpdates.length) queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
       if (noteChanged) await saveNotes(newNotes);
     } catch {
@@ -727,7 +707,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
               </span>
               <Pencil className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
             </button>
-            {hasMappableSpots && (
+            {hasMap && (
               <button
                 onClick={() => setShowMap(s => !s)}
                 className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors shrink-0 ${
@@ -743,10 +723,10 @@ function DayContent({day, dayDate, docs, otherDocs = [], spots, tripId, cityId, 
         )}
       </div>
 
-      {/* Day spots map — collapsed by default; lazy (no map-load quota until expanded) */}
-      {showMap && hasMappableSpots && (
+      {/* Mapa del día (alojamiento + paradas) — plegado por defecto; no carga nada hasta desplegar */}
+      {showMap && hasMap && (
         <div className="px-4 pt-1 pb-3 bg-card border-t border-border">
-          <DaySpotsMap spots={spots} height={220} onSelectSpot={setEditingSpot} />
+          <TodayRouteMap hotelSpot={hotelSpot} items={mapItems} height={220} onSelectSpot={(item) => (item._kind === 'doc' ? setViewingDoc(item) : setEditingSpot(item))} />
         </div>
       )}
 
@@ -1088,6 +1068,7 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
           dayDate={dateStr}
           docs={docs}
           otherDocs={otherDocs}
+          hotelSpot={getCityHotel(allSpots, cityId)}
           spots={spots}
           tripId={tripId}
           cityId={cityId}
@@ -1360,14 +1341,7 @@ export default function Cities() {
     enabled: !!tripId, staleTime: 30000,
   });
 
-  const { data: allDocs = [] } = useQuery({
-    queryKey: ['allDocs', tripId],
-    queryFn: () => base44.entities.Ticket.filter({ trip_id: tripId }),
-    // refetchOnMount:'always': el caché persistido pintaba la lista de la
-    // última visita (sin el billete que otro viajero acababa de subir) hasta
-    // que vencía el staleTime. Mismo patrón que Home.
-    enabled: !!tripId, staleTime: 60000, refetchOnMount: 'always',
-  });
+  const { data: allDocs = [] } = useTripDocs(tripId);
 
   // UserProfile.read se cerró en el rls (exponía email/nationality de todo
   // el mundo) — antes esto traía TODOS los perfiles de la app; ahora se pide

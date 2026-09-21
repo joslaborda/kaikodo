@@ -6,6 +6,7 @@ import { notify, resolveUserIds } from '@/lib/notifications';
 import { scheduleTicketReminder, cancelTicketReminder } from '@/lib/localReminders';
 import { isDocForUser, holdersSummary } from '@/lib/docHolders';
 import { linkHotelDocToStay } from '@/lib/hotelStay';
+import { requestTicketPush, cancelTicketPush, hasServerPushFor } from '@/lib/ticketPush';
 import { Car, ChevronDown, ChevronUp, CirclePlus, FileText, Hotel, Lock, Pencil, Plus, Shield, Ticket, Train, Trash2, User, Users } from 'lucide-react';
 import { PlaneIcon, BusFront } from '@/lib/icons';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -23,6 +24,7 @@ import { normalizeEmail } from '@/lib/utils';
 import { searchUserProfiles } from '@/lib/userProfiles';
 import { resolveDocViewUrl } from '@/lib/privateFiles';
 
+import { useTripDocs, invalidateTripDocs } from '@/hooks/useTripDocs';
 const DOC_ICONS = {
   flight:    PlaneIcon,
   train:     Train,
@@ -225,19 +227,11 @@ export default function Documents() {
   const [deleteDoc, setDeleteDoc]   = useState(null);
   const [viewFile, setViewFile]     = useState(null);
 
-  const { data: tickets = [] } = useQuery({
-    queryKey: ['tickets', tripId],
-    queryFn: () => base44.entities.Ticket.filter({ trip_id: tripId }, '-date'),
-    // José (17 sep 2026) — revisión de seguridad: con el cache persistido en
-    // localStorage (kodo-query-cache), staleTime:0 solo no bastaba para que
-    // esta pantalla mostrase SIEMPRE la lista real nada más montar — la
-    // hidratación del cache persistido pintaba los datos viejos primero y el
-    // refetch por staleness podía tardar en sustituirlos. refetchOnMount:
-    // 'always' fuerza la petición de red en cuanto se monta, sin depender de
-    // ese cálculo de staleness (mismo patrón ya usado para la query 'trip'
-    // en Home.jsx).
-    enabled: !!tripId, staleTime: 0, refetchOnMount: 'always',  // always fresh so new members see docs immediately, and removed members stop seeing them
-  });
+  // staleTime:0 a propósito (revisión de seguridad, 17 sep 2026): un documento ya
+  // no accesible (viaje abandonado / expulsión) no debe seguir apareciendo tras
+  // recargar por culpa del caché persistido. La consulta es la misma que usan
+  // Home, Ruta y Hoy/Mañana (src/hooks/useTripDocs.js).
+  const { data: tickets = [] } = useTripDocs(tripId, { staleTime: 0 });
 
   // Deep-link desde una notificación (bell in-app, o recordatorio local de
   // vuelo/tren/evento) con ?doc_id=... en la URL: abre directamente ese
@@ -331,12 +325,9 @@ export default function Documents() {
     if (updates.length) {
       Promise.all(updates.map(({ ticketId, updates }) => base44.entities.Ticket.update(ticketId, updates)))
         .then(() => {
-          queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
-          // Home/Ruta (Cities.jsx, TodayTab.jsx, TomorrowTab.jsx, TripAlerts.jsx)
-          // cachean los mismos documentos bajo la clave 'allDocs', no 'tickets'.
-          // Sin esto, un documento subido/editado/borrado aquí no se reflejaba
-          // ahí hasta que esa otra caché caducara por sí sola.
-          queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+          // Una sola consulta de documentos para todo el viaje (useTripDocs):
+          // invalidarla aquí refresca también Home, Ruta y Hoy/Mañana.
+          invalidateTripDocs(queryClient, tripId);
         });
     }
   }, [tripId, tickets.length, itineraryDays.length]);
@@ -354,13 +345,14 @@ export default function Documents() {
       return base44.entities.Ticket.create({ ...enrichTicketDataWithAutoLinks(data, itineraryDays, data.city_id), trip_id: tripId, user_id: userId, trip_members: trip.members });
     },
     onSuccess: (newDoc, data) => {
-      queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+      invalidateTripDocs(queryClient, tripId);
       setAddOpen(false); setAddInitial(null);
       // Una reserva de hotel deja puesto el alojamiento de la ciudad (hotelStay.js).
       if (data.category === 'hotel') linkHotelDocToStay({ doc: { ...data, id: newDoc?.id }, tripId, trip, cities, userEmail: currentUser?.email, userId, queryClient });
       // Solo suena en el móvil de quien va a usar el documento (used_by).
       if (isDocForUser({ created_by: currentUserEmail, ...data }, currentUserEmail)) scheduleTicketReminder({ ...data, id: newDoc?.id, trip_id: tripId });
+      // El aviso de quienes lo usan lo programa el servidor (no dependen de abrir la app).
+      requestTicketPush({ ...data, id: newDoc?.id });
       // Notify members about new doc
       if (data.visibility !== 'personal') {
         const sharedWith = data.visibility === 'selected_users'
@@ -388,12 +380,12 @@ export default function Documents() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Ticket.update(id, enrichTicketDataWithAutoLinks(data, itineraryDays, data.city_id)),
     onSuccess: (_updatedDoc, { data, oldDoc }) => {
-      queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+      invalidateTripDocs(queryClient, tripId);
       setEditDoc(null);
       if (data.category === 'hotel') linkHotelDocToStay({ doc: { ...data, id: oldDoc?.id, spot_id: data.spot_id || oldDoc?.spot_id }, tripId, trip, cities, userEmail: currentUser?.email, userId, queryClient });
       cancelTicketReminder(oldDoc?.id);
       if (isDocForUser({ created_by: oldDoc?.created_by, ...data }, currentUserEmail)) scheduleTicketReminder({ ...data, id: oldDoc?.id, trip_id: tripId });
+      requestTicketPush({ ...data, id: oldDoc?.id, reminder_push_ids: oldDoc?.reminder_push_ids });
       // Antes editar la hora de un ticket (vuelo/tren/etc.) no avisaba a
       // nadie — solo se notificaba al CREAR el documento. Mismo criterio de
       // destinatarios que doc_added (respeta visibility), pero disparado
@@ -424,10 +416,10 @@ export default function Documents() {
     onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
   });
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.Ticket.delete(id),
+    // Se retiran antes los avisos programados en el servidor (después ya no se puede leer el documento).
+    mutationFn: async (id) => { await cancelTicketPush(id); return base44.entities.Ticket.delete(id); },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tickets', tripId] });
-      queryClient.invalidateQueries({ queryKey: ['allDocs', tripId] });
+      invalidateTripDocs(queryClient, tripId);
       setDeleteDoc(null);
     },
   

@@ -31,6 +31,7 @@ import { syncTicketRemindersForUser } from '@/lib/localReminders';
 import InviteModal from '@/components/home/InviteModal';
 import SettingsDialog from '@/components/home/SettingsDialog';
 
+import { useTripDocs } from '@/hooks/useTripDocs';
 if (typeof document !== 'undefined' && !document.getElementById('kodo-tab-slide-style')) {
   const st = document.createElement('style');
   st.id = 'kodo-tab-slide-style';
@@ -221,30 +222,18 @@ export default function Home() {
   const { data: cities = [] } = useQuery({ queryKey: ['cities', tripId], queryFn: () => base44.entities.City.filter({ trip_id: tripId }, 'order'), enabled: !!tripId, staleTime: 30000 });
   const { data: expenses = [] } = useQuery({ queryKey: ['expenses', tripId], queryFn: () => base44.entities.Expense.filter({ trip_id: tripId }), enabled: !!tripId, staleTime: 30000 });
   const { data: packingItems = [] } = useQuery({ queryKey: ['packingItems', tripId], queryFn: () => base44.entities.PackingItem.filter({ trip_id: tripId }), enabled: !!tripId, staleTime: 30000 });
-  const { data: documents = [], isSuccess: documentsLoaded } = useQuery({
-    queryKey: ['documents', tripId],
-    queryFn: async () => {
-      const tickets = await base44.entities.Ticket.filter({ trip_id: tripId });
-      return tickets.filter(ticket => {
-        const vis = ticket.visibility || 'personal';
-        if (vis === 'shared') return true;
-        // Quien va a usar el documento siempre lo ve (used_by).
-        if ((ticket.used_by || []).some(e => normalizeEmail(e) === currentUserEmail)) return true;
-        // selected_users: además de los tuyos, los que te han compartido a ti
-        // (antes se descartaban aquí aunque Documents.jsx sí los mostraba).
-        if (vis === 'selected_users' && (ticket.shared_with || []).some(e => normalizeEmail(e) === currentUserEmail)) return true;
-        return normalizeEmail(ticket.created_by) === currentUserEmail || ticket.user_id === currentUserId;
-      });
-    },
-    enabled: !!tripId && !!currentUserEmail,
-    // José (17 sep 2026) — revisión de seguridad: mismo problema que
-    // Documents.jsx (ver comentario ahí) pero en la tarjeta "Hoy" de Home —
-    // un documento ya no accesible (viaje abandonado/expulsión) seguía
-    // apareciendo aquí tras recargar porque el cache persistido se pintaba
-    // antes de que venciera el staleTime de 30s. refetchOnMount:'always'
-    // fuerza la red en cada montaje, mismo patrón que la query 'trip'.
-    staleTime: 30000, refetchOnMount: 'always',
-  });
+  // Los documentos vienen de la consulta única del viaje (useTripDocs). Aquí solo
+  // se descartan los que este usuario no debe ver (el rls ya lo hace en el
+  // backend; esto cubre además el caché persistido de una sesión anterior).
+  const { data: allTickets = [], isSuccess: documentsLoaded } = useTripDocs(tripId, { enabled: !!currentUserEmail });
+  const documents = useMemo(() => allTickets.filter(ticket => {
+    const vis = ticket.visibility || 'personal';
+    if (vis === 'shared') return true;
+    // Quien va a usar el documento siempre lo ve (used_by).
+    if ((ticket.used_by || []).some(e => normalizeEmail(e) === currentUserEmail)) return true;
+    if (vis === 'selected_users' && (ticket.shared_with || []).some(e => normalizeEmail(e) === currentUserEmail)) return true;
+    return normalizeEmail(ticket.created_by) === currentUserEmail || ticket.user_id === currentUserId;
+  }), [allTickets, currentUserEmail, currentUserId]);
   const { data: allSpots = [] } = useQuery({ queryKey: ['spots', tripId], queryFn: () => base44.entities.Spot.filter({ trip_id: tripId }), enabled: !!tripId, staleTime: 30000 });
   // Recordatorios locales de los billetes que VA A USAR ESTE móvil (used_by),
   // no solo de los que subió él — ver syncTicketRemindersForUser. Solo cuando la
@@ -252,8 +241,8 @@ export default function Home() {
   // todos los avisos ya programados.
   useEffect(() => {
     if (!documentsLoaded || !tripId || !currentUserEmail) return;
-    syncTicketRemindersForUser(documents, currentUserEmail, tripId);
-  }, [documents, documentsLoaded, currentUserEmail, tripId]);
+    syncTicketRemindersForUser(documents, currentUserEmail, tripId, currentUserId);
+  }, [documents, documentsLoaded, currentUserEmail, currentUserId, tripId]);
   const { data: tripMessages = [] } = useQuery({ queryKey: ['tripMessages', tripId], queryFn: () => base44.entities.TripMessage.filter({ trip_id: tripId }), enabled: !!tripId, staleTime: 10000, refetchInterval: 30000 });
   const tripMembers = trip?.members || [];
   const { data: profiles = [] } = useQuery({
