@@ -651,7 +651,9 @@
       "stopsCount": "{{count}} stops",
       "addHotel": "+ Add accommodation",
       "tomorrowRoute": "Tomorrow's route",
-      "checkIn": "Check-in"
+      "checkIn": "Check-in",
+      "ticketMissing": "This ticket has no file",
+      "uploadTicket": "Upload ticket"
     },
     "tomorrow": {
       "emptyTitle": "Nothing planned for tomorrow",
@@ -1435,7 +1437,11 @@
     "deleteConfirm": "Delete this? This can't be undone.",
     "uploadFile": "Upload file",
     "uploading": "Uploading…",
-    "uploaded": "File uploaded"
+    "uploaded": "File uploaded",
+    "editDocument": "Edit document",
+    "forWho": "For",
+    "attached": "Attached",
+    "changeFile": "Change file"
   },
   "membersPanel": {
     "travelersCount": "Travellers ({{count}})",
@@ -1790,7 +1796,13 @@
     "restored": "Connection restored",
     "offline": "Offline · Viewing saved data",
     "mapUnavailable": "Map not available offline",
-    "mapUnavailableHint": "Your places are still here. \"Directions\" opens your phone's maps app."
+    "mapUnavailableHint": "Your places are still here. \"Directions\" opens your phone's maps app.",
+    "ticketUnavailable": "Can't open the ticket offline",
+    "ticketUnavailableHint": "Open it once with a connection and it will be saved on your phone to view offline.",
+    "ticketFailed": "Couldn't open the ticket",
+    "ticketFailedHint": "Check your connection and try again.",
+    "uploadNeedsNetwork": "No connection",
+    "uploadNeedsNetworkHint": "The file uploads when you have a network. Try again when you do."
   },
   "publish": {
     "published": "Published",

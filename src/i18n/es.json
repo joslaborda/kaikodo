@@ -651,7 +651,9 @@
       "stopsCount": "{{count}} paradas",
       "addHotel": "+ Añadir alojamiento",
       "tomorrowRoute": "Ruta de mañana",
-      "checkIn": "Check-in"
+      "checkIn": "Check-in",
+      "ticketMissing": "Este billete no tiene archivo",
+      "uploadTicket": "Subir billete"
     },
     "tomorrow": {
       "emptyTitle": "Nada planificado para mañana",
@@ -1435,7 +1437,11 @@
     "deleteConfirm": "¿Eliminar esto? No se puede deshacer.",
     "uploadFile": "Subir archivo",
     "uploading": "Subiendo…",
-    "uploaded": "Archivo subido"
+    "uploaded": "Archivo subido",
+    "editDocument": "Editar documento",
+    "forWho": "Para",
+    "attached": "Adjunto",
+    "changeFile": "Cambiar archivo"
   },
   "membersPanel": {
     "travelersCount": "Viajeros ({{count}})",
@@ -1790,7 +1796,13 @@
     "restored": "Conexión restaurada",
     "offline": "Sin conexión · Viendo datos guardados",
     "mapUnavailable": "Mapa no disponible sin conexión",
-    "mapUnavailableHint": "Tus sitios siguen aquí. Con \"Cómo llegar\" se abre la app de mapas del móvil."
+    "mapUnavailableHint": "Tus sitios siguen aquí. Con \"Cómo llegar\" se abre la app de mapas del móvil.",
+    "ticketUnavailable": "No se puede abrir el billete sin conexión",
+    "ticketUnavailableHint": "Ábrelo una vez con conexión y quedará guardado en el móvil para poder verlo sin red.",
+    "ticketFailed": "No se pudo abrir el billete",
+    "ticketFailedHint": "Comprueba tu conexión e inténtalo de nuevo.",
+    "uploadNeedsNetwork": "Sin conexión",
+    "uploadNeedsNetworkHint": "El archivo se sube cuando hay red. Inténtalo de nuevo cuando la tengas."
   },
   "publish": {
     "published": "Publicado",
