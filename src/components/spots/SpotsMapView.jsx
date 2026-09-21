@@ -8,6 +8,8 @@ import { loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUse
 import { spotTypeIconSvg } from './spotTypeIcon';
 import { isStaySpot } from '@/lib/cityStay';
 import { stayGoogleIcon, stayLeafletIcon } from './stayIcon';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import OfflineMapNotice from './OfflineMapNotice';
 import { arePointsTight, SINGLE_POINT_ZOOM, MAX_FIT_ZOOM } from '@/lib/mapFit';
 
 // Antes cada día usaba uno de los 5 --chart-1..5, todos tonos naranja/marrón
@@ -71,6 +73,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
   const dateLocale = i18n.language === 'en' ? undefined : es;
   const containerRef = useRef(null);
   const mapRef = useRef(null);
+  const online = useOnlineStatus();
   const onCreatePinRef = useRef(onCreatePin);
   const onSelectSpotRef = useRef(onSelectSpot);
   onCreatePinRef.current = onCreatePin;
@@ -120,7 +123,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
   const visibleUnscheduled = selectedDate ? [] : unscheduledSpots;
 
   useEffect(() => {
-    if (!withCoords.length || useGoogle === null) return undefined;
+    if (!withCoords.length || useGoogle === null || !online) return undefined;
     let cancelled = false;
 
     const renderLeaflet = () => {
@@ -270,6 +273,7 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
   }, [
     selectedDate,
         useGoogle,
+        online,
     withCoords.map(s => s.id + '@' + (isStaySpot(s) ? '' : (s.assigned_date || '')) + '@' + (s.day_order ?? '') + '@' + (s.assigned_time || '')).join(','),
   ]);
 
@@ -278,6 +282,12 @@ export default function SpotsMapView({ spots = [], cities = [], onCreatePin, onS
       <div className="text-center py-10 border-2 border-dashed border-border rounded-2xl bg-card">
         <p className="text-sm text-muted-foreground">{t('spots.map.noCoords')}</p>
       </div>
+    );
+  }
+
+  if (!online) {
+    return (
+      <OfflineMapNotice points={withCoords.slice(0, 12).map(s => ({ key: s.id, label: s.title, lat: s.lat, lng: s.lng }))} />
     );
   }
 
