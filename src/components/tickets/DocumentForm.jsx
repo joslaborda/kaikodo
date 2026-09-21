@@ -443,12 +443,16 @@ export default function DocumentForm({
         </div>
       </div>
 
-      {/* Name */}
+      {/* Name — en una reserva de hotel el nombre ES el hotel elegido en el buscador
+          de abajo: una vez elegido se oculta (antes salía dos veces: "Nombre" y
+          "Hotel" con el mismo texto). Sin hotel elegido sigue pidiéndose a mano. */}
+      {!(category === 'hotel' && typeof fields.location_lat === 'number') && (
       <div>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('documents.form.name')}</p>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{category === 'hotel' ? t('documents.form.nameHotel') : t('documents.form.name')}</p>
         <Input value={fields.name} onChange={e => setField('name', e.target.value)}
-          placeholder={t('documents.form.ph.name')} className="h-10 text-sm" />
+          placeholder={category === 'hotel' ? t('documents.form.ph.hotel') : t('documents.form.ph.name')} className="h-10 text-sm" />
       </div>
+      )}
 
       {/* Origin / Destination */}
       {(hasField('origin') || hasField('destination')) && (
@@ -476,7 +480,7 @@ export default function DocumentForm({
       {hasField('location') && (
         <div>
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-            {category === 'hotel' ? t('documents.form.fields.hotelPlace') : t('documents.form.fields.location')} <span className="font-normal normal-case tracking-normal text-muted-foreground">{t('documents.form.optional')}</span>
+            {category === 'hotel' ? t('documents.form.fields.hotelPlace') : <>{t('documents.form.fields.location')} <span className="font-normal normal-case tracking-normal text-muted-foreground">{t('documents.form.optional')}</span></>}
           </p>
           <p className="text-xs text-muted-foreground/70 mb-1.5">{category === 'hotel' ? t('documents.form.hotelHint') : t('documents.form.locationHint')}</p>
           {fields.location_lat && fields.location_lng ? (
