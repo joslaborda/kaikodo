@@ -1026,7 +1026,8 @@
       "seenBy": "Lo verá: {{who}}",
       "change": "Cambiar",
       "hotelHint": "Búscalo y quedará también como tu alojamiento en la ciudad",
-      "usedByHintStay": "Quiénes se alojan aquí. Puede ser más de una persona."
+      "usedByHintStay": "Quiénes se alojan aquí. Puede ser más de una persona.",
+      "nameHotel": "Nombre del hotel o de la reserva"
     },
     "card": {
       "view": "Ver",

@@ -1026,7 +1026,8 @@
       "seenBy": "Seen by: {{who}}",
       "change": "Change",
       "hotelHint": "Search it and it will also be your accommodation in the city",
-      "usedByHintStay": "Who is staying here. Can be more than one person."
+      "usedByHintStay": "Who is staying here. Can be more than one person.",
+      "nameHotel": "Hotel or booking name"
     },
     "card": {
       "view": "View",
