@@ -20,7 +20,6 @@ export default function TodayTab({ trip, cities, tripId, profiles, onInvite, cur
   const queryClient = useQueryClient();
   const today = new Date();
   const todayStr    = format(today, 'yyyy-MM-dd');
-  const tomorrowStr = format(new Date(today.getTime() + 86400000), 'yyyy-MM-dd');
 
   const sortedCities = useMemo(() =>
     [...cities].sort((a, b) => (a.start_date || '').localeCompare(b.start_date || '')),
@@ -32,11 +31,6 @@ export default function TodayTab({ trip, cities, tripId, profiles, onInvite, cur
     [sortedCities, todayStr]
   );
 
-  const tomorrowCity = useMemo(() =>
-    sortedCities.find(c => c.start_date === tomorrowStr) ||
-    sortedCities.find(c => c.start_date && c.end_date && tomorrowStr >= c.start_date && tomorrowStr <= c.end_date),
-    [sortedCities, tomorrowStr]
-  );
 
   const { data: allDocs = [] } = useTripDocs(tripId);
 
@@ -156,24 +150,8 @@ const handleUpdateItemTime = async (item, time) => {
         />
       )}
 
-      {tomorrowCity && tomorrowCity.id !== todayCity?.id && (
-        <DayCard
-          label={t('common.tomorrow')}
-          city={tomorrowCity}
-          docs={docsForDate(tomorrowStr)}
-          spots={spotsForDate(tomorrowCity.id, tomorrowStr)}
-          itineraryDays={itineraryDays}
-          dateStr={tomorrowStr}
-          tripId={tripId}
-          defaultOpen={false}
-          onReorderSpots={handleReorder}
-          onUpdateItemTime={handleUpdateItemTime}
-          hotelSpot={hotelForCity(tomorrowCity.id)}
-          trip={trip}
-          currentUserEmail={currentUserEmail}
-          profiles={profiles}
-        />
-      )}
+      {/* José (21 sep 2026): aquí salía además una tarjeta "MAÑANA" plegada — ya hay una
+          pestaña Mañana propia, y con las dos la misma información estaba dos veces. */}
 
       <div className="bg-card rounded-2xl border border-border overflow-hidden">
         <MemberAvatarRow trip={trip} profiles={profiles} onInvite={onInvite} currentUserEmail={currentUserEmail} tripId={tripId} />

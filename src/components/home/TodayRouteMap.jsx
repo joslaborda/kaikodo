@@ -4,6 +4,8 @@ import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoM
 import { loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
 import { arePointsTight, SINGLE_POINT_ZOOM, MAX_FIT_ZOOM } from '@/lib/mapFit';
 import { stayGoogleIcon, stayLeafletIcon } from '@/components/spots/stayIcon';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import OfflineMapNotice from '@/components/spots/OfflineMapNotice';
 
 // Mini-mapa de la ruta del dia: hotel (si hay uno guardado como spot type
 // 'hotel' para esta ciudad) + los items del dia con coordenadas, numerados
@@ -36,6 +38,7 @@ function numberedSvgIcon(google, num, bg) {
 export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onSelectSpot }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
+    const online = useOnlineStatus();
     // Mismo problema real que ya se arregló en DaySpotsMap.jsx (14 sep
     // 2026): un google.maps.Map no tiene .remove(). Aquí es MÁS grave
     // porque este mapa no es colapsable — se desmonta/limpia cada vez que
@@ -66,7 +69,9 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
         }, []);
 
   useEffect(() => {
-        if (totalPoints === 0 || useGoogle === null) return undefined;
+        // Sin conexión no se crea ningún mapa (ni Google ni el Leaflet de reserva:
+        // los dos necesitan red) — se enseña OfflineMapNotice.
+        if (totalPoints === 0 || useGoogle === null || !online) return undefined;
         let cancelled = false;
 
                 if (useGoogle) {
@@ -188,9 +193,17 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
                         markersRef.current = [];
                 };
 
-  }, [hotelSpot?.id, hotelSpot?.lat, hotelSpot?.lng, useGoogle, routeItems.map(i => i.id + ':' + (i._kind === 'doc' ? i.location_lat + ':' + i.location_lng : i.lat + ':' + i.lng)).join(',')]);
+  }, [hotelSpot?.id, hotelSpot?.lat, hotelSpot?.lng, useGoogle, online, routeItems.map(i => i.id + ':' + (i._kind === 'doc' ? i.location_lat + ':' + i.location_lng : i.lat + ':' + i.lng)).join(',')]);
 
   if (totalPoints === 0) return null;
+
+  if (!online) {
+    const points = [
+      ...(hasHotel ? [{ key: 'stay', label: hotelSpot.title, lat: hotelSpot.lat, lng: hotelSpot.lng }] : []),
+      ...routeItems.map((i, idx) => ({ key: i.id || idx, badge: idx + 1, label: i.title || i.name || i.location_name || '', lat: i._kind === 'spot' ? i.lat : i.location_lat, lng: i._kind === 'spot' ? i.lng : i.location_lng })),
+    ];
+    return <OfflineMapNotice points={points} />;
+  }
 
   return <div ref={containerRef} className="kodo-map-warm" style={{ height, borderRadius: 12, overflow: 'hidden' }} />;
 }

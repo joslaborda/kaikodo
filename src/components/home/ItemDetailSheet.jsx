@@ -1,9 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
+import { toast } from '@/components/ui/use-toast';
+import { checkUpload, convertHeicIfNeeded } from '@/lib/uploadLimits';
+import { invalidateTripDocs } from '@/hooks/useTripDocs';
 import { createPortal } from 'react-dom';
-import { X, Clock, CirclePlus, Trash2 } from 'lucide-react';
+import { X, Clock, CirclePlus, Trash2, Upload } from 'lucide-react';
 import { DOC_ICONS, SPOT_ICONS, SPOT_COLORS } from './constants';
 import { useTranslation } from 'react-i18next';
-import { resolveDocViewUrl } from '@/lib/privateFiles';
+import { resolveDocViewUrl, uploadDocFile } from '@/lib/privateFiles';
 
 export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, onDelete }) {
   const { t } = useTranslation();
@@ -12,6 +17,10 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedUri, setUploadedUri] = useState('');
+  const fileInputRef = useRef(null);
+  const queryClient = useQueryClient();
 
   // Mientras la hoja está abierta, la página de detrás no debe hacer scroll (en
   // escritorio se podía subir y bajar toda la página con la hoja encima).
@@ -47,6 +56,34 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
     setEditingTime(false);
   };
 
+  // José (21 sep 2026): un documento sin archivo (p. ej. la reserva de hotel) enseñaba
+  // "Archivo · Sin archivo" pero no había forma de subirlo desde aquí. Ahora esa
+  // casilla es un botón que sube el archivo (mismo almacenamiento privado que el
+  // formulario) y lo guarda en el documento.
+  const hasFile = !!(item.file_url || item.file_uri || uploadedUri);
+  const handleFilePicked = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !item.id) return;
+    const chk = checkUpload(file, { images: false });
+    if (!chk.ok) {
+      toast({ title: t('upload.tooLarge'), description: t('upload.maxMb', { mb: chk.maxMb }), variant: 'destructive' });
+      return;
+    }
+    setUploading(true);
+    try {
+      const uploadFile = await convertHeicIfNeeded(file);
+      const { file_uri } = await uploadDocFile(uploadFile);
+      await base44.entities.Ticket.update(item.id, { file_uri, file_url: '' });
+      setUploadedUri(file_uri);
+      if (item.trip_id) invalidateTripDocs(queryClient, item.trip_id);
+      toast({ title: t('itemDetail.uploaded') });
+    } catch {
+      toast({ title: t('common.error'), description: t('common.tryAgain'), variant: 'destructive' });
+    }
+    setUploading(false);
+  };
+
   const handleDelete = async () => {
     setDeleting(true);
     try { await onDelete(item); } finally { setDeleting(false); }
@@ -56,7 +93,7 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
   // (storage privado) pide una URL firmada nueva cada vez en vez de una que
   // podría haber caducado. Ver src/lib/privateFiles.js.
   const handleOpenPdf = async () => {
-    const url = await resolveDocViewUrl(item);
+    const url = await resolveDocViewUrl({ ...item, file_uri: item.file_uri || uploadedUri });
     onClose();
     if (url) setTimeout(() => onOpenPdf(url), 50);
   };
@@ -130,15 +167,20 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
                 <p className="text-xs text-muted-foreground mb-1">{t('itemDetail.type')}</p>
                 <p className="text-sm font-medium text-foreground capitalize">{typeLabel}</p>
               </div>
-              {!item.file_url && !item.file_uri && (
-                <div className="bg-secondary rounded-xl p-3 flex-1">
+              {!hasFile && (
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                  className="bg-secondary rounded-xl p-3 flex-1 text-left border border-dashed border-primary/40 hover:bg-orange-50 transition-colors disabled:opacity-60">
                   <p className="text-xs text-muted-foreground mb-1">{t('itemDetail.file')}</p>
-                  <p className="text-sm text-muted-foreground">{t('itemDetail.noFile')}</p>
-                </div>
+                  <p className="text-sm font-medium text-primary flex items-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5" />{uploading ? t('itemDetail.uploading') : t('itemDetail.uploadFile')}
+                  </p>
+                </button>
               )}
             </div>
           )}
         </div>
+
+        <input ref={fileInputRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={handleFilePicked} />
 
         {onDelete && confirmDelete && (
           <div className="mx-5 mb-3 flex items-center justify-between gap-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 rounded-xl px-4 py-2.5">
@@ -159,7 +201,7 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
               <Trash2 className="w-3.5 h-3.5" />{t('common.delete')}
             </button>
           )}
-          {isDoc && (item.file_url || item.file_uri) && (
+          {isDoc && hasFile && (
             <button onClick={handleOpenPdf}
               className="flex-1 py-3 bg-primary text-white rounded-full text-sm font-medium">
               {t('itemDetail.viewDocument')}
