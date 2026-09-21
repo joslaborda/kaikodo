@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { cancelTicketReminder } from '@/lib/localReminders';
 
 // José (21 sep 2026): el aviso "sale tu tren/vuelo" de las personas que USAN un
 // documento (used_by) lo programa el SERVIDOR (base44/functions/scheduleTicketPush)
@@ -23,7 +24,11 @@ export async function requestTicketPush(ticket) {
     // servidor la necesita en UTC. Mismo criterio que el recordatorio local.
     const dt = new Date(`${ticket.date}T${ticket.time || '00:00'}:00`);
     const tzOffsetMinutes = Number.isNaN(dt.getTime()) ? new Date().getTimezoneOffset() : dt.getTimezoneOffset();
-    await base44.functions.invoke('scheduleTicketPush', { ticketId: ticket.id, tzOffsetMinutes });
+    const res = await base44.functions.invoke('scheduleTicketPush', { ticketId: ticket.id, tzOffsetMinutes });
+    // El servidor ya avisa a quien guarda el documento → se retira su aviso local
+    // (el que se programó al guardar) para que no salgan dos.
+    const body = res?.data ?? res;
+    if (body?.callerScheduled) await cancelTicketReminder(ticket.id);
   } catch {
     // best-effort
   }
@@ -39,9 +44,4 @@ export async function cancelTicketPush(ticketId) {
   }
 }
 
-// ¿El servidor ya tiene programado un aviso para este usuario en este documento?
-// Si es así, su móvil no programa el aviso local (saldrían dos iguales).
-export function hasServerPushFor(ticket, userId) {
-  if (!userId) return false;
-  return (ticket?.reminder_push_ids || []).some(s => String(s).startsWith(userId + ':'));
-}
+export { hasServerPushFor } from '@/lib/docHolders';

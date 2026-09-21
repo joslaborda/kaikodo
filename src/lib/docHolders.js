@@ -79,3 +79,10 @@ export function holdersSummary(doc, profiles, myEmail, members = [], labels = {}
     .map(e => (normalizeEmail(e) === me ? (labels.you || e) : displayNameFor(e, profiles)))
     .join(', ');
 }
+
+// ¿El servidor ya tiene programado un aviso para este usuario en este documento?
+// Si es así, su móvil no programa el aviso local (saldrían dos iguales).
+export function hasServerPushFor(ticket, userId) {
+  if (!userId) return false;
+  return (ticket?.reminder_push_ids || []).some(s => String(s).startsWith(userId + ':'));
+}

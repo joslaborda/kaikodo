@@ -2,8 +2,7 @@ import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import i18n from '@/i18n';
 import { createPageUrl } from '@/utils';
-import { isDocForUser } from '@/lib/docHolders';
-import { hasServerPushFor } from '@/lib/ticketPush';
+import { isDocForUser, hasServerPushFor } from '@/lib/docHolders';
 
 // Recordatorios locales en el propio dispositivo para vuelos, trenes, bus y
 // actividades con hora asignada. A diferencia de las notificaciones push
