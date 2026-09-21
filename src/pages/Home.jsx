@@ -271,6 +271,17 @@ export default function Home() {
     prefetchTicketFiles([...documents].sort((a, b) => Number(isDocForUser(b, currentUserEmail)) - Number(isDocForUser(a, currentUserEmail))));
   }, [documents, documentsLoaded, currentUserEmail]);
 
+  // José: la app abierta a las 23:50 seguía diciendo "Hoy" a las 00:10 (la fecha solo
+  // se leía al pintar). Se vigila el cambio de día cada 30 s y al volver a primer plano.
+  const [, setDayKey] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  useEffect(() => {
+    const check = () => setDayKey(k => { const n = format(new Date(), 'yyyy-MM-dd'); return n === k ? k : n; });
+    const id = setInterval(check, 30000);
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', check); window.removeEventListener('focus', check); };
+  }, []);
+
   useEffect(() => {
     if (!documentsLoaded || !tripId || !currentUserEmail) return;
     syncTicketRemindersForUser(documents, currentUserEmail, tripId, currentUserId);
