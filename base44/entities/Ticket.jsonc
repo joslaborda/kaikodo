@@ -105,6 +105,17 @@
       },
       "description": "Emails de usuarios con acceso (para selected_users)"
     },
+    "spot_id": {
+      "type": "string",
+      "description": "Solo reservas de hotel: id del Spot (type hotel) que es el alojamiento de la ciudad. Enlaza la reserva con su alojamiento (ver src/lib/hotelStay.js)."
+    },
+    "used_by": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Emails de quienes van a USAR este documento (distinto de quién puede verlo). Determina a quién se le destaca el billete en Home y a quién le salta el recordatorio. Documentos anteriores a este campo: se asume created_by (ver src/lib/docHolders.js)."
+    },
     "arrival_city_id": {
       "type": "string",
       "description": "Ciudad destino (trenes/vuelos)"
@@ -143,14 +154,16 @@
       "$or": [
         { "created_by": "{{user.email}}" },
         { "$and": [ { "data.visibility": "shared" }, { "data.trip_members": { "$in": ["{{user.email}}"] } } ] },
-        { "$and": [ { "data.visibility": "selected_users" }, { "data.shared_with": { "$in": ["{{user.email}}"] } } ] }
+        { "$and": [ { "data.visibility": "selected_users" }, { "data.shared_with": { "$in": ["{{user.email}}"] } } ] },
+        { "data.used_by": { "$in": ["{{user.email}}"] } }
       ]
     },
     "update": {
       "$or": [
         { "created_by": "{{user.email}}" },
         { "$and": [ { "data.visibility": "shared" }, { "data.trip_members": { "$in": ["{{user.email}}"] } } ] },
-        { "$and": [ { "data.visibility": "selected_users" }, { "data.shared_with": { "$in": ["{{user.email}}"] } } ] }
+        { "$and": [ { "data.visibility": "selected_users" }, { "data.shared_with": { "$in": ["{{user.email}}"] } } ] },
+        { "data.used_by": { "$in": ["{{user.email}}"] } }
       ]
     },
     // Fix: "eliminar documento no funciona" — el rls de delete solo dejaba
