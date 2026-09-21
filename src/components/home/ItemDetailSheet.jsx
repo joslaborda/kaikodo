@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Clock, CirclePlus, Trash2 } from 'lucide-react';
 import { DOC_ICONS, SPOT_ICONS, SPOT_COLORS } from './constants';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +13,15 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Mientras la hoja está abierta, la página de detrás no debe hacer scroll (en
+  // escritorio se podía subir y bajar toda la página con la hoja encima).
+  useEffect(() => {
+    if (!item) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [!!item]);
+
   if (!item) return null;
 
   const isDoc  = item._kind === 'doc';
@@ -20,6 +30,11 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
   const SpotIcon  = !isDoc ? (SPOT_ICONS[item.type] || CirclePlus) : null;
   const spotColor = !isDoc ? (SPOT_COLORS[item.type] || SPOT_COLORS.custom) : '';
   const title = item.title || item.name || t('itemDetail.untitled');
+  // El tipo se mostraba tal cual ("train" → "Train", en inglés aunque la app esté en
+  // español): se traduce con las mismas claves que el resto de la app.
+  const typeLabel = item.type
+    ? t((isDoc ? 'documents.types.' : 'spots.types.') + item.type, { defaultValue: item.type })
+    : null;
   // Las notas de itinerario traen el texto en `content`, no en `notes` — antes
   // este sheet solo miraba `item.notes`, así que el cuerpo de la nota nunca
   // se veía aquí (aunque sí en el editor de Ruta).
@@ -46,8 +61,11 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
     if (url) setTimeout(() => onOpenPdf(url), 50);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+  // Portal a <body> (mismo patrón que FeedbackModal / NotificationBell): pegada al
+  // borde inferior de la pantalla y por encima de la barra, sea cual sea el
+  // contenedor desde el que se abra.
+  const sheet = (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/40" onClick={onClose}>
       <div className="bg-card w-full max-w-lg rounded-t-3xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="pt-3 pb-1 flex justify-center">
           <div className="w-9 h-1 rounded-full bg-border" />
@@ -59,7 +77,7 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
           <div className="flex-1 min-w-0">
             <p className="text-base font-medium text-foreground leading-snug">{title}</p>
             <p className="text-xs text-muted-foreground mt-0.5 capitalize">
-              {isDoc ? (item.type || t('itemDetail.document')) : (item.type || t('itemDetail.spot'))}
+              {typeLabel || (isDoc ? t('itemDetail.document') : t('itemDetail.spot'))}
               {item.time && <span className="text-primary font-medium"> · {item.time}</span>}
             </p>
           </div>
@@ -110,7 +128,7 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
             <div className="flex gap-2">
               <div className="bg-secondary rounded-xl p-3 flex-1">
                 <p className="text-xs text-muted-foreground mb-1">{t('itemDetail.type')}</p>
-                <p className="text-sm font-medium text-foreground capitalize">{item.type}</p>
+                <p className="text-sm font-medium text-foreground capitalize">{typeLabel}</p>
               </div>
               {!item.file_url && !item.file_uri && (
                 <div className="bg-secondary rounded-xl p-3 flex-1">
@@ -134,7 +152,7 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
           </div>
         )}
 
-        <div className="flex items-center gap-3 px-5 pb-8 pt-0">
+        <div className="flex items-center gap-3 px-5 pt-0" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}>
           {onDelete && !confirmDelete && (
             <button onClick={() => setConfirmDelete(true)}
               className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors shrink-0">
@@ -161,4 +179,6 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(sheet, document.body) : sheet;
 }
