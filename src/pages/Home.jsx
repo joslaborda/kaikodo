@@ -39,8 +39,15 @@ if (typeof document !== 'undefined' && !document.getElementById('kodo-tab-slide-
   st.textContent = `
     @keyframes slideInRight { from { transform: translateX(32px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     @keyframes slideInLeft  { from { transform: translateX(-32px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-    .kodo-slide-right { animation: slideInRight 0.2s cubic-bezier(.25,.46,.45,.94) both; }
-    .kodo-slide-left  { animation: slideInLeft  0.2s cubic-bezier(.25,.46,.45,.94) both; }
+    /* 21 sep 2026: antes fill-mode both — al acabar la animación se quedaba un
+       transform permanente en el contenedor, y un position fixed dentro de un
+       ancestro con transform se ancla a ESE ancestro, no a la pantalla. Efecto en
+       Home: las hojas inferiores (detalle de un billete, etc.) no quedaban pegadas
+       al borde inferior y la página de detrás seguía haciendo scroll. Con
+       backwards el final de la animación (translateX(0)) es el estado natural y
+       no deja ningún transform. */
+    .kodo-slide-right { animation: slideInRight 0.2s cubic-bezier(.25,.46,.45,.94) backwards; }
+    .kodo-slide-left  { animation: slideInLeft  0.2s cubic-bezier(.25,.46,.45,.94) backwards; }
   `;
   document.head.appendChild(st);
 }
