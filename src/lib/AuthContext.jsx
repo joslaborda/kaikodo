@@ -227,6 +227,9 @@ export const AuthProvider = ({ children }) => {
   const logout = useCallback((shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
+    // Los billetes/pasaportes guardados en el móvil para verlos sin red son de esta
+    // persona: se borran al cerrar sesión (móviles compartidos, cuentas distintas).
+    import('@/lib/ticketCache').then(m => m.clearTicketCache()).catch(() => {});
     // Desvincula el dispositivo en OneSignal — ver comentario en
     // pushNotifications.js sobre dispositivos compartidos entre miembros
     // del mismo viaje.

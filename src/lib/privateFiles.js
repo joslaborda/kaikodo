@@ -1,4 +1,7 @@
 import { base44 } from '@/api/base44Client';
+import i18n from '@/i18n';
+import { toast } from '@/components/ui/use-toast';
+import { getCachedTicketUrl, saveTicketBlob, ticketFileKey, hasCachedTicket, listCachedTickets, removeCachedTicket, MAX_TICKET_BYTES } from '@/lib/ticketCache';
 
 /**
  * Documentos (Ticket): antes se subían con UploadFile (storage PÚBLICO de
@@ -69,7 +72,7 @@ export async function uploadDocFile(file) {
  * nueva cada vez (así nunca se enseña una caducada); si no, cae al file_url
  * público legado.
  */
-export async function resolveDocViewUrl(ticket) {
+async function resolveRemoteDocUrl(ticket) {
   if (ticket?.file_uri && ticket?.id) {
     try {
       // José (14 sep 2026): antes esto llamaba a CreateFileSignedUrl
@@ -92,4 +95,74 @@ export async function resolveDocViewUrl(ticket) {
   }
   const legacyUrl = ticket?.file_url || '';
   return isSafeFileUrl(legacyUrl) ? legacyUrl : '';
+}
+
+/**
+ * URL para ABRIR el archivo de un documento — el único sitio del que salen todas.
+ *
+ * Orden: 1) la copia guardada en el móvil (instantánea y sin red — ver
+ * src/lib/ticketCache.js); 2) una URL firmada nueva. Si no hay ni copia ni red, se
+ * AVISA (antes el botón "Ver billete" se quedaba sin hacer nada, sin decir por qué).
+ */
+export async function resolveDocViewUrl(ticket) {
+  const cached = await getCachedTicketUrl(ticket);
+  if (cached) return cached;
+  const remote = await resolveRemoteDocUrl(ticket);
+  if (remote) return remote;
+  if (ticketFileKey(ticket)) {
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    toast({
+      title: i18n.t(offline ? 'offline.ticketUnavailable' : 'offline.ticketFailed'),
+      description: i18n.t(offline ? 'offline.ticketUnavailableHint' : 'offline.ticketFailedHint'),
+      variant: 'destructive',
+    });
+  }
+  return '';
+}
+
+/**
+ * Guarda en el móvil los archivos de los próximos días (de ayer a dentro de 4 días)
+ * para poder abrirlos sin conexión. Se llama al abrir Home con red. Tope de 12
+ * archivos, uno detrás de otro y sin molestar: cualquier fallo se ignora.
+ * También retira las copias de documentos que ya no existen o pasaron hace días.
+ */
+export async function prefetchTicketFiles(tickets = []) {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    // Modo "ahorro de datos" del móvil: no se descarga nada por su cuenta.
+    if (typeof navigator !== 'undefined' && navigator.connection?.saveData) return;
+    const day = 86400000;
+    const now = Date.now();
+    const inWindow = (d) => {
+      const t = Date.parse((d.date || d.valid_from || d.start_date || '') + 'T00:00:00');
+      return Number.isFinite(t) && t >= now - day && t <= now + 4 * day;
+    };
+    // El orden de `tickets` manda (quien llama pone primero lo suyo). Tope de 12
+    // archivos y de 40 MB por pasada: un viaje con fotos de billetes de varios MB
+    // no debe gastarse los datos del móvil (roaming) sin avisar.
+    const wanted = tickets.filter(d => d?.id && ticketFileKey(d) && inWindow(d)).slice(0, 12);
+    let budget = 40 * 1024 * 1024;
+
+    // limpieza: copias de documentos que ya no están o cuyo día pasó hace más de 3 días
+    const keepIds = new Set(tickets.map(d => d.id));
+    for (const rec of await listCachedTickets()) {
+      const t = Date.parse((rec.date || '') + 'T00:00:00');
+      if (!keepIds.has(rec.id) || (Number.isFinite(t) && t < now - 3 * day)) await removeCachedTicket(rec.id);
+    }
+
+    for (const d of wanted) {
+      if (await hasCachedTicket(d)) continue;
+      const url = await resolveRemoteDocUrl(d);
+      if (!url) continue;
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      if (blob.size > MAX_TICKET_BYTES) continue;
+      if (blob.size > budget) break;
+      budget -= blob.size;
+      await saveTicketBlob(d, blob);
+    }
+  } catch {
+    // best-effort: nunca debe afectar a la pantalla
+  }
 }
