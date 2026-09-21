@@ -105,6 +105,11 @@
       },
       "description": "Emails de usuarios con acceso (para selected_users)"
     },
+    "reminder_push_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Lo rellena SOLO el servidor (scheduleTicketPush): 'userId:idDeOneSignal' de cada aviso push programado para este documento, para poder cancelarlo o reprogramarlo si cambia la hora o se borra."
+    },
     "spot_id": {
       "type": "string",
       "description": "Solo reservas de hotel: id del Spot (type hotel) que es el alojamiento de la ciudad. Enlaza la reserva con su alojamiento (ver src/lib/hotelStay.js)."
