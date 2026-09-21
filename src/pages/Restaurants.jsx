@@ -547,11 +547,12 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
-          {/* Location FIRST (map at top) */}
-          <div>
+          {/* Location FIRST (map at top). En modo alojamiento lo primero es BUSCAR el
+              hotel (order-1); el mapa y "usar mi ubicación" pasan detrás. */}
+          <div className={isStayMode ? 'flex flex-col' : ''}>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('spots.create.location')}</p>
             {/* Map placeholder / real map */}
-            <div className="rounded-xl overflow-hidden border border-border mb-2" style={{ height: '180px', background: 'var(--kodo-bg-subtle)', position: 'relative' }}>
+            <div className={`rounded-xl overflow-hidden border border-border mb-2 ${isStayMode ? 'order-2' : ''}`} style={{ height: '180px', background: 'var(--kodo-bg-subtle)', position: 'relative' }}>
               {showMap
                 ? <SpotPinMap lat={defaultLat} lng={defaultLng} onMove={(la, ln, addr) => { setPinLat(la); setPinLng(ln); if (addr) { suppressNextSearchRef.current = true; setAddress(addr); } }} />
                 : (
@@ -563,11 +564,11 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
               }
             </div>
             <button aria-label={t('spots.create.useMyLocation')} onClick={() => { if (!pinLat) handleGPS(); setShowMap(true); }}
-              className="w-full flex items-center justify-between px-4 py-2.5 border border-border rounded-2xl text-sm text-primary font-medium hover:bg-orange-50 transition-colors mb-2">
+              className={`w-full flex items-center justify-between px-4 py-2.5 border border-border rounded-2xl text-sm text-primary font-medium hover:bg-orange-50 transition-colors mb-2 ${isStayMode ? 'order-3' : ''}`}>
               <span className="flex items-center gap-2"><Navigation className="w-4 h-4"/>{locating ? t('spots.create.locating') : t('spots.create.useMyLocationFull')}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
-            <div className="relative">
+            <div className={`relative ${isStayMode ? 'order-1 mb-2' : ''}`}>
               <Input value={address} onChange={e => { suppressNextSearchRef.current = false; setAddress(e.target.value); }}
                 placeholder={isStayMode ? t('spots.create.stayAddressPlaceholder') : t('spots.create.addressPlaceholder')} className="h-9 text-sm pr-8" />
               {addressSearching && (
@@ -915,7 +916,7 @@ export default function Restaurants() {
   }, [tripId, navigate]);
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { trip, activeCity } = useTripContext(tripId);
+  const { trip, activeCity, cities: tripCitiesCtx } = useTripContext(tripId);
   const { user: currentUser } = useAuth();
   const { data: profiles = [] } = useQuery({
     queryKey: ['profiles_rest', tripId],
@@ -1004,8 +1005,22 @@ export default function Restaurants() {
   const toastTimer = useRef(null);
 
   useEffect(() => {
-    if (activeCity?.name && !selectedCity) { setSelectedCity(activeCity.name); setSelectedCityId(activeCity.id || null); }
+    // Con ?city_id= en la URL ("+ Añadir alojamiento" / "+ Spot" desde la parada de
+    // Ruta) manda ESA ciudad, no la de hoy.
+    if (activeCity?.name && !selectedCity && !cityIdFromParam) { setSelectedCity(activeCity.name); setSelectedCityId(activeCity.id || null); }
   }, [activeCity?.name, activeCity?.id]);
+
+  // José (21 sep 2026, probando en Chrome): "+ Añadir alojamiento" bajo Barcelona
+  // guardaba el hotel en MADRID. El efecto de arriba (la ciudad activa de hoy)
+  // llegaba después y pisaba la ciudad de la URL, y además solo se guardaba el id
+  // y no el nombre ni el país. Ahora la ciudad pedida por la URL se aplica entera
+  // (id + nombre) en cuanto las paradas cargan. Vale para todo enlace con city_id.
+  useEffect(() => {
+    if (!cityIdFromParam) return;
+    const c = (tripCitiesCtx || []).find(x => x.id === cityIdFromParam);
+    if (c) { setSelectedCity(c.name); setSelectedCityId(c.id); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cityIdFromParam, tripCitiesCtx]);
 
   // Queries
   const { data: spots = [], isLoading: loadingSpots } = useQuery({
@@ -1205,7 +1220,8 @@ export default function Restaurants() {
 
   
   const baseData = extra => ({
-    trip_id: tripId || undefined, city_id: effectiveCityId||undefined, city_name: effectiveCityName, country: normalizeCountry(country),
+    // El país es el de la ciudad elegida, no el de la ciudad activa de hoy.
+    trip_id: tripId || undefined, city_id: effectiveCityId||undefined, city_name: effectiveCityName, country: normalizeCountry((tripCitiesCtx || []).find(c => c.id === effectiveCityId)?.country || country),
     visibility: 'trip_members', visited: false,
     created_by: user?.email, created_by_user_id: user?.id,
     creator_username: myProfile?.username||'',
