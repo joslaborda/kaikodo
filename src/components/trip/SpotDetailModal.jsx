@@ -11,6 +11,7 @@ import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName 
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
 import { toast } from '@/components/ui/use-toast';
+import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import { scheduleSpotReminder, cancelSpotReminder } from '@/lib/localReminders';
 
 // Antes 'hotel' y las variantes de transporte (aeropuerto/tren/bus) no
@@ -97,6 +98,7 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
     }
   }, [spot?.id]);
 
+  useBodyScrollLock(!!open && !!spot);
   if (!open || !spot) return null;
 
   // Un alojamiento es de toda la estancia: ni día ni hora ni "quitar del día"
