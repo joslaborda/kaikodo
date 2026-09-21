@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { FileText, X, Download } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 // pdfjs-dist 4.x+ ya no publica un build UMD/script clásico (pdf.min.js) —
@@ -128,14 +129,22 @@ export default function PDFViewer({ fileUrl, onClose }) {
 
   if (!fileUrl) return null;
 
-  return (
+  // José (21 sep 2026): el visor era "distinto" según desde dónde se abriera.
+  // Dentro de las pestañas de Home el contenedor lleva una animación de
+  // entrada (kodo-slide-*, con fill-mode both) que deja un transform
+  // permanente — y un `position: fixed` dentro de un ancestro con transform
+  // se ancla a ESE ancestro, no a la pantalla: el visor quedaba recortado a la
+  // columna de contenido y con la barra inferior (z-50, igual que él) por
+  // encima. Desde Documentos/Ruta no pasaba. Con el portal a <body> y z-[100]
+  // es idéntico (pantalla completa, sobre la barra) se abra desde donde se abra.
+  const viewer = (
     /* El contenido (barras negras translúcidas, texto blanco a varias
        opacidades, sombra del canvas) está diseñado como un "lightbox" sobre
        fondo oscuro fijo, no sobre el token de tema — antes usaba
        hsl(var(--background)), que en modo claro es un fondo casi blanco, y
        los textos blancos translúcidos (cargando/error/sin vista previa)
        quedaban casi invisibles encima. */
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#141414' }}>
+    <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: '#141414' }}>
 
       {/* Top bar — el padding-top suma el "safe area" del notch/isla
           dinámica (iOS) o la barra de estado (Android) a los 12px propios
@@ -237,4 +246,6 @@ export default function PDFViewer({ fileUrl, onClose }) {
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(viewer, document.body) : viewer;
 }
