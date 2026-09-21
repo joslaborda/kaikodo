@@ -746,7 +746,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
             <button key={d.id}
               onClick={() => { if (d.file_url) setViewingFile(d.file_url); else setViewingDoc(d); }}
               className="w-full flex items-center gap-3 px-4 py-2.5 border-t border-border/60 hover:bg-secondary/20 transition-colors text-left">
-              <div className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center shrink-0"><FileText size={13} className="text-muted-foreground" /></div>
+              <div className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center shrink-0">{(() => { const OI = DOC_ICON_MAP[d.category] || FileText; return <OI size={13} className="text-muted-foreground" />; })()}</div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-foreground truncate">{d.name || d.title || t('cities.day.docFallback')}</p>
                 <p className="text-xs text-muted-foreground truncate">{[d.time, t('documents.forHolders', { names: otherHoldersLabel(d, profiles, currentUserEmail) })].filter(Boolean).join(' · ')}</p>
@@ -1038,13 +1038,15 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
             </div>
             {/* Info */}
             <div className="flex-1 min-w-0">
-              <p className={`text-sm font-semibold truncate ${!day?.title && !hasContent ? 'text-muted-foreground italic font-normal' : 'text-foreground'}`}>
-                {day?.title || (hasContent
-                ? pillItems.map(p => p.label).join(' · ')
-                : t('cities.day.tapToPlan'))}
-              </p>
+              {/* Sin título y con contenido, las pastillas de abajo YA dicen "1 doc" —
+                  antes se repetía el mismo texto arriba. */}
+              {(day?.title || !hasContent) && (
+                <p className={`text-sm font-semibold truncate ${!day?.title && !hasContent ? 'text-muted-foreground italic font-normal' : 'text-foreground'}`}>
+                  {day?.title || t('cities.day.tapToPlan')}
+                </p>
+              )}
               {hasContent && (
-                <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                <div className={`flex gap-1.5 flex-wrap ${day?.title ? 'mt-1.5' : ''}`}>
                   {pillItems.map((p, i) => (
                     <span key={i} className={`text-label font-bold px-2 py-0.5 rounded-full ${p.cls}`}>{p.label}</span>
                   ))}
