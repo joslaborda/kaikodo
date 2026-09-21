@@ -378,7 +378,8 @@
       "deleteStopError": "Couldn't delete the stop",
       "endBeforeStart": "The end date can't be before the start date",
       "datesOverlap": "These dates overlap with another stop on the trip",
-      "datesFromStops": "Calculated from your stops. To change them, edit the dates of a stop."
+      "datesFromStops": "Calculated from your stops. To change them, edit the dates of a stop.",
+      "adminOnlyEditName": "Only the trip admin can change the name."
     },
     "loadingTrip": "Loading trip...",
     "travelersCount_one": "{{count}} traveler",
