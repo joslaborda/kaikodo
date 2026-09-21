@@ -19,9 +19,13 @@ export default function TomorrowTab({ trip, cities, tripId, currentUserEmail, pr
     [cities]
   );
 
+  // Mismo criterio que TodayTab.jsx: en un día de tránsito (una ciudad termina
+  // y otra empieza ese día) mañana es la ciudad a la que llegas. Antes esta
+  // pestaña decía "Madrid" y la tarjeta de Hoy decía "Barcelona" para el
+  // mismo día.
   const tomorrowCity = useMemo(() =>
-    sortedCities.find(c => c.start_date && c.end_date && tomorrowStr >= c.start_date && tomorrowStr <= c.end_date) ||
-    sortedCities.find(c => c.start_date === tomorrowStr),
+    sortedCities.find(c => c.start_date === tomorrowStr) ||
+    sortedCities.find(c => c.start_date && c.end_date && tomorrowStr >= c.start_date && tomorrowStr <= c.end_date),
     [sortedCities, tomorrowStr]
   );
 

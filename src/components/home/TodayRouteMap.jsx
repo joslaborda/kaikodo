@@ -3,6 +3,7 @@ import { loadLeaflet } from '@/components/spots/spotsHelpers';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from '@/components/spots/mapTiles';
 import { loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
 import { arePointsTight, SINGLE_POINT_ZOOM, MAX_FIT_ZOOM } from '@/lib/mapFit';
+import { stayGoogleIcon, stayLeafletIcon } from '@/components/spots/stayIcon';
 
 // Mini-mapa de la ruta del dia: hotel (si hay uno guardado como spot type
 // 'hotel' para esta ciudad) + los items del dia con coordenadas, numerados
@@ -32,15 +33,6 @@ function numberedSvgIcon(google, num, bg) {
     };
 }
 
-function hotelSvgIcon(google) {
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="34" viewBox="0 0 30 34"><path d="M15 1C7.8 1 2 6.8 2 14c0 9.5 13 19 13 19s13-9.5 13-19C28 6.8 22.2 1 15 1z" fill="#6b6460" stroke="#fff" stroke-width="2.5"/><path d="M9 15l6-4.5 6 4.5v6.5a1.2 1.2 0 0 1-1.2 1.2H10.2A1.2 1.2 0 0 1 9 21.5z" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/><path d="M12.5 22.7V17h5v5.7" fill="none" stroke="#fff" stroke-width="1.8"/></svg>`;
-    return {
-          url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-          scaledSize: new google.maps.Size(30, 34),
-          anchor: new google.maps.Point(15, 32),
-    };
-}
-
 export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onSelectSpot }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
@@ -59,7 +51,12 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
   const routeItems = items.filter(i => i._kind === 'spot' ? (i?.lat && i?.lng) : (i?.location_lat && i?.location_lng));
     const hasHotel = !!(hotelSpot?.lat && hotelSpot?.lng);
     const totalPoints = routeItems.length + (hasHotel ? 1 : 0);
-        const [useGoogle, setUseGoogle] = useState(false);
+        // null = todavía no sabemos si hay Google (se pregunta a la vez que se monta el
+        // componente). Antes arrancaba en false, así que se creaba primero un mapa
+        // Leaflet que se destruía al llegar la respuesta y se creaba el de Google en
+        // el mismo contenedor: parpadeo gris de varios segundos y clases de Leaflet
+        // sobrando en el contenedor de Google.
+        const [useGoogle, setUseGoogle] = useState(null);
         useEffect(() => {
             let cancelled = false;
             getGoogleMapsApiKey().then(key => {
@@ -69,7 +66,7 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
         }, []);
 
   useEffect(() => {
-        if (totalPoints === 0) return undefined;
+        if (totalPoints === 0 || useGoogle === null) return undefined;
         let cancelled = false;
 
                 if (useGoogle) {
@@ -94,7 +91,7 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
 
                                                       if (hasHotel) {
                                                                   const pos = { lat: hotelSpot.lat, lng: hotelSpot.lng };
-                                                                  const marker = new google.maps.Marker({ position: pos, map, icon: hotelSvgIcon(google) });
+                                                                  const marker = new google.maps.Marker({ position: pos, map, icon: stayGoogleIcon(google) });
                                                                   marker.addListener('click', () => { if (onSelectSpotRef.current) onSelectSpotRef.current({ ...hotelSpot, _kind: 'spot' }); });
                                                                   markersRef.current.push(marker);
                                                                   bounds.extend(pos); path.push(pos);
@@ -141,10 +138,7 @@ export default function TodayRouteMap({ hotelSpot, items = [], height = 150, onS
 
                                  if (hasHotel) {
                                            points.push([hotelSpot.lat, hotelSpot.lng]);
-                                           const hotelIcon = L.divIcon({
-                                                       html: '<div style="width:26px;height:26px;background:#6b6460;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" style="transform:rotate(45deg)"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></div>',
-                                                       iconSize: [26, 26], iconAnchor: [13, 26], className: '',
-                                           });
+                                           const hotelIcon = stayLeafletIcon(L);
                                            const hotelMarker = L.marker([hotelSpot.lat, hotelSpot.lng], { icon: hotelIcon }).addTo(map);
                                            hotelMarker.on('click', () => { if (onSelectSpotRef.current) onSelectSpotRef.current({ ...hotelSpot, _kind: 'spot' }); });
                                  }
