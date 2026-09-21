@@ -34,11 +34,16 @@ export async function requestTicketPush(ticket) {
   }
 }
 
-// Llamar ANTES de borrar un documento (después ya no se puede leer).
+// Llamar ANTES de borrar un documento (después ya no se puede leer). El borrado
+// espera a esto, así que nunca se le deja colgado más de 4 s: si la función está
+// fría o tarda, se borra igualmente (un aviso huérfano solo se ignora al sonar).
 export async function cancelTicketPush(ticketId) {
   try {
     if (!ticketId) return;
-    await base44.functions.invoke('scheduleTicketPush', { ticketId, cancel: true });
+    await Promise.race([
+      base44.functions.invoke('scheduleTicketPush', { ticketId, cancel: true }),
+      new Promise((resolve) => setTimeout(resolve, 4000)),
+    ]);
   } catch {
     // best-effort
   }
