@@ -267,7 +267,11 @@ export default function Invites() {
     }
 
     const linkTrip = linkPreview.trip;
-    const isMember = currentUser?.email && linkTrip?.members?.includes(currentUser.email.toLowerCase());
+    // José (22 sep 2026) -- auditoría: mismo criterio que el resto del
+    // archivo (normalizeEmail, con trim + lowercase) en vez de solo
+    // toLowerCase() -- consistencia defensiva contra el mismo tipo de
+    // desajuste de email que ya causó bugs reales aquí antes.
+    const isMember = currentUser?.email && linkTrip?.members?.includes(normalizeEmail(currentUser.email));
 
     if (isMember) {
       return (
@@ -372,7 +376,7 @@ export default function Invites() {
     }
 
     // Ya es miembro del viaje (aceptó esta invitación u otra, o ya estaba dentro).
-    const isMember = currentUser?.email && trip?.members?.includes(currentUser.email.toLowerCase());
+    const isMember = currentUser?.email && trip?.members?.includes(normalizeEmail(currentUser.email));
 
     if (isMember) {
       return (

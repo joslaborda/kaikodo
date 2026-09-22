@@ -23,6 +23,7 @@ import { getLanguage } from '@/i18n/index.js';
 import { useToast } from '@/components/ui/use-toast';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
 import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey, loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, kodoMarkerIcon } from '@/lib/googleMaps';
+import { fetchPlaceRating } from '@/components/spots/placesAutocomplete';
 // El selector de pin (SpotPinMap, más abajo) usaba Leaflet siempre, sin
 // intentar Google Maps primero — a diferencia de DaySpotsMap/SpotsMapView/
 // TodayRouteMap, que sí siguen el patrón "Google primero, Leaflet solo como
@@ -1359,6 +1360,13 @@ export default function Restaurants() {
   const importSavedSpot = async (savedSpot, targetCity) => {
     setSavingId('import_' + savedSpot.id);
     try {
+      // José (22 sep 2026): mismo pedido que ya se aplicó al banner de
+      // Importar del Perfil — "si tu viaje tiene estrellas, que las tenga
+      // también al importar". Este es un segundo punto de entrada distinto
+      // (panel de wishlist aquí dentro de Restaurantes) a la misma acción,
+      // así que necesita el mismo trato para no quedar inconsistente. Solo
+      // se pide aquí, al importar de verdad — nunca al guardar en el perfil.
+      const ratingData = savedSpot.google_place_id ? await fetchPlaceRating(savedSpot.google_place_id) : null;
       const created = await createMutation.mutateAsync({
         trip_id: tripId, city_id: targetCity?.id || effectiveCityId || undefined,
         city_name: targetCity?.name || effectiveCityName, country: normalizeCountry(country),
@@ -1368,6 +1376,7 @@ export default function Restaurants() {
         visibility: 'trip_members', visited: false,
         created_by: user?.email, created_by_user_id: user?.id,
         source: 'saved_import',
+        ...(typeof ratingData?.rating === 'number' ? { rating: ratingData.rating, user_rating_count: ratingData.userRatingCount ?? undefined } : {}),
       });
       setLastSavedId(created?.id);
       showToastFor({ title: savedSpot.title }, targetCity?.name || city);

@@ -7,23 +7,44 @@ import { Label } from "@/components/ui/label";
 import { Mail, ArrowLeft, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import { useTranslation } from "react-i18next";
+import KaikodoCaptcha from "@/components/auth/KaikodoCaptcha";
 
 export default function ForgotPassword() {
   const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  // José (22 sep 2026) -- auditoría de seguridad: esta página independiente
+  // (/forgot-password, alcanzable sin sesión -- ver App.jsx) llama al mismo
+  // auth.resetPasswordRequest que el tab "olvidé mi contraseña" de
+  // LoginScreen.jsx, pero sin el captcha propio que ahí sí protege ese envío.
+  // Cualquiera podía saltarse por completo la protección anti-abuso yendo
+  // directo a esta URL en vez de usar el formulario de dentro de la app.
+  // Mismo patrón que LoginScreen.jsx: token de un solo uso, se resetea tras
+  // cada intento.
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaKey, setCaptchaKey] = useState(0);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    if (!captchaToken) return;
     setLoading(true);
     try {
+      const verifyRes = await base44.functions.invoke('verifyCaptcha', { token: captchaToken });
+      if (!verifyRes?.data?.success) {
+        setError(t('auth.errors.captchaFailed'));
+        return;
+      }
       await base44.auth.resetPasswordRequest(email);
+      setSent(true);
     } catch {
-      // Always show success regardless
+      // Always show success regardless -- no confirmar/negar si el email existe.
+      setSent(true);
     } finally {
       setLoading(false);
-      setSent(true);
+      setCaptchaKey(k => k + 1);
     }
   };
 
@@ -44,6 +65,11 @@ export default function ForgotPassword() {
         </p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              {error}
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="email">{t('auth.fields.email')}</Label>
             <div className="relative">
@@ -61,7 +87,8 @@ export default function ForgotPassword() {
               />
             </div>
           </div>
-          <Button type="submit" className="w-full h-12 font-medium" disabled={loading}>
+          <KaikodoCaptcha active={true} resetKey={captchaKey} onToken={setCaptchaToken} />
+          <Button type="submit" className="w-full h-12 font-medium" disabled={loading || !captchaToken}>
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
