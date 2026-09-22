@@ -45,13 +45,29 @@ export async function linkHotelDocToStay({ doc, tripId, trip, cities = [], userE
     } else {
       // Sin coordenadas también se crea (nombre a mano): sale en "Te alojas en X"
       // aunque no haya pin.
+      //
+      // José (22 sep 2026): "los hoteles se quedan como spots creados por mí,
+      // y eso no es correcto, ya existen en Google -- si fuesen Airbnb sí te
+      // lo compraba". `hasCoords` es la señal fiable: DocumentForm.jsx SOLO
+      // rellena location_lat/location_lng cuando el usuario elige un
+      // resultado real de Google Places (autocomplete + place details) --
+      // no hay ningún input numérico a mano para esto. Así que un hotel con
+      // coords es, por definición, un sitio que ya existe en Google: se
+      // guarda como "guardado" (saved_by), igual que cualquier spot que
+      // viene de una búsqueda de Google en Restaurants.jsx. Un hotel sin
+      // coords (nombre escrito a mano, sin match en Google -- el caso
+      // Airbnb) sigue siendo, con razón, creado por el usuario.
+      const fromGoogle = hasCoords;
       stay = await base44.entities.Spot.create({
         trip_id: tripId, city_id: cityId,
         city_name: city?.name || doc.city || '', country: city?.country || undefined,
         title, type: 'hotel',
         ...(hasCoords ? { lat: doc.location_lat, lng: doc.location_lng } : {}),
-        visibility: 'trip_members', visited: false, source: 'hotel_doc',
-        created_by: userEmail || undefined, created_by_user_id: userId || undefined,
+        visibility: 'trip_members', visited: false,
+        source: fromGoogle ? 'google_places' : 'hotel_doc',
+        ...(fromGoogle
+          ? { created_by: null, created_by_user_id: null, saved_by: [userEmail].filter(Boolean) }
+          : { created_by: userEmail || undefined, created_by_user_id: userId || undefined }),
         trip_members: trip?.members || [],
       });
     }
