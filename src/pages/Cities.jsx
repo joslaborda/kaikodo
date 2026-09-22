@@ -663,8 +663,23 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
 
         {/* Tappable body — opens view */}
         <button
-          onClick={() => {
-            if (item._kind === 'doc') { if (item.file_url) setViewingFile(item.file_url); else setViewingDoc(item); }
+          onClick={async () => {
+            // José (22 sep 2026) -- auditoría de seguridad: esto pasaba
+            // item.file_url en crudo a setViewingFile/PDFViewer, saltándose
+            // resolveDocViewUrl() (y su isSafeFileUrl()) -- file_url es texto
+            // libre editable por cualquier miembro del viaje, así que un
+            // valor tipo "javascript:..." se ejecutaba en el origen de la
+            // app al abrir el documento. resolveDocViewUrl es "el único
+            // sitio del que salen todas las URLs" (ver privateFiles.js) por
+            // esto exactamente -- aquí no se estaba usando.
+            if (item._kind === 'doc') {
+              if (item.file_url || item.file_uri) {
+                const url = await resolveDocViewUrl(item);
+                if (url) setViewingFile(url); else setViewingDoc(item);
+              } else {
+                setViewingDoc(item);
+              }
+            }
             if (item._kind === 'spot') setEditingSpot(item);
             if (item._kind === 'note') setEditingNote(item._noteIdx);
           }}
@@ -755,7 +770,15 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
           </button>
           {showOthers && otherDocs.map(d => (
             <button key={d.id}
-              onClick={() => { if (d.file_url) setViewingFile(d.file_url); else setViewingDoc(d); }}
+              onClick={async () => {
+                // José (22 sep 2026) -- mismo fix de seguridad que arriba.
+                if (d.file_url || d.file_uri) {
+                  const url = await resolveDocViewUrl(d);
+                  if (url) setViewingFile(url); else setViewingDoc(d);
+                } else {
+                  setViewingDoc(d);
+                }
+              }}
               className="w-full flex items-center gap-3 px-4 py-2.5 border-t border-border/60 hover:bg-secondary/20 transition-colors text-left">
               <div className="w-7 h-7 rounded-lg bg-secondary flex items-center justify-center shrink-0">{(() => { const OI = DOC_ICON_MAP[d.category] || FileText; return <OI size={13} className="text-muted-foreground" />; })()}</div>
               <div className="flex-1 min-w-0">
