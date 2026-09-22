@@ -9,7 +9,7 @@ import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
 import useLikeSimple from './useLikeSimple';
 import { useTranslation } from 'react-i18next';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
-import { normalizeEmail } from '@/lib/utils';
+import { normalizeEmail, isSafeHttpUrl } from '@/lib/utils';
 
 export default
 function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCities, userId, onNotify, currentUserEmail }) {
@@ -196,7 +196,8 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
                   <Phone className="w-3.5 h-3.5 shrink-0" />{spot.phone}
                 </a>
               )}
-              {spot.website && (
+              {/* José (22 sep 2026) -- auditoría: mismo fix que SpotDetailModal.jsx. */}
+              {spot.website && isSafeHttpUrl(spot.website) && (
                 <a href={spot.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors break-all">
                   <Globe className="w-3.5 h-3.5 shrink-0" />{spot.website}
                 </a>
