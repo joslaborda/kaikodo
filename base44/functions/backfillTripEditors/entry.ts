@@ -113,7 +113,14 @@ Deno.serve(async (req) => {
 
       for (const entityName of ROLE_AWARE_ENTITIES) {
         try {
-          const records = await withRetry(() => service.entities[entityName].filter({ trip_id: trip.id }));
+          // José (22 sep 2026) -- auditoría: .filter() sin límite explícito
+          // se corta en 50 resultados por defecto (mismo problema ya
+          // resuelto en acceptTripInvite/entry.ts con el mismo límite alto
+          // aquí abajo) -- sin esto, un viaje con más de 50 gastos/ciudades/
+          // días de itinerario dejaba registros sin reparar en silencio, y
+          // como esta herramienta se corre una sola vez a mano, no había
+          // ningún reintento posterior que lo corrigiera solo.
+          const records = await withRetry(() => service.entities[entityName].filter({ trip_id: trip.id }, "-created_date", 2000));
           let fixed = 0;
           for (const record of records) {
             const current = JSON.stringify((record.trip_editors || []).slice().sort());
