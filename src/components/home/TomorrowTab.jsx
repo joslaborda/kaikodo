@@ -6,9 +6,13 @@ import { base44 } from '@/api/base44Client';
 import DayCard from './DayCard';
 import { useTranslation } from 'react-i18next';
 import { isStaySpot, getCityHotel } from '@/lib/cityStay';
-import { isDocInMyRoute } from '@/lib/docHolders';
+import { isDocInMyRoute, isDocForUser } from '@/lib/docHolders';
+import { notify, resolveUserIds } from '@/lib/notifications';
+import { normalizeEmail } from '@/lib/utils';
+import { scheduleTicketReminder, cancelTicketReminder, scheduleSpotReminder } from '@/lib/localReminders';
+import { requestTicketPush } from '@/lib/ticketPush';
 
-import { useTripDocs } from '@/hooks/useTripDocs';
+import { useTripDocs, invalidateTripDocs } from '@/hooks/useTripDocs';
 export default function TomorrowTab({ trip, cities, tripId, currentUserEmail, profiles }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -49,6 +53,49 @@ export default function TomorrowTab({ trip, cities, tripId, currentUserEmail, pr
         .sort((a, b) => (a.day_order ?? 999) - (b.day_order ?? 999))
     : [];
 
+  // José (22 sep 2026) -- auditoría: faltaba por completo. DayCard.jsx solo
+  // guarda de verdad si le llega onUpdateItemTime (`if (onUpdateItemTime)
+  // await onUpdateItemTime(...)`); sin él, editar la hora de un spot o
+  // documento desde esta pestaña actualizaba solo el estado local de la
+  // hoja (parecía guardado, la hoja se cerraba con la hora nueva) pero
+  // nunca llegaba a persistirse. Mismo handler que ya tienen TodayTab.jsx
+  // e InicioTab.jsx, adaptado a "mañana" en vez de "hoy".
+  const handleUpdateItemTime = async (item, time) => {
+    const timeIsChanging = (time || '') !== (item.time || '');
+    if (item._kind === 'doc') {
+      const oldTime = item.time || '';
+      await base44.entities.Ticket.update(item.id, { time, ...(timeIsChanging ? { day_order: null } : {}) });
+      invalidateTripDocs(queryClient, tripId);
+      if (timeIsChanging) {
+        cancelTicketReminder(item.id);
+        if (isDocForUser(item, currentUserEmail)) scheduleTicketReminder({ ...item, time, trip_id: item.trip_id || tripId });
+        requestTicketPush({ ...item, time });
+      }
+      if ((time || '') !== oldTime && time && item.visibility !== 'personal') {
+        const sharedWith = item.visibility === 'selected_users'
+          ? (item.shared_with || [])
+          : (trip?.members || []).filter(e => normalizeEmail(e) !== normalizeEmail(currentUserEmail));
+        const targets = sharedWith.filter(e => normalizeEmail(e) !== normalizeEmail(currentUserEmail));
+        if (targets.length) {
+          const myProfile = (profiles || []).find(p => normalizeEmail(p.email) === normalizeEmail(currentUserEmail));
+          resolveUserIds(targets).then(resolved => {
+            resolved.forEach(({ userId }) => notify({
+              userId, type: 'doc_time', actor: myProfile, tripId, tripName: trip?.name,
+              refId: item.id, refTitle: item.name || t('documents.docFallback'),
+              refExtra: { time, endTime: item.end_time || null },
+            }));
+          });
+        }
+      }
+    } else if (item._kind === 'spot') {
+      await base44.entities.Spot.update(item.id, { assigned_time: time, ...(timeIsChanging ? { day_order: null } : {}) });
+      queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
+      if (timeIsChanging) {
+        scheduleSpotReminder({ ...item, assigned_time: time });
+      }
+    }
+  };
+
   if (!tomorrowCity) return (
     <div className="bg-card rounded-2xl border border-border text-center py-12 px-4">
       <div className="w-12 h-12 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-3">
@@ -75,6 +122,7 @@ export default function TomorrowTab({ trip, cities, tripId, currentUserEmail, pr
         // aunque la ciudad ya tuviera uno guardado. El alojamiento es de la
         // estancia entera, no de un día: mañana tiene el mismo que hoy.
         hotelSpot={getCityHotel(allSpots, tomorrowCity.id)}
+        onUpdateItemTime={handleUpdateItemTime}
         onReorderSpots={async (newOrder) => {
           await Promise.all(newOrder.map((spot, idx) =>
             base44.entities.Spot.update(spot.id, { day_order: idx })
