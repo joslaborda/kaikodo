@@ -1932,5 +1932,13 @@
     "minutesShort_other": "{{count}} min",
     "ticketTitle": "{{label}} in {{time}}",
     "spotTitle": "{{title}} in {{minutes}} min"
+  },
+  "terms": {
+    "reaccept": {
+      "title": "We've updated our Terms and Privacy Policy",
+      "body": "Before continuing, please review and accept the updated version.",
+      "accept": "Accept and continue",
+      "logout": "Log out"
+    }
   }
 }
