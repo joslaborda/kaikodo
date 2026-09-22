@@ -11,7 +11,7 @@ import { es } from 'date-fns/locale';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue } from '@/lib/tripDays';
 import { useToast } from '@/components/ui/use-toast';
 import { checkUpload, convertHeicIfNeeded } from '@/lib/uploadLimits';
-import { normalizeEmail } from '@/lib/utils';
+import { normalizeEmail, isSafeHttpUrl } from '@/lib/utils';
 import { profileFor, displayNameFor } from '@/lib/docHolders';
 import { uploadDocFile, resolveDocViewUrl } from '@/lib/privateFiles';
 import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey } from '@/lib/googleMaps';
@@ -764,12 +764,20 @@ export default function DocumentForm({
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('documents.form.file')}</p>
         {fields.file_url ? (
           <div className="border border-border rounded-xl overflow-hidden">
-            {/* Preview row */}
+            {/* José (22 sep 2026) -- auditoría de seguridad: fields.file_url
+                arranca con initialData.file_url tal cual para un documento
+                legado (sin file_uri, ver el useEffect de arriba) -- texto
+                libre editable por cualquier miembro del viaje, nunca pasaba
+                por isSafeFileUrl()/resolveDocViewUrl() antes de llegar aquí.
+                Mismo bug, mismo sitio que el ya cerrado en Cities.jsx (ver
+                ese commit) -- aquí es donde de verdad nace el valor para
+                los 3 onView(...) y el <img src> de abajo, así que se valida
+                una sola vez, en el único punto de origen. */}
             <div className="flex items-center gap-3 px-4 py-3 bg-secondary/40 border-b border-border">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
               </svg>
-              <button onClick={() => onView && onView(fields.file_url)}
+              <button onClick={() => onView && isSafeHttpUrl(fields.file_url) && onView(fields.file_url)}
                 className="text-sm text-foreground flex-1 truncate text-left hover:text-primary transition-colors">
                 {t('documents.form.fileAttached')}
               </button>
@@ -779,7 +787,7 @@ export default function DocumentForm({
               </button>
             </div>
             {/* Inline preview for images — clickable to open viewer */}
-            {fields.file_url.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i) && (
+            {isSafeHttpUrl(fields.file_url) && fields.file_url.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i) && (
               <button onClick={() => onView && onView(fields.file_url)}
                 className="w-full block cursor-pointer">
                 <img src={fields.file_url} alt="preview"
@@ -787,7 +795,7 @@ export default function DocumentForm({
               </button>
             )}
             {/* PDF preview — clickable hint */}
-            {fields.file_url.match(/\.pdf(\?|$)/i) && (
+            {isSafeHttpUrl(fields.file_url) && fields.file_url.match(/\.pdf(\?|$)/i) && (
               <button onClick={() => onView && onView(fields.file_url)}
                 className="w-full px-4 py-3 bg-orange-50 border-t border-orange-100 text-left hover:bg-orange-100 transition-colors">
                 <p className="text-xs text-primary">{t('documents.form.pdfHint')}</p>
