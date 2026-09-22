@@ -6,6 +6,9 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { TERMS_VERSION } from '@/lib/termsVersion';
+import TermsReacceptGate from '@/components/auth/TermsReacceptGate';
 import { decodeInvitePreview } from '@/lib/invitePreview';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import LoginScreen from '@/components/auth/LoginScreen';
@@ -51,6 +54,26 @@ const AuthenticatedApp = () => {
     const { t } = useTranslation();
     const location = useLocation();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
+
+    // José (22 sep 2026): "el mecanismo de re-aceptación de términos que
+    // creías que tenías no existe" -- profile.terms_version se guardaba al
+    // onboardear (CreateProfileModal) pero nada lo volvía a comprobar nunca.
+    // Mismo patrón de query que ya usa TripsList.jsx (['myProfile', id]) --
+    // se hace aquí, en el gate global, y no solo en TripsList/Invites, para
+    // que no haya página ni deep-link que se salte la comprobación.
+    // `enabled` espera a is_verified===true por el mismo motivo que el resto
+    // de queries gateadas por sesión: antes de eso no hay UserProfile fiable
+    // que pedir.
+    const { data: myProfile } = useQuery({
+      queryKey: ['myProfile', authUser?.id],
+      queryFn: async () => {
+        const r = await base44.entities.UserProfile.filter({ user_id: authUser.id });
+        return r[0] || null;
+      },
+      enabled: !!authUser?.id && authUser?.is_verified === true,
+      staleTime: 60000,
+    });
 
     // José (15 sep 2026): el único listener de appUrlOpen que existía
     // (nativeAuth.js, ver listenForLoginCallback) ignora a propósito
@@ -229,6 +252,20 @@ const AuthenticatedApp = () => {
   if (authUser && authUser.is_verified === false) {
     const VerifyEmailPage = Pages['VerifyEmail'];
     return VerifyEmailPage ? <VerifyEmailPage /> : null;
+  }
+
+  // Gate: Términos/Privacidad desactualizados. `myProfile === null` (usuario
+  // recién verificado que aún no ha pasado por CreateProfileModal) NO entra
+  // aquí a propósito -- ese onboarding ya pide la versión actual, este gate
+  // es solo para quien YA tiene perfil con una versión distinta a la de
+  // ahora. Duerme mientras TERMS_VERSION no cambie: hoy no lo ve nadie.
+  if (myProfile && myProfile.terms_version !== TERMS_VERSION) {
+    return (
+      <TermsReacceptGate
+        profile={myProfile}
+        onAccepted={() => queryClient.invalidateQueries({ queryKey: ['myProfile', authUser?.id] })}
+      />
+    );
   }
 
   return (
