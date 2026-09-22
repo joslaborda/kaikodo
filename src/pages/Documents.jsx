@@ -429,7 +429,12 @@ export default function Documents() {
   // Filter
   const filtered = useMemo(() => tickets.filter(ticket => {
     const vis = ticket.visibility || 'personal';
-    const isOwner = normalizeEmail(ticket.created_by) === currentUserEmail || ticket.user_id === userId || (ticket.used_by || []).some(e => normalizeEmail(e) === currentUserEmail);
+    // José (22 sep 2026) -- auditoría: mismo bug que en Home.jsx -- el check
+    // de used_by a mano no entendía el marcador '*' ("todos", incluye a
+    // quien se una después). isDocForUser ya se usa más abajo en este mismo
+    // archivo para los recordatorios; aquí, para decidir quién ve el
+    // documento en la lista, faltaba.
+    const isOwner = isDocForUser(ticket, currentUserEmail) || ticket.user_id === userId;
     // personal: only owner sees it
     if (vis === 'personal' && !isOwner) return false;
     // selected_users: owner or explicitly shared

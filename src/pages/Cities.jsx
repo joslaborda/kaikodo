@@ -4,6 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { base44 } from '@/api/base44Client';
 import { leaveTrip } from '@/lib/tripMembers';
+import { computeEditors } from '@/lib/syncTripMembers';
 import { useAuth } from '@/lib/AuthContext';
 import { normalizeEmail } from '@/lib/utils';
 import { searchUserProfiles } from '@/lib/userProfiles';
@@ -302,7 +303,14 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
     const payload = { content: JSON.stringify(clean) };
     try {
       if (day?.id) await base44.entities.ItineraryDay.update(day.id, payload);
-      else await base44.entities.ItineraryDay.create({ city_id: cityId, trip_id: tripId, date: dayDate, title: '', ...payload, order: 0, trip_members: trip.members });
+      // José (22 sep 2026) -- auditoría: el rls de create de ItineraryDay
+      // exige data.trip_editors (igual que City/Expense), y este create
+      // nunca lo mandaba -- fallaba SIEMPRE, para cualquier rol, no solo
+      // para un viewer (el hallazgo del 17 sep se quedó corto: no era un
+      // caso de permisos correctos rechazando a quien no debía, es que
+      // faltaba el campo por completo). Solo se nota la primera vez que se
+      // escribe algo en un día que todavía no tiene registro propio.
+      else await base44.entities.ItineraryDay.create({ city_id: cityId, trip_id: tripId, date: dayDate, title: '', ...payload, order: 0, trip_members: trip.members, trip_editors: computeEditors(trip.members, trip) });
       queryClient.invalidateQueries({ queryKey: ['itineraryDays', tripId] });
       invalidateTripDocs(queryClient, tripId);
     } catch (e) {
@@ -327,7 +335,8 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
     setSavingTitle(true);
     try {
       if (day?.id) await base44.entities.ItineraryDay.update(day.id, { title: titleVal });
-      else await base44.entities.ItineraryDay.create({ city_id: cityId, trip_id: tripId, date: dayDate, title: titleVal, content: '', order: 0, trip_members: trip.members });
+      // José (22 sep 2026) -- mismo fix que saveNotes: faltaba trip_editors.
+      else await base44.entities.ItineraryDay.create({ city_id: cityId, trip_id: tripId, date: dayDate, title: titleVal, content: '', order: 0, trip_members: trip.members, trip_editors: computeEditors(trip.members, trip) });
       queryClient.invalidateQueries({ queryKey: ['itineraryDays', tripId] });
       setTitleEditing(false);
     } catch (e) {

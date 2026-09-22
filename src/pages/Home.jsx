@@ -254,7 +254,16 @@ export default function Home() {
     const vis = ticket.visibility || 'personal';
     if (vis === 'shared') return true;
     // Quien va a usar el documento siempre lo ve (used_by).
-    if ((ticket.used_by || []).some(e => normalizeEmail(e) === currentUserEmail)) return true;
+    // José (22 sep 2026) -- auditoría: este check leía used_by a mano y no
+    // entendía el marcador '*' (docHolders.js, "todos" -- incluye a quien
+    // se una después). Un doc "de todos" con audiencia no-'shared' (p.ej.
+    // "quién lo verá" plegado a solo quienes lo usan) tiene shared_with
+    // fijo del momento de crearlo: alguien que se une al viaje más tarde no
+    // estaba en esa lista y tampoco lo pillaba aquí -- documento invisible
+    // para el nuevo miembro, justo lo que '*' existe para evitar.
+    // isDocForUser ya está importado y usado más abajo (prefetch) -- aquí
+    // faltaba.
+    if (isDocForUser(ticket, currentUserEmail)) return true;
     if (vis === 'selected_users' && (ticket.shared_with || []).some(e => normalizeEmail(e) === currentUserEmail)) return true;
     return normalizeEmail(ticket.created_by) === currentUserEmail || ticket.user_id === currentUserId;
   }), [allTickets, currentUserEmail, currentUserId]);
