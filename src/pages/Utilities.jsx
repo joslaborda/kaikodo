@@ -1385,7 +1385,7 @@ export default function Utilities() {
           <div className="space-y-4">
             {tripCities.length > 0 ? (
               tripCities.map(city => (
-                <WeatherCard key={city.id} city={city.name} tripCountry={city.country || country} showCityName />
+                <WeatherCard key={city.id} city={city} tripCountry={city.country || country} showCityName />
               ))
             ) : country ? (
               <WeatherCard city={trip?.name || country} tripCountry={country} />

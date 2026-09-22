@@ -222,7 +222,14 @@ export default function TripsList() {
     const active   = withStatus.filter(x => x.status?.type === 'active');
     const upcoming = withStatus.filter(x => x.status?.type === 'upcoming')
       .sort((a,b) => a.status.days - b.status.days);
-    const past     = withStatus.filter(x => x.status?.type === 'past' || !x.status);
+    const past     = withStatus.filter(x => x.status?.type === 'past' || !x.status)
+      // José (16 sep 2026): "Londres sale encima de Dublín pero Londres fue
+      // antes" -- Pasados nunca se ordenaba, se quedaba con el orden en
+      // que llegaban de la API (ni por fecha ni por nada). Se ordena por
+      // fecha de fin real, el más reciente primero -- no depende de
+      // interpretar el signo de status.days (que es para el contador de
+      // "faltan/hace X días", no pensado para ordenar una lista).
+      .sort((a, b) => (b.t.end_date || b.t.start_date || '').localeCompare(a.t.end_date || a.t.start_date || ''));
 
     // José (14 sep 2026): antes solo el PRIMER viaje activo se trataba como
     // hero -- si había un segundo viaje activo a la vez (posible, nada

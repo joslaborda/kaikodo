@@ -479,6 +479,13 @@ export default function Profile() {
           created_by: user?.email,
           created_by_user_id: user?.id,
           source: 'saved_import',
+          // José (22 sep 2026): "Permission denied for create operation on
+          // Spot entity" -- el rls de create de Spot exige que
+          // data.trip_members incluya al usuario. Este create nunca lo
+          // mandaba (a diferencia de createMutation en Restaurants.jsx, que
+          // sí lo inyecta siempre) -- por eso la función de importar nunca
+          // funcionó, no es una regresión.
+          trip_members: nextTrip?.members || [],
         });
       }
     },
