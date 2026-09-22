@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { FileText, X, Download } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { isSafeHttpUrl } from '@/lib/utils';
 
 // pdfjs-dist 4.x+ ya no publica un build UMD/script clásico (pdf.min.js) —
 // solo ES modules (.mjs). Confirmado descargando el paquete real de npm y
@@ -127,7 +128,16 @@ export default function PDFViewer({ fileUrl, onClose }) {
     }
   };
 
-  if (!fileUrl) return null;
+  // José (22 sep 2026) -- auditoría de seguridad: este visor renderiza
+  // fileUrl en <a href> (barra de descarga, siempre visible; estados de
+  // error/sin-preview) sin comprobar el esquema. Todos los sitios que lo
+  // usan ya pasan por resolveDocViewUrl()/isSafeFileUrl() antes de llegar
+  // aquí (ver privateFiles.js), pero eso vivía fuera de este componente --
+  // un futuro caller que se salte ese paso (como hacía Cities.jsx hasta
+  // este mismo commit) volvería a abrir el mismo hueco. Defensa en
+  // profundidad: el propio visor no renderiza nada si fileUrl no es
+  // http/https, sea cual sea el origen.
+  if (!fileUrl || !isSafeHttpUrl(fileUrl)) return null;
 
   // José (21 sep 2026): el visor era "distinto" según desde dónde se abriera.
   // Dentro de las pestañas de Home el contenedor lleva una animación de
