@@ -9,7 +9,7 @@ import { getMapsUrl } from '@/components/spots/spotsHelpers';
 import { useTranslation } from 'react-i18next';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
 import { notify, resolveUserIds } from '@/lib/notifications';
-import { normalizeEmail } from '@/lib/utils';
+import { normalizeEmail, isSafeHttpUrl } from '@/lib/utils';
 import { toast } from '@/components/ui/use-toast';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import { scheduleSpotReminder, cancelSpotReminder } from '@/lib/localReminders';
@@ -255,7 +255,13 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
                   <Phone className="w-3.5 h-3.5 shrink-0" />{spot.phone}
                 </a>
               )}
-              {spot.website && (
+              {/* José (22 sep 2026) -- auditoría: mismo DOM XSS vía esquema URI
+                  ya cerrado para spot.link en Profile.jsx (ver isSafeHttpUrl),
+                  abierto aquí. website solo lo rellena Google Places hoy, no
+                  hay campo de texto libre para él, pero es un dato de un
+                  tercero (la ficha de negocio la reclama quien sea) y renderizarlo
+                  sin comprobar el esquema es el mismo patrón de riesgo. */}
+              {spot.website && isSafeHttpUrl(spot.website) && (
                 <a href={spot.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors break-all">
                   <Globe className="w-3.5 h-3.5 shrink-0" />{spot.website}
                 </a>
