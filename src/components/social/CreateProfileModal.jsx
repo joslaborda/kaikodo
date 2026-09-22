@@ -10,12 +10,10 @@ import { setLanguage, getLanguage } from '@/i18n/index.js';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 
-// Versión de Términos/Privacidad que se está pidiendo aceptar — si el
-// contenido legal cambia de forma relevante más adelante, subir este valor
-// para poder detectar (comparando contra profile.terms_version) qué
-// usuarios ya registrados aceptaron una versión antigua y pedirles
-// re-aceptación, en vez de asumir que un consentimiento viejo sigue siendo válido.
-const TERMS_VERSION = '2026-07-22';
+// José (22 sep 2026): movida a src/lib/termsVersion.js -- compartida ahora
+// con el gate de re-aceptación en App.jsx (TermsReacceptGate), que es el
+// mecanismo que este comentario decía que debía existir y no existía.
+import { TERMS_VERSION } from '@/lib/termsVersion';
 
 // ── País list ─────────────────────────────────────────────────────────────────
 const HISPANO_FIRST = ['España','México','Colombia','Argentina','Perú','Venezuela','Chile','Ecuador','Guatemala','Cuba','Bolivia','República Dominicana','Honduras','Paraguay','El Salvador','Nicaragua','Costa Rica','Panamá','Uruguay','Puerto Rico','Guinea Ecuatorial'];
