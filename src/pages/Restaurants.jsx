@@ -1723,8 +1723,11 @@ export default function Restaurants() {
                         // Por place id: el título guardado ya no es el nombre de Google.
                         const isDuplicate = spots.some(s => s.osm_id && s.osm_id === p._placeId);
                         return (
-                          <div key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${i < placeResults.length - 1 ? 'border-b border-border' : ''}`}>
-                            <div className="flex-1 min-w-0">
+                          // José (23 sep 2026): mismo diseño que la lista de spots
+                          // (opción X): ficha de Google a todo el ancho, foto a la
+                          // izquierda, y el botón centrado debajo.
+                          <div key={p.id} className={`px-3 pt-2.5 pb-3 ${i < placeResults.length - 1 ? 'border-b border-border' : ''}`}>
+                            <div className="min-w-0">
                               <GooglePlaceCard placeId={p._placeId} variant="compact" fallback={(
                                 <div className="flex items-center gap-3 min-w-0">
                                   <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
@@ -1737,11 +1740,14 @@ export default function Restaurants() {
                                 </div>
                               )} />
                             </div>
-                            {isDuplicate ? <span className="text-xs text-muted-foreground flex-shrink-0">{t('spots.savedBadge')}</span>
-                              : <button onClick={() => savePlaceResult(p)} disabled={savingId === p.id} className="flex-shrink-0 text-primary hover:text-primary/70 transition-colors">
-                                  <Plus className="w-5 h-5" />
+                            <div className="flex justify-center mt-2">
+                            {isDuplicate ? <span className="text-xs text-muted-foreground px-3 py-1.5">{t('spots.savedBadge')}</span>
+                              : <button onClick={() => savePlaceResult(p)} disabled={savingId === p.id}
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-card border border-primary rounded-full px-3 py-1.5 hover:bg-orange-50 transition-colors disabled:opacity-50">
+                                  <Plus className="w-3.5 h-3.5" />{t('common.save')}
                                 </button>
                             }
+                            </div>
                           </div>
                         );
                       })}

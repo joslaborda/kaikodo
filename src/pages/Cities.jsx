@@ -40,7 +40,6 @@ import { isDocForUser, isDocInMyRoute, otherHoldersLabel } from '@/lib/docHolder
 import { useTranslation } from 'react-i18next';
 
 import { useTripDocs, invalidateTripDocs } from '@/hooks/useTripDocs';
-import GooglePlaceCard, { googlePlaceIdOf, isGoogleCardControl } from '@/components/spots/GooglePlaceCard';
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DOC_ICON_MAP = {
   flight: PlaneIcon, hotel: Hotel, train: Train,
@@ -665,9 +664,6 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
         {/* Tappable body — opens view */}
         <button
           onClick={async (e) => {
-            // Toques en el botón de Google Maps / la foto de la ficha de
-            // Google: hacen lo suyo, sin abrir además nuestro detalle.
-            if (isGoogleCardControl(e)) return;
             // José (22 sep 2026) -- auditoría de seguridad: esto pasaba
             // item.file_url en crudo a setViewingFile/PDFViewer, saltándose
             // resolveDocViewUrl() (y su isSafeFileUrl()) -- file_url es texto
@@ -696,14 +692,10 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
               : (() => { const SpI = SPOT_ICONS[item.type] || CirclePlus; return <SpI size={14} className={SPOT_COLORS[item.type]?.split(' ')[1] || 'text-muted-foreground'} />; })()}
           </div>
           <div className="flex-1 min-w-0">
-            {/* José (23 sep 2026): un spot de Google enseña su ficha (nombre
-                oficial + estrellas) con conexión; sin conexión, el nombre
-                propio guardado. Términos EEA de Google Maps Platform. */}
-            <GooglePlaceCard
-              placeId={item._kind === 'spot' ? googlePlaceIdOf(item) : null}
-              variant="lean"
-              fallback={<p className="text-sm font-medium text-foreground truncate">{item._title}</p>}
-            />
+            {/* José (23 sep 2026): en Ruta no se carga la ficha de Google (cada
+                carga se cobra y aquí no aporta: el spot ya está asignado). Nombre
+                propio del spot; la ficha completa sale al abrir el detalle. */}
+            <p className="text-sm font-medium text-foreground truncate">{item._title}</p>
             {item._sub && <p className="text-xs text-muted-foreground mt-0.5 truncate">{item._sub}</p>}
           </div>
         </button>
