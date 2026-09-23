@@ -133,6 +133,17 @@
       "type": "string",
       "description": "Nombre del aeropuerto/estación elegido en el buscador (solo vuelo/tren) — para mostrarlo en el mini-mapa del día."
     },
+    "location_place_id": {
+      "type": "string",
+      // José (23 sep 2026): place id de Google de la ubicación elegida (lo
+      // único de Places que se puede guardar sin límite, términos EEA).
+      "description": "Place ID de Google de la ubicación elegida en el buscador"
+    },
+    "place_refreshed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Última vez que se refrescaron location_lat/lng desde Google (máx. 30 días)"
+    },
     "location_lat": {
       "type": "number",
       "description": "Latitud del aeropuerto/estación elegido en el buscador (solo vuelo/tren)."

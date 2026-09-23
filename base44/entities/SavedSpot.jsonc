@@ -79,6 +79,14 @@
       "type": "string",
       "description": "ID de Foursquare si viene de b\u00fasqueda"
     },
+    "title_is_own": {
+      "type": "boolean",
+      // José (23 sep 2026): true si el título es del usuario (lo que escribió
+      // al buscar, o lo que puso a mano), no el nombre de Google -- que no se
+      // puede guardar (términos EEA). purgeGooglePlacesContent sustituye los
+      // títulos de Google antiguos (sin esta marca).
+      "description": "El título lo escribió el usuario (no es el nombre de Google)"
+    },
     "place_refreshed_at": {
       "type": "string",
       "format": "date-time",
