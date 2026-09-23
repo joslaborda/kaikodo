@@ -23,7 +23,6 @@ import { getLanguage } from '@/i18n/index.js';
 import { useToast } from '@/components/ui/use-toast';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
 import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey, loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, kodoMarkerIcon } from '@/lib/googleMaps';
-import { fetchPlaceRating } from '@/components/spots/placesAutocomplete';
 // El selector de pin (SpotPinMap, más abajo) usaba Leaflet siempre, sin
 // intentar Google Maps primero — a diferencia de DaySpotsMap/SpotsMapView/
 // TodayRouteMap, que sí siguen el patrón "Google primero, Leaflet solo como
@@ -1261,7 +1260,6 @@ export default function Restaurants() {
           details = cached || (apiKey ? await fetchPlaceDetailsGoogle(place._placeId, apiKey) : null);
           if (details) resolved = { ...place, lat: details.lat ?? place.lat, lng: details.lng ?? place.lng, address: details.address || place.address, type: details.type || place.type, name: details.name || place.name };
         }
-        const photoUrl = details?.photos?.[0]?.name ? `https://places.googleapis.com/v1/${details.photos[0].name}/media?maxWidthPx=400&key=${apiKey}` : undefined;
         const created = await createMutation.mutateAsync({
                 trip_id: tripId || undefined, city_id: effectiveCityId||undefined,
           city_name: effectiveCityName, country: normalizeCountry(country),
@@ -1279,13 +1277,10 @@ export default function Restaurants() {
           visibility: 'trip_members', visited: false,
           created_by: null, created_by_user_id: null,
           saved_by: [user?.email].filter(Boolean),
-          photo_url: photoUrl,
-          rating: details?.rating ?? undefined,
-          user_rating_count: details?.userRatingCount ?? undefined,
-          opening_hours_json: details?.regularOpeningHours ? JSON.stringify(details.regularOpeningHours) : (details?.currentOpeningHours ? JSON.stringify(details.currentOpeningHours) : undefined),
-          phone: details?.nationalPhoneNumber || details?.internationalPhoneNumber || undefined,
-          website: details?.websiteUri || undefined,
-          price_level: details?.priceLevel || undefined,
+          // José (23 sep 2026): términos EEA de Google Maps Platform -- ya no se
+          // guarda rating, foto, horario, teléfono, web ni precio. Se pintan en
+          // vivo con Places UI Kit a partir de osm_id (el place id, lo único
+          // que Google permite guardar sin límite). Ver GooglePlaceCard.jsx.
       });
       setLastSavedId(created?.id);
             setPlaceResults([]); setSearchQuery('');
@@ -1360,13 +1355,6 @@ export default function Restaurants() {
   const importSavedSpot = async (savedSpot, targetCity) => {
     setSavingId('import_' + savedSpot.id);
     try {
-      // José (22 sep 2026): mismo pedido que ya se aplicó al banner de
-      // Importar del Perfil — "si tu viaje tiene estrellas, que las tenga
-      // también al importar". Este es un segundo punto de entrada distinto
-      // (panel de wishlist aquí dentro de Restaurantes) a la misma acción,
-      // así que necesita el mismo trato para no quedar inconsistente. Solo
-      // se pide aquí, al importar de verdad — nunca al guardar en el perfil.
-      const ratingData = savedSpot.google_place_id ? await fetchPlaceRating(savedSpot.google_place_id) : null;
       const created = await createMutation.mutateAsync({
         trip_id: tripId, city_id: targetCity?.id || effectiveCityId || undefined,
         city_name: targetCity?.name || effectiveCityName, country: normalizeCountry(country),
@@ -1376,7 +1364,10 @@ export default function Restaurants() {
         visibility: 'trip_members', visited: false,
         created_by: user?.email, created_by_user_id: user?.id,
         source: 'saved_import',
-        ...(typeof ratingData?.rating === 'number' ? { rating: ratingData.rating, user_rating_count: ratingData.userRatingCount ?? undefined } : {}),
+        // José (23 sep 2026): el rating ya no se guarda (términos EEA de
+        // Google): basta con el place id, y la ficha de UI Kit enseña las
+        // estrellas en vivo dentro del viaje.
+        ...(savedSpot.google_place_id ? { osm_id: savedSpot.google_place_id } : {}),
       });
       setLastSavedId(created?.id);
       showToastFor({ title: savedSpot.title }, targetCity?.name || city);
@@ -1423,6 +1414,8 @@ export default function Restaurants() {
         creator_username: spot.creator_username || myProfile?.username || '',
         // Tag as saved (not created) by current user
         saved_by: [user?.email].filter(Boolean),
+        // Place id de Google (si lo tiene) para la ficha de UI Kit.
+        ...(spot.osm_id ? { osm_id: spot.osm_id } : {}),
       });
       setLastSavedId(created?.id);
       showToastFor({ title: spot.title }, selectedCity || city);

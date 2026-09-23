@@ -14,7 +14,7 @@ import { createPageUrl } from '@/utils';
 import { getCountryMeta, normalizeCountry, getCountryLabel } from '@/lib/countryConfig';
 import { getTripCoverImage } from '@/lib/tripImage';
 import { getTripStatus } from '@/components/trip/TripCard';
-import { searchNewPlaces, fetchPlaceDetails, fetchPlaceRating } from '@/components/spots/placesAutocomplete';
+import { searchNewPlaces, fetchPlaceDetails } from '@/components/spots/placesAutocomplete';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
 import { normalizeEmail, isSafeHttpUrl } from '@/lib/utils';
@@ -460,12 +460,6 @@ export default function Profile() {
         const targetCity = nextTripCities.find(
           c => c.name?.toLowerCase().trim() === (s.city_name || '').toLowerCase().trim()
         ) || nextTripCities[0] || null;
-        // José (22 sep 2026): rating solo se pide AQUÍ, al importar de verdad
-        // a un viaje -- nunca al guardar en el perfil (ver fetchPlaceRating).
-        // Si falla o el SavedSpot no tiene google_place_id (guardado antes
-        // de que existiera ese campo, o de otra fuente), se crea igual sin
-        // rating -- nunca bloquea la importación.
-        const ratingData = s.google_place_id ? await fetchPlaceRating(s.google_place_id) : null;
         // Crea un Spot NUEVO en el viaje destino — nunca borra ni convierte el
         // SavedSpot original (mismo comportamiento que importSavedSpot en
         // Restaurants.jsx, source:'saved_import').
@@ -492,7 +486,10 @@ export default function Profile() {
           // sí lo inyecta siempre) -- por eso la función de importar nunca
           // funcionó, no es una regresión.
           trip_members: nextTrip?.members || [],
-          ...(typeof ratingData?.rating === 'number' ? { rating: ratingData.rating, user_rating_count: ratingData.userRatingCount ?? undefined } : {}),
+          // José (23 sep 2026): el rating ya no se guarda (términos EEA de
+          // Google). Se guarda solo el place id; la ficha de Places UI Kit
+          // enseña las estrellas en vivo dentro del viaje.
+          ...(s.google_place_id ? { osm_id: s.google_place_id } : {}),
         });
       }
     },
@@ -609,7 +606,8 @@ export default function Profile() {
         country: normalizeCountry(details?.country || ''),
         lat: details?.lat || null,
         lng: details?.lng || null,
-        image_url: details?.image_url || null,
+        // José (23 sep 2026): ya no se guarda la foto de Google (y con ella
+        // tu API key dentro de la URL) -- términos EEA de Google Maps Platform.
         google_place_id: place._placeId || null,
       });
     },
