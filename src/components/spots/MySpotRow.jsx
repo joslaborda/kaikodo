@@ -1,4 +1,4 @@
-import { Pencil, Navigation } from 'lucide-react';
+import { Navigation } from 'lucide-react';
 import GooglePlaceCard, { googlePlaceIdOf, isGoogleCardControl } from './GooglePlaceCard';
 import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 // SpotCard.jsx sobre por qué se quitó la función de comentarios de spots.
 
 export default
-function MySpotRow({ spot, onTap }) {
+function MySpotRow({ spot, onTap, onAssignDay }) {
   const { t } = useTranslation();
   const tc = TYPE_CONFIG[spot.type] || TYPE_CONFIG.custom;
 
@@ -37,33 +37,31 @@ function MySpotRow({ spot, onTap }) {
           y Google oculta la foto en fichas estrechas; el estado y el lápiz
           bajan a la línea de abajo, junto a categoría · ciudad y Cómo llegar. */}
       <button onClick={e => { if (isGoogleCardControl(e)) return; onTap(spot); }} className="w-full block px-4 pt-3 pb-1 text-left hover:bg-secondary/20 transition-colors">
-        <GooglePlaceCard placeId={placeId} variant="compact" fallback={ownHeader} />
-        {hasDate && (
-          <p className="text-xs text-primary mt-0.5 flex items-center gap-1">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            {spot.assigned_date}
-          </p>
-        )}
+        {/* Vertical: foto arriba a todo lo ancho. En horizontal, en móvil,
+            Google no enseñaba la foto (José, 23 sep 2026). */}
+        <GooglePlaceCard placeId={placeId} variant="compact" orientation="vertical" fallback={ownHeader} />
       </button>
 
-      {/* Categoría · ciudad, estado del día y Cómo llegar en una sola línea. */}
+      {/* José (23 sep 2026): "Asignar día" es un botón visible en el estilo de
+          la app (borde naranja, fondo blanco) y NO abre la ficha del spot --
+          abre directamente el selector de día (cada ficha de Google que se
+          carga se cobra). Debajo, categoría · ciudad y Cómo llegar. */}
       <div className="flex items-center gap-3 px-4 pb-3 pt-1">
-        <button type="button" onClick={() => onTap(spot)} className="flex-1 min-w-0 flex items-center gap-2 text-left">
-          <span className="text-xs text-muted-foreground truncate">
-            {t(tc.tk)}
-            {spot.city_name ? ' · ' + spot.city_name : ''}
-          </span>
-          {spot.visited ? (
-            <span className="shrink-0 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">{t('spots.card.visited')}</span>
-          ) : isStay ? (
-            <span className="shrink-0 text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">{t('spots.stayBadge')}</span>
-          ) : hasDate ? (
-            <span className="shrink-0 text-xs bg-orange-100 text-primary px-2 py-0.5 rounded-full font-medium">{t('spots.assigned')}</span>
-          ) : (
-            <span className="shrink-0 text-xs text-muted-foreground/60">{t('spots.noDay')}</span>
-          )}
-          <Pencil className="shrink-0 w-3.5 h-3.5 text-muted-foreground/40" />
-        </button>
+        {spot.visited ? (
+          <span className="shrink-0 text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-medium">{t('spots.card.visited')}</span>
+        ) : isStay ? (
+          <span className="shrink-0 text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-medium">{t('spots.stayBadge')}</span>
+        ) : (
+          <button type="button" onClick={() => (onAssignDay ? onAssignDay(spot) : onTap(spot))}
+            className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-card border border-primary rounded-full px-3 py-1.5 hover:bg-orange-50 transition-colors">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            {hasDate ? spot.assigned_date : t('spots.assignDayBtn')}
+          </button>
+        )}
+        <span className="flex-1 min-w-0 text-xs text-muted-foreground truncate">
+          {t(tc.tk)}
+          {spot.city_name ? ' · ' + spot.city_name : ''}
+        </span>
         {(spot.address || (spot.lat && spot.lng)) && (
           <a href={getMapsUrl(spot)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
             className="shrink-0 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors p-1 -m-1 rounded-lg">

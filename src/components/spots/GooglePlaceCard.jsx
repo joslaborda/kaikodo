@@ -59,10 +59,10 @@ function remember(key, el) {
   while (kept.size > MAX_KEPT) kept.delete(kept.keys().next().value);
 }
 
-function buildElement(variant, placeId, interactive) {
+function buildElement(variant, placeId, interactive, orientation) {
   const el = document.createElement(variant === 'full' ? 'gmp-place-details' : 'gmp-place-details-compact');
   if (variant !== 'full') {
-    el.setAttribute('orientation', 'horizontal');
+    el.setAttribute('orientation', orientation === 'vertical' ? 'vertical' : 'horizontal');
     el.setAttribute('truncation-preferred', '');
   }
   const req = document.createElement('gmp-place-details-place-request');
@@ -139,12 +139,12 @@ function buildElement(variant, placeId, interactive) {
  *  - fallback: lo que se ve sin conexión, sin place id, o si Google falla.
  *  - interactive: false dentro de filas pulsables (la ficha no captura toques).
  */
-export default function GooglePlaceCard({ placeId, variant = 'compact', fallback = null, className = '', interactive = true }) {
+export default function GooglePlaceCard({ placeId, variant = 'compact', fallback = null, className = '', interactive = true, orientation = 'horizontal' }) {
   const containerRef = useRef(null);
   const online = useOnlineStatus();
   const [visible, setVisible] = useState(false);
   const [failed, setFailed] = useState(false);
-  const key = `${variant}:${interactive ? 'i' : 'n'}:${placeId}`;
+  const key = `${variant}:${orientation}:${interactive ? 'i' : 'n'}:${placeId}`;
 
   // Carga diferida: solo cuando el hueco entra (o está a punto de entrar) en pantalla.
   useEffect(() => {
@@ -178,7 +178,7 @@ export default function GooglePlaceCard({ placeId, variant = 'compact', fallback
       .then(g => g.maps.importLibrary('places'))
       .then(() => {
         if (cancelled || !node) return;
-        el = buildElement(variant, placeId, interactive);
+        el = buildElement(variant, placeId, interactive, orientation);
         el.addEventListener('gmp-error', () => { kept.delete(key); if (!cancelled) setFailed(true); });
         el.addEventListener('gmp-load', () => remember(key, el));
         node.replaceChildren(el);
@@ -189,7 +189,7 @@ export default function GooglePlaceCard({ placeId, variant = 'compact', fallback
       cancelled = true;
       if (el && node?.contains(el)) node.removeChild(el);
     };
-  }, [placeId, visible, online, failed, variant, interactive, key]);
+  }, [placeId, visible, online, failed, variant, interactive, orientation, key]);
 
   if (!placeId || !online || failed) return fallback;
   return <div ref={containerRef} className={className} style={{ minHeight: variant === 'full' ? 120 : variant === 'lean' ? 40 : 64 }} />;
