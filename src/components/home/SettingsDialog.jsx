@@ -200,7 +200,8 @@ function SettingsDialog({
       // fechas/país sin tocar el nombre -- si no se hiciera esto, abrir y
       // guardar la edición sin cambiar el nombre las borraría igualmente.
       lat: city.lat ?? null,
-      photo_ref: city.photo_ref ?? null,
+      place_id: city.place_id ?? null,
+      place_refreshed_at: city.place_refreshed_at ?? null,
       lng: city.lng ?? null,
     });
   };
@@ -237,7 +238,8 @@ function SettingsDialog({
         // undefined (Base44 no toca el campo) si se escribió a mano.
         lat: cityDraft.lat,
         lng: cityDraft.lng,
-        photo_ref: cityDraft.photo_ref,
+        place_id: cityDraft.place_id || undefined,
+        place_refreshed_at: cityDraft.place_refreshed_at || undefined,
       });
             // Avisa a los demas miembros si el pais o las fechas de la parada
             // cambian de verdad -- esto es un cambio de destino del viaje.
@@ -324,7 +326,8 @@ function SettingsDialog({
         end_date: cityDraft.end_date || '',
         lat: cityDraft.lat,
         lng: cityDraft.lng,
-        photo_ref: cityDraft.photo_ref,
+        place_id: cityDraft.place_id || undefined,
+        place_refreshed_at: cityDraft.place_refreshed_at || undefined,
         trip_members: trip.members,
         trip_editors: computeEditors(trip.members, trip),
       });
@@ -460,8 +463,8 @@ function SettingsDialog({
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">{t('common.city')}</p>
                     <CityInput country={cityDraft.country} value={cityDraft.name || ''}
-                      onChange={v => setCityDraft(p => ({ ...p, name: v, lat: null, lng: null, photo_ref: null }))}
-                      onSelectPlace={({ name, lat, lng, photoRef }) => setCityDraft(p => ({ ...p, name, lat, lng, photo_ref: photoRef }))}
+                      onChange={v => setCityDraft(p => ({ ...p, name: v, lat: null, lng: null, place_id: null, place_refreshed_at: null }))}
+                      onSelectPlace={({ name, lat, lng, placeId }) => setCityDraft(p => ({ ...p, name, lat, lng, place_id: placeId, place_refreshed_at: new Date().toISOString() }))}
                       extraSuggestions={existingCityNames} placeholder={t('common.city')} />
                   </div>
                   <div>
@@ -528,8 +531,8 @@ function SettingsDialog({
               <div>
                 <p className="text-xs text-muted-foreground mb-1">{t('common.city')}</p>
                 <CityInput country={cityDraft.country} value={cityDraft.name || ''}
-                  onChange={v => setCityDraft(p => ({ ...p, name: v, lat: null, lng: null, photo_ref: null }))}
-                  onSelectPlace={({ name, lat, lng, photoRef }) => setCityDraft(p => ({ ...p, name, lat, lng, photo_ref: photoRef }))}
+                  onChange={v => setCityDraft(p => ({ ...p, name: v, lat: null, lng: null, place_id: null, place_refreshed_at: null }))}
+                  onSelectPlace={({ name, lat, lng, placeId }) => setCityDraft(p => ({ ...p, name, lat, lng, place_id: placeId, place_refreshed_at: new Date().toISOString() }))}
                   extraSuggestions={existingCityNames} placeholder={t('common.city')} />
               </div>
               <div>
