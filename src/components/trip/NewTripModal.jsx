@@ -316,7 +316,7 @@ export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }
       // con `lat`/`lng` a `undefined` en cualquier posición si esa parada
       // se escribió a mano sin elegir ninguna sugerencia -- eso es
       // exactamente el fallback esperado, no un error.
-      stopCoords: tripCities.map(s => ({ lat: s.lat ?? undefined, lng: s.lng ?? undefined, photoRef: s.photoRef ?? undefined })),
+      stopCoords: tripCities.map(s => ({ lat: s.lat ?? undefined, lng: s.lng ?? undefined, placeId: s.placeId ?? undefined })),
       stopCountries: tripCities.map(s => normalizeCountry(s.country || firstCountry)),
       allocations,
       selectedTemplate: null,
@@ -466,7 +466,7 @@ export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }
                         country={stop.country}
                         value={stop.city}
                         onChange={v => updateStop(idx, { city: v, lat: null, lng: null })}
-                        onSelectPlace={({ name, lat, lng, photoRef }) => updateStop(idx, { city: name, lat, lng, photoRef })}
+                        onSelectPlace={({ name, lat, lng, placeId }) => updateStop(idx, { city: name, lat, lng, placeId })}
                         placeholder={t('trip.new.cityN', { n: idx + 1 })}
                       />
                     </div>
