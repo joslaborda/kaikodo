@@ -118,7 +118,7 @@ function buildElement(variant, placeId, interactive, orientation) {
   // interno, y el botón "Abrir en Maps" -- que no se puede quitar -- en tonos
   // de la app en vez del azul de Google. La atribución "Google Maps" es
   // obligatoria y su posición la fija Google (no admite reordenarse).
-  el.style.fontSize = variant === 'full' ? '15px' : '14px';
+  el.style.fontSize = variant === 'full' ? '15px' : '13px';
   el.style.setProperty('--gmp-mat-spacing-two-extra-large', '16px');
   el.style.setProperty('--gmp-mat-spacing-extra-large', '12px');
   el.style.setProperty('--gmp-mat-spacing-large', '10px');
