@@ -37,6 +37,22 @@ export function googlePlaceIdOf(spot) {
   return null;
 }
 
+// José (23 sep 2026): las fichas de Google van dentro de filas pulsables
+// (abren nuestro detalle). Sus propios controles -- el botón azul de abrir en
+// Google Maps y la foto -- tienen que hacer lo suyo SIN abrir además nuestro
+// detalle. Devuelve true si el toque salió de uno de esos controles; las
+// filas lo comprueban al principio de su onClick y, si es así, no hacen nada.
+export function isGoogleCardControl(e) {
+  const path = e?.nativeEvent?.composedPath?.() || e?.composedPath?.() || [];
+  for (const n of path) {
+    const tag = n?.tagName;
+    if (!tag) continue;
+    if (tag.startsWith('GMP-PLACE-DETAILS')) return false; // llegó a la ficha sin pasar por un control
+    if (tag === 'A' || tag === 'BUTTON' || n.getAttribute?.('role') === 'button') return true;
+  }
+  return false;
+}
+
 function remember(key, el) {
   kept.delete(key);
   kept.set(key, el);
@@ -96,6 +112,22 @@ function buildElement(variant, placeId, interactive) {
   el.style.setProperty('--gmp-mat-font-family', "'Nunito', system-ui, sans-serif");
   el.style.setProperty('--gmp-mat-color-primary', '#c2410c');
   el.style.setProperty('--gmp-mat-color-surface', 'transparent');
+  // José (23 sep 2026): en móvil la ficha quedaba enorme. Todo lo de abajo son
+  // propiedades CSS documentadas por Google para UI Kit (no se toca nada por
+  // dentro): texto algo más pequeño (escala todo el componente), menos aire
+  // interno, y el botón "Abrir en Maps" -- que no se puede quitar -- en tonos
+  // de la app en vez del azul de Google. La atribución "Google Maps" es
+  // obligatoria y su posición la fija Google (no admite reordenarse).
+  el.style.fontSize = variant === 'full' ? '15px' : '14px';
+  el.style.setProperty('--gmp-mat-spacing-two-extra-large', '16px');
+  el.style.setProperty('--gmp-mat-spacing-extra-large', '12px');
+  el.style.setProperty('--gmp-mat-spacing-large', '10px');
+  el.style.setProperty('--gmp-mat-spacing-medium', '8px');
+  el.style.setProperty('--gmp-mat-spacing-small', '4px');
+  el.style.setProperty('--gmp-mat-spacing-extra-small', '2px');
+  el.style.setProperty('--gmp-mat-color-secondary-container', '#f5f5f4');
+  el.style.setProperty('--gmp-mat-color-on-secondary-container', '#57534e');
+  el.style.setProperty('--gmp-star-rating-color', '#f59e0b');
   return el;
 }
 

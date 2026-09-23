@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import { X, MapPin, Navigation } from 'lucide-react';
 import GooglePlaceCard, { googlePlaceIdOf } from './GooglePlaceCard';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
@@ -14,6 +15,7 @@ import { normalizeEmail } from '@/lib/utils';
 export default
 function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCities, userId, onNotify, currentUserEmail }) {
   const { t } = useTranslation();
+  const online = useOnlineStatus();
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState(spot?.notes || '');
   const [assignedDate, setAssignedDate] = useState(spot?.assigned_date || '');
@@ -117,6 +119,8 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
     }
   };
 
+  const compactHeader = !!googlePlaceIdOf(spot) && online;
+
   return (
     <>
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40" onClick={onClose}>
@@ -124,7 +128,13 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
         {/* Handle + Header — fixed */}
         <div className="flex-shrink-0">
           <div className="w-9 h-1 bg-border rounded-full mx-auto mt-4 mb-3" />
-          <div className="flex items-start justify-between px-5 pb-4 border-b border-border">
+          {/* José (23 sep 2026): con ficha de Google (con conexión) la cabecera
+              se reduce a categoría · ciudad: el nombre ya lo pone la ficha justo
+              debajo, y el icono + título propio duplicaban y ocupaban mucho. */}
+          <div className={`flex items-start justify-between px-5 border-b border-border ${compactHeader ? 'pb-2' : 'pb-4'}`}>
+            {compactHeader ? (
+              <p className="text-xs text-muted-foreground self-center">{t(tc.tk)}{spot.city_name ? ' · ' + spot.city_name : ''}</p>
+            ) : (
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${tc.color}`}>
                 {tc.Icon && <tc.Icon size={14} />}
@@ -134,6 +144,7 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
                 <p className="text-xs text-muted-foreground">{t(tc.tk)}{spot.city_name ? ' · ' + spot.city_name : ''}</p>
               </div>
             </div>
+            )}
             <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
               <X className="w-4 h-4 text-muted-foreground" />
             </button>
