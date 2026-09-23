@@ -15,6 +15,7 @@ import { getCountryMeta, normalizeCountry, getCountryLabel } from '@/lib/country
 import { getTripCoverImage } from '@/lib/tripImage';
 import { getTripStatus } from '@/components/trip/TripCard';
 import { searchNewPlaces, fetchPlaceDetails } from '@/components/spots/placesAutocomplete';
+import { matchTripCity } from '@/lib/tripCityMatch';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
 import { normalizeEmail, isSafeHttpUrl } from '@/lib/utils';
@@ -457,9 +458,10 @@ export default function Profile() {
   const importMutation = useMutation({
     mutationFn: async () => {
       for (const s of pendingImportMatches) {
-        const targetCity = nextTripCities.find(
-          c => c.name?.toLowerCase().trim() === (s.city_name || '').toLowerCase().trim()
-        ) || nextTripCities[0] || null;
+        // José (23 sep 2026): ciudad real del viaje (mismo nombre o la más
+        // cercana a <= 50 km), mismo criterio que el panel de Spots -- ver
+        // src/lib/tripCityMatch.js. Antes caía a la primera ciudad del viaje.
+        const targetCity = matchTripCity(s, nextTripCities) || nextTripCities[0] || null;
         // Crea un Spot NUEVO en el viaje destino — nunca borra ni convierte el
         // SavedSpot original (mismo comportamiento que importSavedSpot en
         // Restaurants.jsx, source:'saved_import').

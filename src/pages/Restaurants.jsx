@@ -12,7 +12,7 @@ import { searchUserProfiles } from '@/lib/userProfiles';
 import { normalizeCountry } from '@/lib/countryConfig';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, X, Navigation, MapPin, ArrowRight, Utensils, Landmark, Ticket, ShoppingBag, CirclePlus, Compass, Moon, AlertTriangle, Loader2, Check, CheckCircle2, List, Map as MapIcon, Hotel, Star } from 'lucide-react';
+import { Search, Plus, X, Navigation, MapPin, ArrowRight, Utensils, Landmark, Ticket, ShoppingBag, CirclePlus, Compass, Moon, AlertTriangle, Loader2, Check, CheckCircle2, List, Map as MapIcon, Hotel } from 'lucide-react';
 import OTabBar from '@/components/trip/OTabBar';
 import { Link, useNavigate } from 'react-router-dom';
 import MySpotRow from '@/components/spots/MySpotRow';
@@ -29,6 +29,8 @@ import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey, loadGoogleMaps,
 // fallback si falla o no hay tope disponible". Corregido (5 sept 2026) para
 // seguir el mismo patrón que esos tres — Leaflet/CARTO se mantiene SOLO como
 // red de seguridad, ya no como mapa por defecto.
+import { matchTripCity } from '@/lib/tripCityMatch';
+import GooglePlaceCard from '@/components/spots/GooglePlaceCard';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from '@/components/spots/mapTiles';
 
 
@@ -107,22 +109,18 @@ async function fetchPlaceDetailsGoogle(placeId, apiKey, signal) {
     const res = await fetch('https://places.googleapis.com/v1/places/' + placeId, {
           headers: {
                   'X-Goog-Api-Key': apiKey,
-                  'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types,rating,userRatingCount,photos,regularOpeningHours,currentOpeningHours,internationalPhoneNumber,nationalPhoneNumber,websiteUri,priceLevel',
+                  'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types',
           },
           signal,
     });
     if (!res.ok) return null;
     markGoogleUsed('placeDetails');
     const p = await res.json();
-  const photoName = p.photos?.[0]?.name;
     return {
           name: p.displayName?.text,
           address: p.formattedAddress,
           lat: p.location?.latitude, lng: p.location?.longitude,
           type: googleTypeToKodoType(p.primaryType ? [p.primaryType, ...(p.types||[])] : p.types),
-      rating: p.rating || null,
-      userRatingCount: p.userRatingCount || null,
-      photoUrl: photoName ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=160&key=${apiKey}` : null,
     };
 }
 
@@ -973,9 +971,6 @@ export default function Restaurants() {
   const [searchQuery, setSearchQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState(() => getRecentSearches());
   const [placeResults, setPlaceResults] = useState([]);
-  const [enriched, setEnriched] = useState({}); // placeId -> {rating, userRatingCount, photoUrl}
-  const enrichedIdsRef = useRef(new Set());
-  const enrichObserverRef = useRef(null);
  const [searching, setSearching] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [pinPrefill, setPinPrefill] = useState(null); // {lat,lng} — al tocar el mapa de Mis spots
@@ -1070,8 +1065,11 @@ export default function Restaurants() {
     if (!userSavedSpots.length) return [];
     const tripCountry = normalizeCountry(country || trip?.country || '');
     if (!tripCountry) return [];
-    return userSavedSpots.filter(s => normalizeCountry(s.country || '') === tripCountry);
-  }, [userSavedSpots, country, trip?.country]);
+    // Además del país, tiene que pertenecer a una ciudad del viaje (José,
+    // 23 sep 2026 -- ver importGroups).
+    return userSavedSpots.filter(s =>
+      normalizeCountry(s.country || '') === tripCountry && !!matchTripCity(s, tripCities));
+  }, [userSavedSpots, country, trip?.country, tripCities]);
 
   // Agrupa los spots importables por la ciudad del VIAJE a la que
   // corresponden (comparando nombre normalizado), no por la ciudad
@@ -1084,17 +1082,18 @@ export default function Restaurants() {
   // como ya hacía antes, en vez de quedar sin ciudad — un Spot sin city_id
   // no está probado en el resto de la app (Ruta, día a día, etc).
   const normCityName = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+
+  // José (23 sep 2026): cada guardado va a la ciudad del viaje que le
+  // corresponde (mismo nombre o a <= 50 km, ver src/lib/tripCityMatch.js).
+  // Ya no hay grupo "otras ciudades" colgado de la ciudad activa: eso metía
+  // p.ej. un restaurante de Madrid en Barcelona con el nombre "Barcelona".
   const importGroups = useMemo(() => {
     const groups = tripCities.map(c => ({ city: c, spots: [] }));
-    const other = [];
     importableSpots.forEach(s => {
-      const match = tripCities.find(c => normCityName(c.name) === normCityName(s.city_name));
-      if (match) groups.find(g => g.city.id === match.id).spots.push(s);
-      else other.push(s);
+      const match = matchTripCity(s, tripCities);
+      if (match) groups.find(g => g.city.id === match.id)?.spots.push(s);
     });
-    const nonEmpty = groups.filter(g => g.spots.length > 0);
-    if (other.length) nonEmpty.push({ city: null, spots: other });
-    return nonEmpty;
+    return groups.filter(g => g.spots.length > 0);
   }, [importableSpots, tripCities]);
 
   // Activar panel de importación si viene desde el popup de creación de viaje
@@ -1197,36 +1196,10 @@ export default function Restaurants() {
     return () => clearTimeout(searchTimer.current);
   }, [searchQuery, selectedCity, city, country]);
 
-    const enrichPlace = async (place) => {
-      if (!place?._placeId || enrichedIdsRef.current.has(place.id)) return;
-      enrichedIdsRef.current.add(place.id);
-      const apiKey = await getGoogleMapsApiKey();
-      if (!apiKey) return;
-      const details = await fetchPlaceDetailsGoogle(place._placeId, apiKey);
-      if (details) setEnriched(prev => ({ ...prev, [place.id]: details }));
-    };
-
-    const observeCard = (node, place) => {
-      if (!node || !place?._placeId || enrichedIdsRef.current.has(place.id)) return;
-      if (!enrichObserverRef.current) {
-        enrichObserverRef.current = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting && entry.target._kdPlace) {
-              enrichPlace(entry.target._kdPlace);
-              enrichObserverRef.current.unobserve(entry.target);
-            }
-          });
-        }, { rootMargin: '200px' });
-      }
-      node._kdPlace = place;
-      enrichObserverRef.current.observe(node);
-    };
-
-    useEffect(() => {
-      enrichedIdsRef.current = new Set();
-      setEnriched({});
-      placeResults.slice(0, 5).forEach(enrichPlace);
-    }, [placeResults]);
+    // José (23 sep 2026): los resultados ya no se "enriquecen" con rating y
+    // foto vía Places API (contenido de Google pintado fuera de UI Kit, y una
+    // llamada cara por resultado). Cada fila pinta la ficha compacta de
+    // Places UI Kit -- ver GooglePlaceCard.jsx.
 
   
   const baseData = extra => ({
@@ -1256,8 +1229,7 @@ export default function Restaurants() {
         let resolved = place;
         let details = null;
         if (place._placeId) {
-          const cached = enriched[place.id];
-          details = cached || (apiKey ? await fetchPlaceDetailsGoogle(place._placeId, apiKey) : null);
+          details = apiKey ? await fetchPlaceDetailsGoogle(place._placeId, apiKey) : null;
           if (details) resolved = { ...place, lat: details.lat ?? place.lat, lng: details.lng ?? place.lng, address: details.address || place.address, type: details.type || place.type, name: details.name || place.name };
         }
         const created = await createMutation.mutateAsync({
@@ -1355,9 +1327,13 @@ export default function Restaurants() {
   const importSavedSpot = async (savedSpot, targetCity) => {
     setSavingId('import_' + savedSpot.id);
     try {
+      // targetCity siempre viene de importGroups (ciudad real del viaje); si
+      // por lo que sea no llega, se calcula aquí, nunca se cae a la activa.
+      const city = targetCity || matchTripCity(savedSpot, tripCities);
+      if (!city) return;
       const created = await createMutation.mutateAsync({
-        trip_id: tripId, city_id: targetCity?.id || effectiveCityId || undefined,
-        city_name: targetCity?.name || effectiveCityName, country: normalizeCountry(country),
+        trip_id: tripId, city_id: city.id,
+        city_name: city.name, country: normalizeCountry(country),
         title: savedSpot.title, type: savedSpot.type || 'custom',
         address: savedSpot.address || '', lat: savedSpot.lat, lng: savedSpot.lng,
         notes: savedSpot.notes || '', image_url: savedSpot.image_url || null,
@@ -1370,7 +1346,7 @@ export default function Restaurants() {
         ...(savedSpot.google_place_id ? { osm_id: savedSpot.google_place_id } : {}),
       });
       setLastSavedId(created?.id);
-      showToastFor({ title: savedSpot.title }, targetCity?.name || city);
+      showToastFor({ title: savedSpot.title }, city.name);
     } finally {
       setSavingId(null);
     }
@@ -1720,25 +1696,21 @@ export default function Restaurants() {
                     <div className="bg-card border border-border rounded-2xl overflow-hidden">
                       {placeResults.map((p, i) => {
                         const isDuplicate = spots.some(s => s.title?.toLowerCase().trim() === p.name?.toLowerCase().trim());
-                            const enr = enriched[p.id];
                         return (
-                          <div key={p.id} ref={node => observeCard(node, p)} className={`flex items-center gap-3 px-3 py-2.5 ${i < placeResults.length - 1 ? 'border-b border-border' : ''}`}>
-                            {enr?.photoUrl ? (
-          <img src={enr.photoUrl} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
-                ) : (
-          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
-            {(() => { const I = {food:Utensils,sight:Landmark,activity:Ticket,shopping:ShoppingBag,nightlife:Moon,bar:Moon}[p.type] || Compass; return <I size={14} className="text-muted-foreground" />; })()}
-          </div>
-                )}
-                              <div className="flex-1 min-w-0"><p className="text-sm font-medium text-foreground truncate">{p.name}</p>
-                              {p.address && <p className="text-xs text-muted-foreground truncate">{p.address}</p>}
-                            {enr?.rating && (
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Star className="w-3 h-3 fill-current" />
-              {enr.rating}{enr.userRatingCount ? ` (${enr.userRatingCount})` : ''}
-            </p>
-          )}
-                          </div>
+                          <div key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${i < placeResults.length - 1 ? 'border-b border-border' : ''}`}>
+                            <div className="flex-1 min-w-0">
+                              <GooglePlaceCard placeId={p._placeId} variant="compact" interactive={false} fallback={(
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+                                    {(() => { const I = {food:Utensils,sight:Landmark,activity:Ticket,shopping:ShoppingBag,nightlife:Moon,bar:Moon}[p.type] || Compass; return <I size={14} className="text-muted-foreground" />; })()}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
+                                    {p.address && <p className="text-xs text-muted-foreground truncate">{p.address}</p>}
+                                  </div>
+                                </div>
+                              )} />
+                            </div>
                             {isDuplicate ? <span className="text-xs text-muted-foreground flex-shrink-0">{t('spots.savedBadge')}</span>
                               : <button onClick={() => savePlaceResult(p)} disabled={savingId === p.id} className="flex-shrink-0 text-primary hover:text-primary/70 transition-colors">
                                   <Plus className="w-5 h-5" />
