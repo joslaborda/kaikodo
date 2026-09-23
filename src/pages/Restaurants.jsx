@@ -834,12 +834,23 @@ function AssignDateModal({ spot, tripCities = [], onAssign, onSkip, onUndo }) {
 
         {/* Buttons — always visible */}
         <div className="flex gap-3 px-5 pb-5">
+          {/* Abierto desde la fila de un spot ya guardado (no justo después de
+              guardarlo): "Deshacer" borraría el spot -- ahí solo se cancela. */}
+          {onUndo ? (
           <button
             onClick={onUndo}
             className="flex-1 py-3 border border-border rounded-2xl text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
           >
             {t('spots.undo')}
           </button>
+          ) : (
+          <button
+            onClick={onSkip}
+            className="flex-1 py-3 border border-border rounded-2xl text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors"
+          >
+            {t('common.cancel')}
+          </button>
+          )}
           <button
             onClick={async () => {
               if (submitting) return;
@@ -980,6 +991,10 @@ export default function Restaurants() {
   const [savingId, setSavingId] = useState(null);
   const [stateFilter, setStateFilter] = useState('all');
   const [assignDateSpot, setAssignDateSpot] = useState(null); // spot to assign date after saving
+  // true si el modal de día se abrió desde el botón de la fila (spot ya
+  // guardado): entonces no se ofrece "Deshacer" (borraría el spot).
+  const [assignFromRow, setAssignFromRow] = useState(false);
+  const openAssignFromRow = spot => { setAssignFromRow(true); setAssignDateSpot(spot); };
   const [stayDocPrompt, setStayDocPrompt] = useState(null);   // alojamiento recién guardado → ofrecer subir la reserva
   useBodyScrollLock(!!stayDocPrompt);
   const [selectedCity, setSelectedCity] = useState('');
@@ -1274,7 +1289,7 @@ export default function Restaurants() {
       // estancia. Antes este camino (buscador de Google) abría igualmente el
       // "¿Cuándo quieres visitar este spot?" y, al confirmar, le colaba un
       // assigned_date que lo duplicaba dentro de ese día.
-      if (created?.id && !isStaySpot(created) && !isStaySpot(resolved)) setAssignDateSpot(created);
+      if (created?.id && !isStaySpot(created) && !isStaySpot(resolved)) { setAssignFromRow(false); setAssignDateSpot(created); }
       else if (created?.id) setStayDocPrompt(created);
       notifyMembers('spot_added', '', place.name, { spotId: created?.id, spotDate: created?.assigned_date });
     } catch(e) {
@@ -1312,6 +1327,7 @@ export default function Restaurants() {
       } else if (created?.id && form.type !== 'hotel') {
         // Un alojamiento tampoco pasa por el modal de "asignar fecha" de
         // después de crear — mismo motivo que arriba, nunca lleva día.
+        setAssignFromRow(false);
         setAssignDateSpot(created);
       } else if (created?.id) {
         // Un alojamiento no pide día ni hora: en su lugar se ofrece subir la
@@ -1405,7 +1421,7 @@ export default function Restaurants() {
       });
       setLastSavedId(created?.id);
       showToastFor({ title: spot.title }, selectedCity || city);
-      if (created?.id && !isStaySpot(created) && !isStaySpot(spot)) setAssignDateSpot(created);
+      if (created?.id && !isStaySpot(created) && !isStaySpot(spot)) { setAssignFromRow(false); setAssignDateSpot(created); }
     } finally { setSavingId(null); }
   };
 
@@ -1628,10 +1644,9 @@ export default function Restaurants() {
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 px-1">{t('spots.mySpots')}</p>
                     <div className="bg-card rounded-2xl border border-border overflow-hidden">
                       {spots.slice(0, 5).map(spot => (
-                        <MySpotRow key={spot.id} spot={spot} onTap={setSelectedSpot} userId={user?.id} />
+                        <MySpotRow key={spot.id} spot={spot} onTap={setSelectedSpot} onAssignDay={openAssignFromRow} />
                       ))}
                     </div>
-                    <p className="text-xs text-muted-foreground text-center mt-3">{t('spots.emptySearchLine2')}</p>
                   </div>
                 ) : (
                   <div className="text-center py-12">
@@ -1921,7 +1936,7 @@ export default function Restaurants() {
                     key={spot.id}
                     spot={spot}
                     onTap={setSelectedSpot}
-                    userId={user?.id}
+                    onAssignDay={openAssignFromRow}
                   />
                 ))}
               </div>
@@ -2038,7 +2053,7 @@ export default function Restaurants() {
             })();
           }}
           onSkip={() => setAssignDateSpot(null)}
-          onUndo={async () => {
+          onUndo={assignFromRow ? undefined : async () => {
             if (assignDateSpot?.id) {
               // Antes: .catch(() => {}) tragaba el error y el modal se cerraba
               // igual, dando a entender que el spot se había borrado aunque
