@@ -2,14 +2,15 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
-import { X, MapPin, Navigation, Star, Clock, Phone, Globe } from 'lucide-react';
+import { X, MapPin, Navigation } from 'lucide-react';
+import GooglePlaceCard, { googlePlaceIdOf } from './GooglePlaceCard';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
 import useLikeSimple from './useLikeSimple';
 import { useTranslation } from 'react-i18next';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
-import { normalizeEmail, isSafeHttpUrl } from '@/lib/utils';
+import { normalizeEmail } from '@/lib/utils';
 
 export default
 function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCities, userId, onNotify, currentUserEmail }) {
@@ -161,48 +162,11 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
             </div>
           )}
 
-          {/* Place info from Google Places */}
-          {(spot.photo_url || spot.rating != null || spot.opening_hours_json || spot.phone || spot.website) && (
-            <div className="space-y-3">
-              {spot.photo_url && (
-                <img src={spot.photo_url} alt="" className="w-full h-40 rounded-xl object-cover" />
-              )}
-              {spot.rating != null && (
-                <div className="flex items-center gap-1.5 text-sm">
-                  <Star className="w-4 h-4 fill-current text-amber-400" />
-                  <span className="font-medium text-foreground">{Number(spot.rating).toFixed(1)}</span>
-                  {spot.user_rating_count != null && (
-                    <span className="text-muted-foreground">({spot.user_rating_count} {t('spotDetail.placeInfo.ratings')})</span>
-                  )}
-                </div>
-              )}
-              {(() => {
-                let hours = null;
-                try { hours = spot.opening_hours_json ? JSON.parse(spot.opening_hours_json) : null; } catch { hours = null; }
-                if (!hours) return null;
-                const descs = hours.weekdayDescriptions;
-                if (!Array.isArray(descs) || !descs.length) return null;
-                return (
-                  <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
-                    <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                    <div className="space-y-0.5">
-                      {descs.map((d, i) => <p key={i}>{d}</p>)}
-                    </div>
-                  </div>
-                );
-              })()}
-              {spot.phone && (
-                <a href={`tel:${spot.phone}`} className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors">
-                  <Phone className="w-3.5 h-3.5 shrink-0" />{spot.phone}
-                </a>
-              )}
-              {/* José (22 sep 2026) -- auditoría: mismo fix que SpotDetailModal.jsx. */}
-              {spot.website && isSafeHttpUrl(spot.website) && (
-                <a href={spot.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 transition-colors break-all">
-                  <Globe className="w-3.5 h-3.5 shrink-0" />{spot.website}
-                </a>
-              )}
-            </div>
+          {/* José (23 sep 2026): ficha de Google vía Places UI Kit -- rating,
+              fotos, horario, teléfono y web los pinta Google en vivo, nunca
+              se guardan (términos EEA de Google Maps Platform). */}
+          {googlePlaceIdOf(spot) && (
+            <GooglePlaceCard placeId={googlePlaceIdOf(spot)} variant="full" className="rounded-xl overflow-hidden" />
           )}
 
           {/* Notes */}

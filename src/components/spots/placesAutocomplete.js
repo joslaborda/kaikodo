@@ -54,14 +54,13 @@ export async function fetchPlaceDetails(placeId, signal) {
   const res = await fetch('https://places.googleapis.com/v1/places/' + placeId, {
     headers: {
       'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types,photos,addressComponents',
+      'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types,addressComponents',
     },
     signal,
   });
   if (!res.ok) return null;
   markGoogleUsed('placeDetails');
   const p = await res.json();
-  const photoName = p.photos?.[0]?.name;
   const countryComp = (p.addressComponents || []).find(c => (c.types || []).includes('country'));
   // José (15 sep 2026): "no sabes dónde está cada uno, la organización de
   // los spots es pésima" -- el nombre de ciudad que se guardaba salía de
@@ -80,36 +79,7 @@ export async function fetchPlaceDetails(placeId, signal) {
     type: googleTypeToKodoType(p.primaryType ? [p.primaryType, ...(p.types || [])] : p.types),
     country: countryComp?.longText || '',
     city_name: cityComp?.longText || '',
-    image_url: photoName ? `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=200&key=${apiKey}` : null,
   };
-}
-
-// José (22 sep 2026): "los spots guardados en el perfil se quedan como
-// están [sin rating], pero al importar uno a un viaje quiero que salga con
-// rating". Guardar en el perfil pasa mucho (cualquier búsqueda que te
-// interese) y la mayoría de spots guardados nunca llegan a usarse en un
-// viaje -- por eso fetchPlaceDetails de arriba sigue sin pedir el campo
-// caro. Importar es justo lo contrario: pasa poco, y significa que ese
-// spot SÍ se va a usar de verdad -- ahí sí compensa pagar el tier con
-// rating, una sola vez, igual que ya se paga al añadir un spot directo a
-// un viaje desde Restaurants.jsx. Field mask mínimo a propósito: solo lo
-// que hace falta para esto, nada del resto (foto, horario, teléfono...)
-// que fetchPlaceDetails ya trajo al guardarlo.
-export async function fetchPlaceRating(placeId, signal) {
-  const apiKey = await getGoogleMapsApiKey();
-  if (!apiKey) return null;
-  if (!canUseGoogleToday('placeDetails')) return null;
-  const res = await fetch('https://places.googleapis.com/v1/places/' + placeId, {
-    headers: {
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'rating,userRatingCount',
-    },
-    signal,
-  });
-  if (!res.ok) return null;
-  markGoogleUsed('placeDetails');
-  const p = await res.json();
-  return { rating: typeof p.rating === 'number' ? p.rating : null, userRatingCount: typeof p.userRatingCount === 'number' ? p.userRatingCount : null };
 }
 
 // Búsqueda de sitios nuevos (cualquier lugar del mundo) para el buscador
