@@ -63,14 +63,30 @@ export function loadGoogleMaps() {
               // (reading 'Map')". Resolver con window.google (el namespace
               // completo, no solo su sub-propiedad .maps) es lo que espera
               // cada callback existente, sin tocar ninguno de ellos.
-              if (window.google?.maps?.places) { resolve(window.google); return; }
-              const cbName = '__kodoGoogleMapsReady';
-              window[cbName] = () => resolve(window.google);
-              const script = document.createElement('script');
-              script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places,marker&v=weekly&loading=async&callback=${cbName}`;
-              script.async = true;
-              script.onerror = () => reject(new Error('No se pudo cargar Google Maps'));
-              document.head.appendChild(script);
+              // José (23 sep 2026): Places UI Kit (fichas de Google, ver
+              // GooglePlaceCard.jsx) EXIGE cargar Maps JS con el cargador
+              // dinámico oficial (importLibrary), no con <script ...&callback>.
+              // Este es el bootstrap oficial de Google, sin cambios de lógica.
+              // Se sigue resolviendo con window.google (namespace completo)
+              // tras importar maps/places/marker, así que todo el código que
+              // usa google.maps.Map, google.maps.Marker, etc. sigue igual.
+              if (window.google?.maps?.places?.PlaceDetailsElement) { resolve(window.google); return; }
+              try {
+                if (!window.google?.maps?.importLibrary) {
+                  /* eslint-disable */
+                  (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({ key, v: 'weekly' });
+                  /* eslint-enable */
+                }
+                Promise.all([
+                  window.google.maps.importLibrary('maps'),
+                  window.google.maps.importLibrary('places'),
+                  window.google.maps.importLibrary('marker'),
+                ]).then(() => resolve(window.google))
+                  .catch(() => { loadPromise = null; reject(new Error('No se pudo cargar Google Maps')); });
+              } catch (err) {
+                loadPromise = null;
+                reject(err);
+              }
         });
     });
     return loadPromise;
