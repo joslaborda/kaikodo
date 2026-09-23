@@ -22,7 +22,7 @@ import { orderDayItems, findTimeClash as sharedFindTimeClash } from '@/lib/dayTi
 import { isDocForUser, otherHoldersLabel, holdersSummary } from '@/lib/docHolders';
 
 import { invalidateTripDocs } from '@/hooks/useTripDocs';
-import GooglePlaceCard, { googlePlaceIdOf } from '@/components/spots/GooglePlaceCard';
+import GooglePlaceCard, { googlePlaceIdOf, isGoogleCardControl } from '@/components/spots/GooglePlaceCard';
 export default function DayCard({ label, city, docs, spots, itineraryDays, tripId, defaultOpen, onReorderSpots, dateStr, onUpdateItemTime, hotelSpot, hideFeatured = false, trip, currentUserEmail, profiles }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -466,7 +466,8 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
               const isDragOver  = dragOverId === item.id && draggingId !== item.id;
 
               return (
-                <button key={item.id || idx} onClick={async () => {
+                <button key={item.id || idx} onClick={async (e) => {
+                    if (isGoogleCardControl(e)) return; // botón/foto de la ficha de Google
                     if (isDoc && (item.file_url || item.file_uri)) {
                       const url = await resolveDocViewUrl(item);
                       if (url) { setViewFile(url); return; }
@@ -512,7 +513,7 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
                         + estrellas) con conexión; sin conexión, el nombre propio. */}
                     <GooglePlaceCard
                       placeId={item._kind === 'spot' ? googlePlaceIdOf(item) : null}
-                      variant="lean" interactive={false}
+                      variant="lean"
                       fallback={<p className="text-sm font-medium text-foreground truncate">{item.title || item.name || t('home.dayCard.noTitle')}</p>}
                     />
                     {!isDoc && !isNote && item.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.notes}</p>}
