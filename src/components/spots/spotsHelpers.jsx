@@ -2,6 +2,13 @@ import { CirclePlus, Compass, Landmark, ShoppingBag, Ticket, Utensils, Hotel, Tr
 import { PlaneIcon } from '@/lib/icons';
 // ── Maps URL helper ───────────────────────────────────────────────────────────
 export function getMapsUrl(spot) {
+  // José (23 sep 2026): con place id de Google se abre la ficha exacta del
+  // sitio en Google Maps (Maps URLs, gratis) -- ya no guardamos su dirección.
+  const pid = (spot.osm_id ?? spot.google_place_id ?? '').toString().trim();
+  if (pid.length > 10 && !/^\d+$/.test(pid)) {
+    const q = spot.lat && spot.lng ? `${spot.lat},${spot.lng}` : encodeURIComponent(spot.title || '');
+    return `https://www.google.com/maps/search/?api=1&query=${q}&query_place_id=${encodeURIComponent(pid)}`;
+  }
   if (spot.lat && spot.lng) return `https://www.google.com/maps?q=${spot.lat},${spot.lng}`;
   const q = encodeURIComponent(spot.address || spot.title);
   return /iPad|iPhone|iPod/.test(navigator.userAgent)

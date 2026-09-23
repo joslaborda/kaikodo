@@ -1,6 +1,7 @@
 import { getGoogleMapsApiKey } from '@/lib/googleMaps';
 import { canUseGoogleToday, markGoogleUsed } from '@/lib/googleMaps';
 import { getLanguage } from '@/i18n/index.js';
+import { countryNameFromIso } from '@/lib/countryConfig';
 
 // Mismo patrón que searchPlacesGoogle() en Restaurants.jsx (Autocomplete New,
 // tope diario canUseGoogleToday('autocomplete'), mismo mapeo de tipos). Se
@@ -54,7 +55,9 @@ export async function fetchPlaceDetails(placeId, signal) {
   const res = await fetch('https://places.googleapis.com/v1/places/' + placeId, {
     headers: {
       'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types,addressComponents',
+      // José (23 sep 2026): sin displayName/formattedAddress (no se pueden
+      // guardar, términos EEA) -- solo campos Essentials, los más baratos.
+      'X-Goog-FieldMask': 'id,location,types,addressComponents',
     },
     signal,
   });
@@ -72,12 +75,13 @@ export async function fetchPlaceDetails(placeId, signal) {
   const cityComp = (p.addressComponents || []).find(c => (c.types || []).includes('locality'))
     || (p.addressComponents || []).find(c => (c.types || []).includes('postal_town'))
     || (p.addressComponents || []).find(c => (c.types || []).includes('administrative_area_level_2'));
+  // País: nuestra propia etiqueta (countryConfig) a partir del código ISO,
+  // no el texto de Google.
+  const ownCountry = countryNameFromIso(countryComp?.shortText);
   return {
-    title: p.displayName?.text,
-    address: p.formattedAddress,
     lat: p.location?.latitude, lng: p.location?.longitude,
-    type: googleTypeToKodoType(p.primaryType ? [p.primaryType, ...(p.types || [])] : p.types),
-    country: countryComp?.longText || '',
+    type: googleTypeToKodoType(p.types),
+    country: ownCountry,
     city_name: cityComp?.longText || '',
   };
 }

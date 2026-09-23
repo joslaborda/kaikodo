@@ -55,6 +55,15 @@ function buildElement(variant, placeId, interactive) {
 
   if (variant === 'full') {
     el.appendChild(document.createElement('gmp-place-all-content'));
+  } else if (variant === 'lean') {
+    // Filas densas (Ruta, Hoy/Mañana): solo nombre, estrellas y atribución.
+    const cfg = document.createElement('gmp-place-content-config');
+    cfg.appendChild(document.createElement('gmp-place-rating'));
+    const attribution = document.createElement('gmp-place-attribution');
+    attribution.setAttribute('light-scheme-color', 'gray');
+    attribution.setAttribute('dark-scheme-color', 'white');
+    cfg.appendChild(attribution);
+    el.appendChild(cfg);
   } else {
     // Misma configuración que el ejemplo oficial de Google para la ficha
     // compacta: foto, rating, tipo, precio, abierto ahora y atribución.
@@ -93,7 +102,8 @@ function buildElement(variant, placeId, interactive) {
 /**
  * Ficha de Google de un sitio, pintada por Places UI Kit.
  *  - placeId: place id de Google. Sin él no se pinta nada (o `fallback`).
- *  - variant: 'compact' (filas de listas) | 'full' (ficha de detalle).
+ *  - variant: 'compact' (filas de listas) | 'lean' (filas densas: nombre +
+ *    estrellas, sin foto) | 'full' (ficha de detalle).
  *  - fallback: lo que se ve sin conexión, sin place id, o si Google falla.
  *  - interactive: false dentro de filas pulsables (la ficha no captura toques).
  */
@@ -150,5 +160,5 @@ export default function GooglePlaceCard({ placeId, variant = 'compact', fallback
   }, [placeId, visible, online, failed, variant, interactive, key]);
 
   if (!placeId || !online || failed) return fallback;
-  return <div ref={containerRef} className={className} style={{ minHeight: variant === 'full' ? 120 : 64 }} />;
+  return <div ref={containerRef} className={className} style={{ minHeight: variant === 'full' ? 120 : variant === 'lean' ? 40 : 64 }} />;
 }
