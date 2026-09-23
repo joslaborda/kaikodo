@@ -293,6 +293,15 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
           </div>
           )}
 
+          {/* José (23 sep 2026): ficha de Google vía Places UI Kit -- rating,
+              fotos, horario y precio los pinta Google en vivo, nunca se
+              guardan (términos EEA de Google Maps Platform). Va DEBAJO de
+              nota/día/hora (lo que el usuario viene a tocar) y en versión
+              compacta, para no empujar esos controles fuera de pantalla. */}
+          {googlePlaceIdOf(spot) && (
+            <GooglePlaceCard placeId={googlePlaceIdOf(spot)} variant="full" className="rounded-xl overflow-hidden" />
+          )}
+
           {/* Notas */}
           <div>
             <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">{t('cities.day.personalNote')}</p>
@@ -317,15 +326,6 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
               </button>
             )}
           </div>
-
-          {/* José (23 sep 2026): ficha de Google vía Places UI Kit -- rating,
-              fotos, horario y precio los pinta Google en vivo, nunca se
-              guardan (términos EEA de Google Maps Platform). Va DEBAJO de
-              nota/día/hora (lo que el usuario viene a tocar) y en versión
-              compacta, para no empujar esos controles fuera de pantalla. */}
-          {googlePlaceIdOf(spot) && (
-            <GooglePlaceCard placeId={googlePlaceIdOf(spot)} variant="full" className="rounded-xl overflow-hidden" />
-          )}
         </div>
 
         {/* Actions */}
