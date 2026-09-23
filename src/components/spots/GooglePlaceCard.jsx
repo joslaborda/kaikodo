@@ -43,7 +43,7 @@ function remember(key, el) {
   while (kept.size > MAX_KEPT) kept.delete(kept.keys().next().value);
 }
 
-function buildElement(variant, placeId) {
+function buildElement(variant, placeId, interactive) {
   const el = document.createElement(variant === 'full' ? 'gmp-place-details' : 'gmp-place-details-compact');
   if (variant !== 'full') {
     el.setAttribute('orientation', 'horizontal');
@@ -60,7 +60,8 @@ function buildElement(variant, placeId) {
     // compacta: foto, rating, tipo, precio, abierto ahora y atribución.
     const cfg = document.createElement('gmp-place-content-config');
     const media = document.createElement('gmp-place-media');
-    media.setAttribute('lightbox-preferred', '');
+    // En filas de lista (no interactivo) el toque es de la fila, no de la foto.
+    if (interactive) media.setAttribute('lightbox-preferred', '');
     cfg.appendChild(media);
     ['gmp-place-rating', 'gmp-place-type', 'gmp-place-price', 'gmp-place-open-now-status']
       .forEach(tag => cfg.appendChild(document.createElement(tag)));
@@ -79,6 +80,9 @@ function buildElement(variant, placeId) {
     colorScheme: 'light',
     border: 'none',
     backgroundColor: 'transparent',
+    // No interactivo: la ficha es solo visual y el toque lo recibe la fila
+    // que la contiene (p. ej. MySpotRow abre el detalle del spot).
+    pointerEvents: interactive ? 'auto' : 'none',
   });
   el.style.setProperty('--gmp-mat-font-family', "'Nunito', system-ui, sans-serif");
   el.style.setProperty('--gmp-mat-color-primary', '#c2410c');
@@ -91,13 +95,14 @@ function buildElement(variant, placeId) {
  *  - placeId: place id de Google. Sin él no se pinta nada (o `fallback`).
  *  - variant: 'compact' (filas de listas) | 'full' (ficha de detalle).
  *  - fallback: lo que se ve sin conexión, sin place id, o si Google falla.
+ *  - interactive: false dentro de filas pulsables (la ficha no captura toques).
  */
-export default function GooglePlaceCard({ placeId, variant = 'compact', fallback = null, className = '' }) {
+export default function GooglePlaceCard({ placeId, variant = 'compact', fallback = null, className = '', interactive = true }) {
   const containerRef = useRef(null);
   const online = useOnlineStatus();
   const [visible, setVisible] = useState(false);
   const [failed, setFailed] = useState(false);
-  const key = `${variant}:${placeId}`;
+  const key = `${variant}:${interactive ? 'i' : 'n'}:${placeId}`;
 
   // Carga diferida: solo cuando el hueco entra (o está a punto de entrar) en pantalla.
   useEffect(() => {
@@ -131,7 +136,7 @@ export default function GooglePlaceCard({ placeId, variant = 'compact', fallback
       .then(g => g.maps.importLibrary('places'))
       .then(() => {
         if (cancelled || !node) return;
-        el = buildElement(variant, placeId);
+        el = buildElement(variant, placeId, interactive);
         el.addEventListener('gmp-error', () => { kept.delete(key); if (!cancelled) setFailed(true); });
         el.addEventListener('gmp-load', () => remember(key, el));
         node.replaceChildren(el);
@@ -142,7 +147,7 @@ export default function GooglePlaceCard({ placeId, variant = 'compact', fallback
       cancelled = true;
       if (el && node?.contains(el)) node.removeChild(el);
     };
-  }, [placeId, visible, online, failed, variant, key]);
+  }, [placeId, visible, online, failed, variant, interactive, key]);
 
   if (!placeId || !online || failed) return fallback;
   return <div ref={containerRef} className={className} style={{ minHeight: variant === 'full' ? 120 : 64 }} />;
