@@ -113,18 +113,16 @@ async function fetchGooglePlaceDetails(placeId, apiKey, signal) {
     const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
           headers: {
                   'X-Goog-Api-Key': apiKey,
-                  'X-Goog-FieldMask': 'id,displayName,formattedAddress,location',
+                  // José (23 sep 2026): solo coordenadas (Essentials). Nombre y
+                  // dirección de Google no se pueden guardar (términos EEA).
+                  'X-Goog-FieldMask': 'id,location',
           },
           signal,
     });
     if (!res.ok) return null;
       markGoogleUsed('placeDetails');
     const p = await res.json();
-    return {
-          name: p.displayName?.text,
-          address: p.formattedAddress,
-          lat: p.location?.latitude, lng: p.location?.longitude,
-    };
+    return { lat: p.location?.latitude, lng: p.location?.longitude };
 }
 async function searchLocation(query, signal) {
     const apiKey = await getGoogleMapsApiKey();
@@ -234,6 +232,8 @@ export default function DocumentForm({
     spot_id:       initialData?.spot_id       || '',
     location_lat:  initialData?.location_lat  || '',
     location_lng:  initialData?.location_lng  || '',
+    location_place_id:  initialData?.location_place_id  || '',
+    place_refreshed_at: initialData?.place_refreshed_at || '',
   });
 
   // Buscador de aeropuerto/estación (solo vuelo/tren, ver SHOW_FIELDS). El
@@ -403,6 +403,9 @@ export default function DocumentForm({
     const { location_lat, location_lng, ...rest } = fields;
     const payload = { ...rest };
     if (!payload.spot_id) delete payload.spot_id;
+    // Vacíos fuera: el backend valida formato y rechazaría '' (mismo caso que lat/lng).
+    if (!payload.location_place_id) delete payload.location_place_id;
+    if (!payload.place_refreshed_at) delete payload.place_refreshed_at;
     // El campo "Ciudad" (texto libre) se quitó del formulario -- era
     // redundante con la fecha, que ya lleva la ciudad del día embebida
     // (fields.city_id, elegido en el desplegable de FECHA). Se resuelve
@@ -498,7 +501,7 @@ export default function DocumentForm({
             <div className="flex items-center gap-2 bg-secondary/40 border border-border rounded-xl px-3 py-2.5">
               <MapPin className="w-4 h-4 text-primary shrink-0" />
               <span className="flex-1 text-sm text-foreground truncate">{fields.location_name}</span>
-              <button type="button" onClick={() => { setFields(prev => ({ ...prev, location_name: '', location_lat: '', location_lng: '' })); setLocationQuery(''); }}
+              <button type="button" onClick={() => { setFields(prev => ({ ...prev, location_name: '', location_lat: '', location_lng: '', location_place_id: '', place_refreshed_at: '' })); setLocationQuery(''); }}
                 className="text-muted-foreground hover:text-red-500 transition-colors shrink-0">
                 <X className="w-4 h-4" />
               </button>
@@ -529,8 +532,13 @@ export default function DocumentForm({
                                           try {
                                                                   const details = await fetchGooglePlaceDetails(r._placeId, apiKey, resolveAbortRef.current.signal);
                                                                   if (details?.lat && details?.lng) {
-                                                                                            setFields(prev => ({ ...prev, location_name: details.name || r.name, location_lat: details.lat, location_lng: details.lng, ...(category === 'hotel' && !prev.name.trim() ? { name: details.name || r.name } : {}) }));
-                                                                                            setLocationQuery(details.name || r.name);
+                                                                                            // José (23 sep 2026): el nombre que se guarda es lo que
+                                                                                            // escribió el usuario (contenido suyo), no el de Google
+                                                                                            // (términos EEA). Se guarda el place id para la ficha de
+                                                                                            // Google y para refrescar coordenadas (máx. 30 días).
+                                                                                            const ownName = locationQuery.trim() || r.name;
+                                                                                            setFields(prev => ({ ...prev, location_name: ownName, location_lat: details.lat, location_lng: details.lng, location_place_id: r._placeId, place_refreshed_at: new Date().toISOString(), ...(category === 'hotel' && !prev.name.trim() ? { name: ownName } : {}) }));
+                                                                                            setLocationQuery(ownName);
                                                                                             setLocationResults([]);
                                                                   } else {
                                                                                             toast({ title: t('common.error'), description: t('common.tryAgain'), variant: 'destructive' });
