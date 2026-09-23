@@ -79,6 +79,14 @@
       "type": "string",
       "description": "ID de Foursquare si viene de b\u00fasqueda"
     },
+    "place_refreshed_at": {
+      "type": "string",
+      "format": "date-time",
+      // José (23 sep 2026): términos de Google Maps Platform -- las
+      // coordenadas que vienen de Places solo se pueden guardar 30 días
+      // seguidos. refreshPlaceCoordinates las vuelve a pedir antes de eso.
+      "description": "Última vez que se refrescaron lat/lng desde Google Places"
+    },
     "google_place_id": {
       "type": "string",
       // Se usa para detectar "ya lo tienes" en el buscador del perfil
