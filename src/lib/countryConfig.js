@@ -666,6 +666,14 @@ function esToIso() {
 }
 
 /** ISO-3166 alpha-2 de un país canónico en español. null si no se conoce. */
+// José (23 sep 2026): nombre canónico (nuestro, en español) de un país a
+// partir de su código ISO -- para no guardar el texto de país de Google.
+export function countryNameFromIso(iso) {
+  if (!iso || iso.length !== 2) return '';
+  const up = iso.toUpperCase();
+  return Object.keys(KNOWN_META).find(k => KNOWN_META[k]?.iso === up) || '';
+}
+
 export function getCountryIso(canonicalEs) {
   if (!canonicalEs) return null;
   return KNOWN_META[canonicalEs]?.iso || esToIso()[normalizeText(canonicalEs)] || null;

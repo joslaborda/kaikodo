@@ -2,7 +2,6 @@
  * Stable, deterministic image resolution for trips.
  * Priority: cover_image → first city → country → destination → fallback
  */
-import { useState, useEffect } from 'react';
 
 const CITY_IMAGES = {
   'tokyo':'photo-1540959733332-eab4deabeeaf','kyoto':'photo-1493976040374-85c8e12f0c0e','osaka':'photo-1590559899731-a382839e5549','hiroshima':'photo-1528360983277-13d401cdc186','nara':'photo-1545569341-9eb8b30979d9','hakone':'photo-1578271887552-5ac3a72752bc','sapporo':'photo-1478436127897-769e1b3f0f36','fukuoka':'photo-1535979863199-3c77338429a0','nikko':'photo-1554797589-7241bb691973',
@@ -194,24 +193,11 @@ export function getTripCoverImage(trip, cities = []) {
 // capturado al añadir la ciudad vía CityInput+Google Places), pide en
 // segundo plano la URL real de la foto y sustituye el fallback por la
 // buena en cuanto llega -- mejora progresiva, nunca bloqueante.
+// José (23 sep 2026): ya NO se usan fotos de Google Places para la portada:
+// los términos EEA de Google Maps Platform no permiten guardar la referencia
+// de foto ni pintar fotos de Places fuera de Places UI Kit. Se queda el
+// fallback propio (getTripCoverImage). Se mantiene el hook para no tocar a
+// quien lo usa.
 export function useTripCoverImage(trip, cities = []) {
-  const fallback = getTripCoverImage(trip, cities);
-  const [url, setUrl] = useState(fallback);
-
-  useEffect(() => {
-    let cancelled = false;
-    setUrl(fallback);
-    const sorted = [...cities].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    const withPhoto = sorted.find(c => c.photo_ref);
-    if (!withPhoto) return;
-    import('@/lib/cityPlaces').then(({ buildCityPhotoUrl }) =>
-      buildCityPhotoUrl(withPhoto.photo_ref)
-    ).then(realUrl => {
-      if (!cancelled && realUrl) setUrl(realUrl);
-    }).catch(() => {});
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trip?.id, cities.map(c => c.photo_ref).join(',')]);
-
-  return url;
+  return getTripCoverImage(trip, cities);
 }

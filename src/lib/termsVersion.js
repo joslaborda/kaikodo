@@ -11,4 +11,6 @@
 // Subir este valor (a la fecha del cambio, o cualquier string que cambie)
 // es lo único que hace falta para que todo usuario con profile.terms_version
 // distinto vea la pantalla de re-aceptación la próxima vez que abra la app.
-export const TERMS_VERSION = '2026-07-22';
+// 2026-09-23: cláusula de Google Maps (Términos §7 y Privacidad §4), exigida
+// por los términos de Google Maps Platform -- todos re-aceptan.
+export const TERMS_VERSION = '2026-09-23';

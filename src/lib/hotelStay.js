@@ -41,6 +41,8 @@ export async function linkHotelDocToStay({ doc, tripId, trip, cities = [], userE
     if (stay) {
       const patch = {};
       if (hasCoords && (!stay.lat || !stay.lng)) { patch.lat = doc.location_lat; patch.lng = doc.location_lng; }
+      // Place id de Google de la reserva -> ficha de Google en el spot (23 sep 2026).
+      if (doc.location_place_id && !stay.osm_id) { patch.osm_id = doc.location_place_id; patch.place_refreshed_at = doc.place_refreshed_at || null; }
       if (Object.keys(patch).length) await base44.entities.Spot.update(stay.id, patch);
     } else {
       // Sin coordenadas también se crea (nombre a mano): sale en "Te alojas en X"
@@ -61,8 +63,10 @@ export async function linkHotelDocToStay({ doc, tripId, trip, cities = [], userE
       stay = await base44.entities.Spot.create({
         trip_id: tripId, city_id: cityId,
         city_name: city?.name || doc.city || '', country: city?.country || undefined,
-        title, type: 'hotel',
+        // title: nombre propio (lo que escribió el usuario en la reserva).
+        title, title_is_own: true, type: 'hotel',
         ...(hasCoords ? { lat: doc.location_lat, lng: doc.location_lng } : {}),
+        ...(doc.location_place_id ? { osm_id: doc.location_place_id, place_refreshed_at: doc.place_refreshed_at || null } : {}),
         visibility: 'trip_members', visited: false,
         source: fromGoogle ? 'google_places' : 'hotel_doc',
         ...(fromGoogle

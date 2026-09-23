@@ -72,7 +72,9 @@ export async function fetchCityLocation(placeId, signal) {
         // referencia a su foto real, sin necesidad de mantener un
         // diccionario fijo que se queda corto con cualquier ciudad que no
         // esté en la lista (ya pasó con Dublín, y ahora con León).
-        'X-Goog-FieldMask': 'location,displayName,photos',
+        // José (23 sep 2026): solo coordenadas. Fotos y nombre de Google no
+        // se pueden guardar ni pintar fuera de UI Kit (términos EEA).
+        'X-Goog-FieldMask': 'location',
       },
       signal,
     });
@@ -80,28 +82,11 @@ export async function fetchCityLocation(placeId, signal) {
     markGoogleUsed('placeDetails');
     const data = await res.json();
     if (data?.location?.latitude == null || data?.location?.longitude == null) return null;
-    return {
-      name: data.displayName?.text || null,
-      lat: data.location.latitude,
-      lng: data.location.longitude,
-      // Nombre del recurso de la primera foto (p.ej.
-      // "places/ChIJ.../photos/AeJ...") -- se usa luego para construir la
-      // URL de la imagen bajo demanda, con la key servida desde backend
-      // (mismo patrón ya usado en Restaurants.jsx), nunca embebida aquí.
-      photoName: data?.photos?.[0]?.name || null,
-    };
+    return { lat: data.location.latitude, lng: data.location.longitude };
   } catch {
     return null;
   }
 }
 
-// José (15 sep 2026): construye la URL de la foto real de una ciudad a
-// partir del photoName guardado en City.photo_ref. Pide la key al backend
-// en el momento (mismo patrón que ya usa Restaurants.jsx para fotos de
-// sitios) -- nunca se guarda ni se expone la key en el bundle del cliente.
-export async function buildCityPhotoUrl(photoName, maxWidthPx = 900) {
-  if (!photoName) return null;
-  const apiKey = await getGoogleMapsApiKey();
-  if (!apiKey) return null;
-  return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidthPx}&key=${apiKey}`;
-}
+// buildCityPhotoUrl eliminada (23 sep 2026): fotos de Google fuera de UI Kit
+// no permitidas por los términos EEA -- ver tripImage.js.
