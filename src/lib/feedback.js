@@ -21,35 +21,19 @@ const FEEDBACK_INBOX = 'hello@kaikodo.app';
  * iniciada mandar correo arbitrario (cualquier destinatario/asunto/cuerpo)
  * gastando créditos de email de la cuenta de Base44 sin ningún control.
  */
-export async function sendFeedback({ feedbackType, message, userEmail, userName }) {
+// José (24 sep 2026): el registro en Feedback ahora lo crea la función de
+// backend (así el límite de envíos no se puede saltar). Aquí solo se llama.
+export async function sendFeedback({ feedbackType, message, userName }) {
   const trimmed = (message || '').trim();
   if (!trimmed) throw new Error('El mensaje no puede estar vacío');
-
-  const record = await base44.entities.Feedback.create({
-    feedback_type: feedbackType,
+  const result = await base44.functions.invoke('sendFeedbackEmail', {
+    feedbackType,
     message: trimmed,
-    user_email: userEmail || '',
-    user_name: userName || '',
-    app_language: getLanguage(),
-    status: 'new',
+    userName,
+    appLanguage: getLanguage(),
   });
-
-  // El email es "best effort" — si falla (p. ej. el buzón hello@ aún no
-  // está verificado del todo), el registro en Feedback ya se guardó, así
-  // que no se pierde el mensaje del usuario por un fallo de envío.
-  try {
-    const result = await base44.functions.invoke('sendFeedbackEmail', {
-      feedbackType,
-      message: trimmed,
-      userEmail,
-      userName,
-      appLanguage: getLanguage(),
-    });
-    const data = result?.data ?? result;
-    if (data?.error) throw new Error(data.error);
-  } catch (e) {
-    console.warn(`[sendFeedback] Email de aviso a ${FEEDBACK_INBOX} no enviado (el registro sí se guardó):`, e?.message);
-  }
-
-  return record;
+  const data = result?.data ?? result;
+  if (data?.error) throw new Error(data.error);
+  if (data?.emailed === false) console.warn(`[sendFeedback] Guardado, pero el aviso a ${FEEDBACK_INBOX} no se envió:`, data.warning);
+  return data;
 }
