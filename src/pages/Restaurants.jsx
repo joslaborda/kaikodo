@@ -109,7 +109,11 @@ async function fetchPlaceDetailsGoogle(placeId, apiKey, signal) {
     const res = await fetch('https://places.googleapis.com/v1/places/' + placeId, {
           headers: {
                   'X-Goog-Api-Key': apiKey,
-                  'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,primaryType,types',
+                  // José (23 sep 2026): solo coordenadas y tipos (tarifa Essentials,
+                  // la más barata). Nombre y dirección de Google ya no se guardan
+                  // (términos EEA): el nombre es el que escribió el usuario y la
+                  // ficha de Places UI Kit enseña el oficial y la dirección.
+                  'X-Goog-FieldMask': 'id,location,types',
           },
           signal,
     });
@@ -117,10 +121,8 @@ async function fetchPlaceDetailsGoogle(placeId, apiKey, signal) {
     markGoogleUsed('placeDetails');
     const p = await res.json();
     return {
-          name: p.displayName?.text,
-          address: p.formattedAddress,
           lat: p.location?.latitude, lng: p.location?.longitude,
-          type: googleTypeToKodoType(p.primaryType ? [p.primaryType, ...(p.types||[])] : p.types),
+          type: googleTypeToKodoType(p.types),
     };
 }
 
@@ -1230,13 +1232,19 @@ export default function Restaurants() {
         let details = null;
         if (place._placeId) {
           details = apiKey ? await fetchPlaceDetailsGoogle(place._placeId, apiKey) : null;
-          if (details) resolved = { ...place, lat: details.lat ?? place.lat, lng: details.lng ?? place.lng, address: details.address || place.address, type: details.type || place.type, name: details.name || place.name };
+          if (details) resolved = { ...place, lat: details.lat ?? place.lat, lng: details.lng ?? place.lng, type: details.type || place.type };
         }
+        // José (23 sep 2026): el nombre que se guarda es lo que el usuario
+        // escribió para encontrar el sitio (contenido suyo). El nombre oficial
+        // de Google no se puede guardar (términos EEA de Google Maps
+        // Platform): lo enseña en vivo la ficha de Places UI Kit. Este nombre
+        // propio solo se ve sin conexión, en notificaciones y en avisos.
+        const ownTitle = searchQuery.trim() || place.name;
         const created = await createMutation.mutateAsync({
                 trip_id: tripId || undefined, city_id: effectiveCityId||undefined,
           city_name: effectiveCityName, country: normalizeCountry(country),
-          title: resolved.name, type: resolved.type || 'sight',
-          address: resolved.address || '', lat: resolved.lat, lng: resolved.lng,
+          title: ownTitle, title_is_own: true, type: resolved.type || 'sight',
+          address: '', lat: resolved.lat, lng: resolved.lng,
           // osm_id: el nombre del campo se queda igual a propósito — lo lee
           // backfillSpotPlaces (backend) para distinguir un Google Place ID
           // de un id numérico legacy de OSM; renombrarlo exigiría tocar esa
@@ -1345,7 +1353,7 @@ export default function Restaurants() {
         // José (23 sep 2026): el rating ya no se guarda (términos EEA de
         // Google): basta con el place id, y la ficha de UI Kit enseña las
         // estrellas en vivo dentro del viaje.
-        ...(savedSpot.google_place_id ? { osm_id: savedSpot.google_place_id, place_refreshed_at: savedSpot.place_refreshed_at || null } : {}),
+        ...(savedSpot.google_place_id ? { osm_id: savedSpot.google_place_id, place_refreshed_at: savedSpot.place_refreshed_at || null, title_is_own: !!savedSpot.title_is_own } : {}),
       });
       setLastSavedId(created?.id);
       showToastFor({ title: savedSpot.title }, city.name);
@@ -1393,7 +1401,7 @@ export default function Restaurants() {
         // Tag as saved (not created) by current user
         saved_by: [user?.email].filter(Boolean),
         // Place id de Google (si lo tiene) para la ficha de UI Kit.
-        ...(spot.osm_id ? { osm_id: spot.osm_id, place_refreshed_at: spot.place_refreshed_at || null } : {}),
+        ...(spot.osm_id ? { osm_id: spot.osm_id, place_refreshed_at: spot.place_refreshed_at || null, title_is_own: !!spot.title_is_own } : {}),
       });
       setLastSavedId(created?.id);
       showToastFor({ title: spot.title }, selectedCity || city);
@@ -1697,7 +1705,8 @@ export default function Restaurants() {
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{t('spots.moreResults')}</p>
                     <div className="bg-card border border-border rounded-2xl overflow-hidden">
                       {placeResults.map((p, i) => {
-                        const isDuplicate = spots.some(s => s.title?.toLowerCase().trim() === p.name?.toLowerCase().trim());
+                        // Por place id: el título guardado ya no es el nombre de Google.
+                        const isDuplicate = spots.some(s => s.osm_id && s.osm_id === p._placeId);
                         return (
                           <div key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${i < placeResults.length - 1 ? 'border-b border-border' : ''}`}>
                             <div className="flex-1 min-w-0">

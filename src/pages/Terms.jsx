@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 const CONTENT = {
   es: {
     title: 'Términos de servicio',
-    updated: 'Última actualización: 22 de julio de 2026',
+    updated: 'Última actualización: 23 de septiembre de 2026',
     sections: [
       {
         h: '1. Aceptación de los términos',
@@ -54,25 +54,31 @@ const CONTENT = {
         ],
       },
       {
-        h: '7. Limitación de responsabilidad',
+        h: '7. Mapas y lugares de Google',
+        p: [
+          'Kaikōdo incluye funciones y contenido de Google Maps (mapas, búsqueda de lugares y fichas de sitios con valoraciones, fotos y horarios). El uso que hagas de esas funciones y contenido de Google Maps está sujeto a las Condiciones de Servicio Adicionales de Google Maps/Google Earth vigentes en cada momento (https://maps.google.com/help/terms_maps/) y a la Política de Privacidad de Google (https://policies.google.com/privacy).',
+        ],
+      },
+      {
+        h: '8. Limitación de responsabilidad',
         p: [
           'En la medida permitida por la ley, Kaikōdo se ofrece sin garantías de ningún tipo. No somos responsables de pérdidas indirectas, pérdida de datos, ni de las consecuencias de decisiones de viaje tomadas usando la app.',
         ],
       },
       {
-        h: '8. Cambios en estos términos',
+        h: '9. Cambios en estos términos',
         p: [
           'Podemos actualizar estos términos. Si el cambio es relevante, te lo notificaremos dentro de la app y, si corresponde, te pediremos que los aceptes de nuevo.',
         ],
       },
       {
-        h: '9. Ley aplicable',
+        h: '10. Ley aplicable',
         p: [
           'Estos términos se rigen por la legislación española. Si resides en la Unión Europea, esto no afecta a los derechos de protección al consumidor que te correspondan por la normativa de tu país de residencia.',
         ],
       },
       {
-        h: '10. Contacto',
+        h: '11. Contacto',
         p: [
           'Para cualquier duda sobre estos términos: hello@kaikodo.app.',
         ],
@@ -81,7 +87,7 @@ const CONTENT = {
   },
   en: {
     title: 'Terms of service',
-    updated: 'Last updated: July 22, 2026',
+    updated: 'Last updated: September 23, 2026',
     sections: [
       {
         h: '1. Acceptance of terms',
@@ -125,25 +131,31 @@ const CONTENT = {
         ],
       },
       {
-        h: '7. Limitation of liability',
+        h: '7. Google Maps and places',
+        p: [
+          'Kaikōdo includes Google Maps features and content (maps, place search, and place cards with ratings, photos, and opening hours). Your use of these Google Maps features and content is subject to the then-current Google Maps/Google Earth Additional Terms of Service (https://maps.google.com/help/terms_maps/) and the Google Privacy Policy (https://policies.google.com/privacy).',
+        ],
+      },
+      {
+        h: '8. Limitation of liability',
         p: [
           'To the extent permitted by law, Kaikōdo is provided without warranties of any kind. We are not liable for indirect losses, data loss, or the consequences of travel decisions made using the app.',
         ],
       },
       {
-        h: '8. Changes to these terms',
+        h: '9. Changes to these terms',
         p: [
           'We may update these terms. If the change is significant, we will notify you within the app and, where applicable, ask you to accept them again.',
         ],
       },
       {
-        h: '9. Governing law',
+        h: '10. Governing law',
         p: [
           'These terms are governed by Spanish law. If you live in the European Union, this does not affect any consumer-protection rights you have under the law of your country of residence.',
         ],
       },
       {
-        h: '10. Contact',
+        h: '11. Contact',
         p: [
           'For any questions about these terms: hello@kaikodo.app.',
         ],

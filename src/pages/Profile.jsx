@@ -491,7 +491,7 @@ export default function Profile() {
           // José (23 sep 2026): el rating ya no se guarda (términos EEA de
           // Google). Se guarda solo el place id; la ficha de Places UI Kit
           // enseña las estrellas en vivo dentro del viaje.
-          ...(s.google_place_id ? { osm_id: s.google_place_id, place_refreshed_at: s.place_refreshed_at || null } : {}),
+          ...(s.google_place_id ? { osm_id: s.google_place_id, place_refreshed_at: s.place_refreshed_at || null, title_is_own: !!s.title_is_own } : {}),
         });
       }
     },
@@ -601,9 +601,13 @@ export default function Profile() {
       const details = await fetchPlaceDetails(place._placeId);
       await base44.entities.SavedSpot.create({
         user_id: user.id,
-        title: details?.title || place.title,
+        // José (23 sep 2026): nombre = lo que escribió el usuario (contenido
+        // suyo); el oficial lo enseña la ficha de Google en vivo. Sin
+        // dirección de Google guardada (términos EEA).
+        title: searchQuery.trim() || place.title,
+        title_is_own: true,
         type: details?.type || place.type || 'custom',
-        address: details?.address || '',
+        address: '',
         city_name: details?.city_name || (place.subtitle || '').split(',')[0]?.trim() || '',
         country: normalizeCountry(details?.country || ''),
         lat: details?.lat || null,

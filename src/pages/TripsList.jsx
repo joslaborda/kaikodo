@@ -175,7 +175,10 @@ export default function TripsList() {
           // ese caso, no revienta nada.
           lat: stopCoords[i]?.lat,
           lng: stopCoords[i]?.lng,
-          photo_ref: stopCoords[i]?.photoRef,
+          // Place id (lo único de Google que se guarda sin límite) para
+          // refrescar las coordenadas antes de 30 días (refreshPlaceCoordinates).
+          place_id: stopCoords[i]?.placeId,
+          place_refreshed_at: stopCoords[i]?.lat != null ? new Date().toISOString() : undefined,
           order: i,
           start_date: dates.start_date, end_date: dates.end_date,
           trip_members: trip.members || [],

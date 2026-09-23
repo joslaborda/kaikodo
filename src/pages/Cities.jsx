@@ -40,6 +40,7 @@ import { isDocForUser, isDocInMyRoute, otherHoldersLabel } from '@/lib/docHolder
 import { useTranslation } from 'react-i18next';
 
 import { useTripDocs, invalidateTripDocs } from '@/hooks/useTripDocs';
+import GooglePlaceCard, { googlePlaceIdOf } from '@/components/spots/GooglePlaceCard';
 // ── Constants ─────────────────────────────────────────────────────────────────
 const DOC_ICON_MAP = {
   flight: PlaneIcon, hotel: Hotel, train: Train,
@@ -692,7 +693,14 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
               : (() => { const SpI = SPOT_ICONS[item.type] || CirclePlus; return <SpI size={14} className={SPOT_COLORS[item.type]?.split(' ')[1] || 'text-muted-foreground'} />; })()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{item._title}</p>
+            {/* José (23 sep 2026): un spot de Google enseña su ficha (nombre
+                oficial + estrellas) con conexión; sin conexión, el nombre
+                propio guardado. Términos EEA de Google Maps Platform. */}
+            <GooglePlaceCard
+              placeId={item._kind === 'spot' ? googlePlaceIdOf(item) : null}
+              variant="lean" interactive={false}
+              fallback={<p className="text-sm font-medium text-foreground truncate">{item._title}</p>}
+            />
             {item._sub && <p className="text-xs text-muted-foreground mt-0.5 truncate">{item._sub}</p>}
           </div>
         </button>

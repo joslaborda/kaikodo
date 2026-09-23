@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 const CONTENT = {
   es: {
     title: 'Política de privacidad',
-    updated: 'Última actualización: 22 de julio de 2026',
+    updated: 'Última actualización: 23 de septiembre de 2026',
     sections: [
       {
         h: '1. Responsable del tratamiento',
@@ -41,6 +41,7 @@ const CONTENT = {
         p: [
           'Con los demás miembros de un viaje al que perteneces: ven tu nombre, foto, y el contenido que compartes con ese viaje (documentos, gastos, mensajes, spots).',
           'Con proveedores técnicos que usamos para operar el servicio: almacenamiento de la aplicación y archivos, mapas, y un servicio de traducción automática si usas el traductor. No vendemos tus datos a terceros ni los usamos con fines publicitarios.',
+          'Mapas y lugares: usamos Google Maps Platform (Google). Cuando ves un mapa, buscas un sitio o abres su ficha, tu dispositivo se conecta con Google, que recibe datos técnicos como tu dirección IP, lo que buscas y la zona del mapa que ves, y los trata según la Política de Privacidad de Google (https://policies.google.com/privacy). De los lugares de Google solo guardamos su identificador y, durante un máximo de 30 días, sus coordenadas; el nombre, la valoración, las fotos y el horario se muestran directamente desde Google.',
         ],
       },
       {
@@ -82,7 +83,7 @@ const CONTENT = {
   },
   en: {
     title: 'Privacy policy',
-    updated: 'Last updated: July 22, 2026',
+    updated: 'Last updated: September 23, 2026',
     sections: [
       {
         h: '1. Data controller',
@@ -109,6 +110,7 @@ const CONTENT = {
         p: [
           'With other members of a trip you belong to: they see your name, photo, and the content you share with that trip (documents, expenses, messages, spots).',
           'With technical providers we use to run the service: app and file storage, maps, and an automatic translation service if you use the translator. We do not sell your data to third parties or use it for advertising.',
+          'Maps and places: we use Google Maps Platform (Google). When you view a map, search for a place, or open its card, your device connects to Google, which receives technical data such as your IP address, what you search for, and the map area you view, and processes it under the Google Privacy Policy (https://policies.google.com/privacy). From Google places we only store their identifier and, for up to 30 days, their coordinates; the name, rating, photos, and opening hours are shown directly from Google.',
         ],
       },
       {
