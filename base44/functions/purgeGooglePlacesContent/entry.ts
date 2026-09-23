@@ -14,6 +14,11 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  *    (places.googleapis.com, que además llevaba la API key dentro).
  *    Las imágenes subidas por el usuario no se tocan.
  *
+ * Además RECUPERA el place id de los spots importados desde Guardados antes
+ * del 23 sep (esa importación no lo copiaba): busca el SavedSpot del mismo
+ * usuario con el mismo nombre y copia su google_place_id a Spot.osm_id. Sin
+ * esto esos spots no podrían enseñar nunca la ficha de Google (ni estrellas).
+ *
  * Solo admin. Lote de 100 por llamada: invocar repetidamente hasta que
  * `remaining` sea 0. Idempotente (lo ya limpio no vuelve a contar).
  */
@@ -22,11 +27,21 @@ const SPOT_FIELDS = [
   "rating", "user_rating_count", "photo_url", "opening_hours_json",
   "phone", "website", "price_level",
 ];
+const isGooglePlaceId = (id: unknown) => {
+  const s = (id ?? "").toString().trim();
+  return s.length > 10 && !/^\d+$/.test(s);
+};
+const normTitle = (s: unknown) =>
+  (s ?? "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 const isGooglePhoto = (url: unknown) =>
   typeof url === "string" && url.includes("places.googleapis.com");
 
-function spotPatch(s: Record<string, unknown>) {
-  const patch: Record<string, null> = {};
+function spotPatch(s: Record<string, unknown>, placeIdFor: (s: Record<string, unknown>) => string | null) {
+  const patch: Record<string, string | null> = {};
+  if (!isGooglePlaceId(s.osm_id) && s.source === "saved_import") {
+    const pid = placeIdFor(s);
+    if (pid) patch.osm_id = pid;
+  }
   for (const f of SPOT_FIELDS) {
     if (s[f] !== undefined && s[f] !== null && s[f] !== "") patch[f] = null;
   }
@@ -46,8 +61,19 @@ Deno.serve(async (req) => {
     const spots = await base44.asServiceRole.entities.Spot.filter({}, "-created_date", 10000);
     const savedSpots = await base44.asServiceRole.entities.SavedSpot.filter({}, "-created_date", 10000);
 
+    // user_id -> (nombre normalizado -> google_place_id) de sus Guardados
+    const savedIndex = new Map<string, Map<string, string>>();
+    for (const ss of (savedSpots || []) as Record<string, unknown>[]) {
+      if (!isGooglePlaceId(ss.google_place_id) || !ss.user_id) continue;
+      const uid = String(ss.user_id);
+      if (!savedIndex.has(uid)) savedIndex.set(uid, new Map());
+      savedIndex.get(uid)!.set(normTitle(ss.title), String(ss.google_place_id).trim());
+    }
+    const placeIdFor = (s: Record<string, unknown>) =>
+      savedIndex.get(String(s.created_by_user_id ?? ""))?.get(normTitle(s.title)) ?? null;
+
     const spotWork = (spots || [])
-      .map((s: Record<string, unknown>) => ({ id: s.id as string, patch: spotPatch(s) }))
+      .map((s: Record<string, unknown>) => ({ id: s.id as string, patch: spotPatch(s, placeIdFor) }))
       .filter((w) => Object.keys(w.patch).length > 0);
     const savedWork = (savedSpots || [])
       .filter((s: Record<string, unknown>) => isGooglePhoto(s.image_url))
