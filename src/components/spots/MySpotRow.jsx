@@ -35,27 +35,33 @@ function MySpotRow({ spot, onTap, onAssignDay }) {
     </div>
   );
 
+  // "Asignar día": botón visible en el estilo de la app. NO abre la ficha del
+  // spot (cada ficha de Google que se carga se cobra): abre directamente el
+  // selector de día y hora.
+  const dayControl = spot.visited ? (
+    <span className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-medium">{t('spots.card.visited')}</span>
+  ) : isStay ? (
+    <span className="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-medium">{t('spots.stayBadge')}</span>
+  ) : (
+    <button type="button" onClick={() => (onAssignDay ? onAssignDay(spot) : onTap(spot))}
+      className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-card border border-primary rounded-full px-3 py-1.5 hover:bg-orange-50 transition-colors">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      {hasDate ? spot.assigned_date : t('spots.assignDayBtn')}
+    </button>
+  );
+
   return (
-    <div className="bg-card border-b border-border last:border-0">
-      {/* Main row — clickable to open sheet */}
-      {/* José (23 sep 2026): la ficha de Google ocupa TODO el ancho de la fila.
-          En móvil, con "Sin día" y el lápiz a su derecha, se quedaba estrecha
-          y Google oculta la foto en fichas estrechas; el estado y el lápiz
-          bajan a la línea de abajo, junto a categoría · ciudad y Cómo llegar. */}
-      <button onClick={e => { if (isGoogleCardControl(e)) return; onTap(spot); }} className="w-full block px-4 pt-3 pb-1 text-left hover:bg-secondary/20 transition-colors">
-        {/* Horizontal: foto a la izquierda y texto al lado (José, 23 sep 2026).
-            Si el ancho no le llega, es Google quien decide quitar la foto. */}
+    <div className="relative bg-card border-b border-border last:border-0">
+      {/* Fila pulsable: abre el detalle del spot. */}
+      <button onClick={e => { if (isGoogleCardControl(e)) return; onTap(spot); }}
+        className={`w-full block px-4 pt-3 text-left hover:bg-secondary/20 transition-colors ${showOwnMeta ? 'pb-1' : 'pb-3'}`}>
         <GooglePlaceCard placeId={placeId} variant="compact" orientation="horizontal" fallback={ownHeader} />
       </button>
 
-      {/* José (23 sep 2026): "Asignar día" es un botón visible en el estilo de
-          la app (borde naranja, fondo blanco) y NO abre la ficha del spot --
-          abre directamente el selector de día (cada ficha de Google que se
-          carga se cobra). Debajo, categoría · ciudad y Cómo llegar. */}
-      {/* José (23 sep 2026), opción X: botón centrado debajo de la ficha.
-          Categoría · ciudad y Cómo llegar solo sin ficha de Google. */}
-      {showOwnMeta && (
-        <div className="flex items-center gap-3 px-4 pt-1">
+      {showOwnMeta ? (
+        // Sin ficha de Google (spot manual o sin conexión): categoría · ciudad,
+        // Cómo llegar (abre los mapas del móvil, útil offline) y el botón.
+        <div className="flex items-center gap-3 px-4 pb-3 pt-1">
           <span className="flex-1 min-w-0 text-xs text-muted-foreground truncate">
             {t(tc.tk)}
             {spot.city_name ? ' · ' + spot.city_name : ''}
@@ -66,21 +72,15 @@ function MySpotRow({ spot, onTap, onAssignDay }) {
               <Navigation className="w-3.5 h-3.5" />{t('spots.sheet.directions')}
             </a>
           )}
+          {dayControl}
         </div>
+      ) : (
+        // José (23 sep 2026): con ficha de Google, el botón va en el hueco de
+        // abajo a la derecha de la ficha, a la altura de "Google Maps" (esa
+        // línea solo tiene la atribución a la izquierda, así que no tapa nada
+        // de Google). La card queda con la altura de la ficha.
+        <div className="absolute right-4 bottom-4">{dayControl}</div>
       )}
-      <div className="flex justify-center px-4 pb-3 pt-2">
-        {spot.visited ? (
-          <span className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-medium">{t('spots.card.visited')}</span>
-        ) : isStay ? (
-          <span className="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-medium">{t('spots.stayBadge')}</span>
-        ) : (
-          <button type="button" onClick={() => (onAssignDay ? onAssignDay(spot) : onTap(spot))}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-card border border-primary rounded-full px-3 py-1.5 hover:bg-orange-50 transition-colors">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            {hasDate ? spot.assigned_date : t('spots.assignDayBtn')}
-          </button>
-        )}
-      </div>
     </div>
   );
 }
