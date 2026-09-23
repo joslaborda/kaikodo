@@ -1724,9 +1724,9 @@ export default function Restaurants() {
                         const isDuplicate = spots.some(s => s.osm_id && s.osm_id === p._placeId);
                         return (
                           // José (23 sep 2026): mismo diseño que la lista de spots
-                          // (opción X): ficha de Google a todo el ancho, foto a la
-                          // izquierda, y el botón centrado debajo.
-                          <div key={p.id} className={`px-3 pt-2.5 pb-3 ${i < placeResults.length - 1 ? 'border-b border-border' : ''}`}>
+                          // ficha de Google a todo el ancho y el botón en su hueco
+                          // de abajo a la derecha.
+                          <div key={p.id} className={`relative px-3 pt-2.5 pb-3 ${i < placeResults.length - 1 ? 'border-b border-border' : ''}`}>
                             <div className="min-w-0">
                               <GooglePlaceCard placeId={p._placeId} variant="compact" fallback={(
                                 <div className="flex items-center gap-3 min-w-0">
@@ -1740,7 +1740,9 @@ export default function Restaurants() {
                                 </div>
                               )} />
                             </div>
-                            <div className="flex justify-center mt-2">
+                            {/* Mismo sitio que "Asignar día" en Mis Spots: hueco de abajo a
+                                la derecha de la ficha, a la altura de "Google Maps". */}
+                            <div className="absolute right-3 bottom-4">
                             {isDuplicate ? <span className="text-xs text-muted-foreground px-3 py-1.5">{t('spots.savedBadge')}</span>
                               : <button onClick={() => savePlaceResult(p)} disabled={savingId === p.id}
                                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-card border border-primary rounded-full px-3 py-1.5 hover:bg-orange-50 transition-colors disabled:opacity-50">
