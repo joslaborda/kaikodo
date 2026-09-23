@@ -4,8 +4,8 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  * refreshPlaceCoordinates — cumplimiento de Google Maps Platform (23 sep 2026).
  *
  * Las coordenadas (lat/lng) que vienen de Places API solo se pueden guardar
- * 30 días seguidos. Esta función vuelve a pedirlas a Google para cada Spot y
- * SavedSpot con place id cuyo `place_refreshed_at` falta o tiene más de 25
+ * 30 días seguidos. Esta función vuelve a pedirlas a Google para cada Spot,
+ * SavedSpot, Ticket (ubicación de reservas) y City con place id cuyo `place_refreshed_at` falta o tiene más de 25
  * días, y guarda las nuevas con la fecha de hoy. Si Google ya no conoce el
  * sitio (404), se borran las coordenadas: no se pueden seguir guardando.
  *
@@ -58,7 +58,40 @@ Deno.serve(async (req) => {
     const spots = await base44.asServiceRole.entities.Spot.filter({}, "-created_date", 10000);
     const saved = await base44.asServiceRole.entities.SavedSpot.filter({}, "-created_date", 10000);
     type Row = Record<string, unknown>;
-    const work: { entity: "Spot" | "SavedSpot"; row: Row; placeId: string }[] = [];
+    const resolveCityPlaceId = async (name: string, country: string) => {
+      const res = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey },
+        body: JSON.stringify({ input: [name, country].filter(Boolean).join(", "), includedPrimaryTypes: ["locality"] }),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) return null;
+      const d = await res.json();
+      return d?.suggestions?.[0]?.placePrediction?.placeId || null;
+    };
+
+    // Ciudades antiguas con coordenadas de Google pero sin place id: se busca
+    // su place id (una vez) para poder refrescarlas; si no aparece, las
+    // coordenadas no se pueden conservar y se borran.
+    const cities = await base44.asServiceRole.entities.City.filter({}, "-created_date", 10000);
+    let citiesLinked = 0;
+    for (const c of (cities || []) as Record<string, unknown>[]) {
+      if (isGooglePlaceId(c.place_id) || c.lat == null || !c.name) continue;
+      try {
+        const pid = await resolveCityPlaceId(String(c.name), String(c.country || ""));
+        if (pid) { c.place_id = pid; c.place_refreshed_at = null; citiesLinked++; }
+        else await base44.asServiceRole.entities.City.update(c.id as string, { lat: null, lng: null });
+      } catch { /* siguiente */ }
+    }
+
+    const tickets = await base44.asServiceRole.entities.Ticket.filter({}, "-created_date", 10000);
+    const work: { entity: "Spot" | "SavedSpot" | "Ticket" | "City"; row: Row; placeId: string }[] = [];
+    for (const c of (cities || []) as Row[]) {
+      if (isGooglePlaceId(c.place_id) && isStale(c.place_refreshed_at)) work.push({ entity: "City", row: c, placeId: String(c.place_id).trim() });
+    }
+    for (const s of (tickets || []) as Row[]) {
+      if (isGooglePlaceId(s.location_place_id) && isStale(s.place_refreshed_at)) work.push({ entity: "Ticket", row: s, placeId: String(s.location_place_id).trim() });
+    }
     for (const s of (spots || []) as Row[]) {
       if (isGooglePlaceId(s.osm_id) && isStale(s.place_refreshed_at)) work.push({ entity: "Spot", row: s, placeId: String(s.osm_id).trim() });
     }
@@ -75,15 +108,19 @@ Deno.serve(async (req) => {
         if (!cache.has(w.placeId)) cache.set(w.placeId, await fetchLocation(w.placeId));
         const r = cache.get(w.placeId);
         if (!r) { failed++; continue; }
+        const latKey = w.entity === "Ticket" ? "location_lat" : "lat";
+        const lngKey = w.entity === "Ticket" ? "location_lng" : "lng";
         const patch = "gone" in r
-          ? { lat: null, lng: null, place_refreshed_at: now }
-          : { lat: r.lat, lng: r.lng, place_refreshed_at: now };
+          ? { [latKey]: null, [lngKey]: null, place_refreshed_at: now }
+          : { [latKey]: r.lat, [lngKey]: r.lng, place_refreshed_at: now };
+        // Ciudad recién enlazada arriba: guardar también su place id.
+        if (w.entity === "City") (patch as Record<string, unknown>).place_id = w.placeId;
         await base44.asServiceRole.entities[w.entity].update(w.row.id as string, patch);
         if ("gone" in r) cleared++; else refreshed++;
       } catch { failed++; }
     }
     const remaining = Math.max(0, work.length - Math.min(work.length, MAX_PER_RUN));
-    return Response.json({ refreshed, cleared, failed, remaining });
+    return Response.json({ refreshed, cleared, failed, citiesLinked, remaining });
   } catch (error) {
     return Response.json({ error: (error as Error).message }, { status: 500 });
   }
