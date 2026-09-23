@@ -16,6 +16,10 @@
     },
     "expires_at": {
       "type": "string"
+    },
+    "ip_hash": {
+      "type": "string",
+      "description": "Hash (no la IP en claro) de quien pidió el reto -- límite de retos pendientes por IP"
     }
   },
   "required": [

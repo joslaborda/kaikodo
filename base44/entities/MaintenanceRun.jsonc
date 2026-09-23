@@ -1,0 +1,25 @@
+{
+  "name": "MaintenanceRun",
+  "type": "object",
+  // José (24 sep 2026): última ejecución de tareas de mantenimiento del
+  // backend (p. ej. refreshPlaceCoordinates), para limitar cuántas veces se
+  // pueden lanzar sin sesión. Solo el backend (service role) la usa.
+  "properties": {
+    "job": {
+      "type": "string",
+      "description": "Nombre de la tarea (p. ej. refreshPlaceCoordinates)"
+    },
+    "last_run_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Cuándo empezó la última ejecución"
+    }
+  },
+  "required": ["job", "last_run_at"],
+  "rls": {
+    "create": false,
+    "read": false,
+    "update": false,
+    "delete": false
+  }
+}
