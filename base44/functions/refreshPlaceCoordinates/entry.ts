@@ -9,14 +9,26 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  * días, y guarda las nuevas con la fecha de hoy. Si Google ya no conoce el
  * sitio (404), se borran las coordenadas: no se pueden seguir guardando.
  *
- * Se ejecuta a diario por la automatización de function.jsonc. También la
- * puede lanzar un admin a mano (Test Function). Sin sesión solo actúa si
- * la llama la automatización; no hay nada que abusar: si no hay nada
- * caducado, no hace ninguna llamada a Google.
+ * Se ejecuta a diario por el workflow de Base44 (base44/workflows/, sin
+ * sesión). También la puede lanzar un admin con sesión (Test Function).
+ *
+ * Seguridad (escáner, 24 sep 2026): antes bastaba con mandar
+ * `{"args":{"trigger":"daily"}}` para ejecutarla sin sesión, en bucle, y
+ * gastar cuota de Google. Un secreto compartido no sirve aquí: el workflow
+ * vive en el repo público y sus argumentos serían visibles, y Base44 no
+ * documenta ninguna forma de reconocer que la llama el workflow. Así que se
+ * quita el INCENTIVO: sin sesión de admin, la función hace su trabajo como
+ * mucho UNA vez cada 20 horas (se apunta en la entidad MaintenanceRun, que
+ * solo el backend puede leer/escribir). Cualquier otra llamada anónima
+ * dentro de esa ventana sale al instante sin llamar a Google ni escribir
+ * nada. El peor caso de abuso es, por tanto, la misma única ejecución diaria
+ * que ya hace el workflow.
  *
  * Coste: 1 Place Details por sitio y ~mes, solo con el campo `location`.
  */
 const STALE_DAYS = 25;
+const JOB_NAME = "refreshPlaceCoordinates";
+const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000;
 const MAX_PER_RUN = 300;
 
 const isGooglePlaceId = (id: unknown) => {
@@ -34,10 +46,22 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
     const user = await base44.auth.me().catch(() => null);
-    const fromAutomation = body?.args?.trigger === "daily";
-    if (!fromAutomation) {
-      if (!user?.email) return Response.json({ error: "No autenticado" }, { status: 401 });
-      if (user.role !== "admin") return Response.json({ error: "No autorizado" }, { status: 403 });
+    void body;
+    const isAdmin = !!user?.email && user.role === "admin";
+    if (user?.email && !isAdmin) return Response.json({ error: "No autorizado" }, { status: 403 });
+    if (!isAdmin) {
+      // Anónimo (el workflow diario, o cualquiera): como mucho una vez cada 20 h.
+      const service = base44.asServiceRole;
+      const runs = await service.entities.MaintenanceRun.filter({ job: JOB_NAME });
+      const last = runs?.[0];
+      const lastMs = last?.last_run_at ? Date.parse(String(last.last_run_at)) : NaN;
+      if (Number.isFinite(lastMs) && Date.now() - lastMs < MIN_INTERVAL_MS) {
+        return Response.json({ skipped: true, reason: "ya se ejecutó en las últimas 20 horas" });
+      }
+      // Se apunta ANTES de trabajar: llamadas seguidas ya salen por arriba.
+      const stamp = { job: JOB_NAME, last_run_at: new Date().toISOString() };
+      if (last?.id) await service.entities.MaintenanceRun.update(last.id, stamp);
+      else await service.entities.MaintenanceRun.create(stamp);
     }
 
     const apiKey = Deno.env.get("VITE_GOOGLE_MAPS_API_KEY") || "";

@@ -1,18 +1,6 @@
 {
   "name": "refreshPlaceCoordinates",
-  "entry": "entry.ts",
-  "automations": [
-    {
-      "type": "scheduled",
-      "name": "daily_refresh_place_coordinates",
-      "description": "Refresca a diario las coordenadas de Google Places con más de 25 días (los términos de Google solo permiten guardarlas 30).",
-      "function_args": { "trigger": "daily" },
-      "is_active": true,
-      "schedule_mode": "recurring",
-      "schedule_type": "simple",
-      "repeat_unit": "days",
-      "repeat_interval": 1,
-      "start_time": "03:00"
-    }
-  ]
+  "entry": "entry.ts"
+  // La ejecución diaria la hace el workflow base44/workflows/Daily Refresh
+  // Place Coordinates.jsonc.
 }
