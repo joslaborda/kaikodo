@@ -1,0 +1,47 @@
+{
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "daily_refresh_place_coordinates",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "refresh": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "refreshPlaceCoordinates",
+            "args": {
+              "trigger": "daily"
+            }
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Refrescar coordenadas de lugares",
+            "description": "Llama a refreshPlaceCoordinates con trigger=daily"
+          }
+        }
+      }
+    ]
+  },
+  "name": "Daily Refresh Place Coordinates",
+  "description": "Ejecuta refreshPlaceCoordinates todos los d\u00edas a las 03:00 UTC para refrescar lat/lng de los spots desde Google Places.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 3 * * *",
+      "one_time_date": null,
+      "timezone": "UTC",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  }
+}
