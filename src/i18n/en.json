@@ -907,7 +907,8 @@
       "body": "You can upload the booking for {{name}} now and it will be linked to this accommodation. Optional.",
       "upload": "Upload booking",
       "skip": "Not now"
-    }
+    },
+    "assignDayBtn": "Add to a day"
   },
   "documents": {
     "title": "Documents",

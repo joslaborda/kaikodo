@@ -907,7 +907,8 @@
       "body": "Puedes subir la reserva de {{name}} ahora y quedará enlazada a este alojamiento. Es opcional.",
       "upload": "Subir reserva",
       "skip": "Ahora no"
-    }
+    },
+    "assignDayBtn": "Asignar día"
   },
   "documents": {
     "title": "Documentos",
