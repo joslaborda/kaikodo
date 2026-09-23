@@ -1710,7 +1710,7 @@ export default function Restaurants() {
                         return (
                           <div key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${i < placeResults.length - 1 ? 'border-b border-border' : ''}`}>
                             <div className="flex-1 min-w-0">
-                              <GooglePlaceCard placeId={p._placeId} variant="compact" interactive={false} fallback={(
+                              <GooglePlaceCard placeId={p._placeId} variant="compact" fallback={(
                                 <div className="flex items-center gap-3 min-w-0">
                                   <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
                                     {(() => { const I = {food:Utensils,sight:Landmark,activity:Ticket,shopping:ShoppingBag,nightlife:Moon,bar:Moon}[p.type] || Compass; return <I size={14} className="text-muted-foreground" />; })()}
