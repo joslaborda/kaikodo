@@ -491,7 +491,7 @@ export default function Profile() {
           // José (23 sep 2026): el rating ya no se guarda (términos EEA de
           // Google). Se guarda solo el place id; la ficha de Places UI Kit
           // enseña las estrellas en vivo dentro del viaje.
-          ...(s.google_place_id ? { osm_id: s.google_place_id } : {}),
+          ...(s.google_place_id ? { osm_id: s.google_place_id, place_refreshed_at: s.place_refreshed_at || null } : {}),
         });
       }
     },
@@ -611,6 +611,8 @@ export default function Profile() {
         // José (23 sep 2026): ya no se guarda la foto de Google (y con ella
         // tu API key dentro de la URL) -- términos EEA de Google Maps Platform.
         google_place_id: place._placeId || null,
+        // Coordenadas recién pedidas a Google: válidas 30 días (ver refreshPlaceCoordinates).
+        ...(details?.lat != null ? { place_refreshed_at: new Date().toISOString() } : {}),
       });
     },
     onSettled: () => setSavingPlaceId(null),

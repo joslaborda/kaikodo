@@ -1246,6 +1246,8 @@ export default function Restaurants() {
           // de una implementación anterior y no se lee en ningún otro sitio
           // del código (comprobado), así que renombrarlo es seguro.
           osm_id: resolved.id || null, source: 'google_places',
+          // Coordenadas recién pedidas a Google: válidas 30 días (ver refreshPlaceCoordinates).
+          ...(details ? { place_refreshed_at: new Date().toISOString() } : {}),
           visibility: 'trip_members', visited: false,
           created_by: null, created_by_user_id: null,
           saved_by: [user?.email].filter(Boolean),
@@ -1343,7 +1345,7 @@ export default function Restaurants() {
         // José (23 sep 2026): el rating ya no se guarda (términos EEA de
         // Google): basta con el place id, y la ficha de UI Kit enseña las
         // estrellas en vivo dentro del viaje.
-        ...(savedSpot.google_place_id ? { osm_id: savedSpot.google_place_id } : {}),
+        ...(savedSpot.google_place_id ? { osm_id: savedSpot.google_place_id, place_refreshed_at: savedSpot.place_refreshed_at || null } : {}),
       });
       setLastSavedId(created?.id);
       showToastFor({ title: savedSpot.title }, city.name);
@@ -1391,7 +1393,7 @@ export default function Restaurants() {
         // Tag as saved (not created) by current user
         saved_by: [user?.email].filter(Boolean),
         // Place id de Google (si lo tiene) para la ficha de UI Kit.
-        ...(spot.osm_id ? { osm_id: spot.osm_id } : {}),
+        ...(spot.osm_id ? { osm_id: spot.osm_id, place_refreshed_at: spot.place_refreshed_at || null } : {}),
       });
       setLastSavedId(created?.id);
       showToastFor({ title: spot.title }, selectedCity || city);
