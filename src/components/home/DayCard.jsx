@@ -22,7 +22,6 @@ import { orderDayItems, findTimeClash as sharedFindTimeClash } from '@/lib/dayTi
 import { isDocForUser, otherHoldersLabel, holdersSummary } from '@/lib/docHolders';
 
 import { invalidateTripDocs } from '@/hooks/useTripDocs';
-import GooglePlaceCard, { googlePlaceIdOf, isGoogleCardControl } from '@/components/spots/GooglePlaceCard';
 export default function DayCard({ label, city, docs, spots, itineraryDays, tripId, defaultOpen, onReorderSpots, dateStr, onUpdateItemTime, hotelSpot, hideFeatured = false, trip, currentUserEmail, profiles }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -467,7 +466,6 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
 
               return (
                 <button key={item.id || idx} onClick={async (e) => {
-                    if (isGoogleCardControl(e)) return; // botón/foto de la ficha de Google
                     if (isDoc && (item.file_url || item.file_uri)) {
                       const url = await resolveDocViewUrl(item);
                       if (url) { setViewFile(url); return; }
@@ -509,13 +507,9 @@ export default function DayCard({ label, city, docs, spots, itineraryDays, tripI
                       : SpotIcon ? <SpotIcon size={16} /> : null}
                   </div>
                   <div className="flex-1 min-w-0">
-                    {/* José (23 sep 2026): spot de Google -> su ficha (nombre oficial
-                        + estrellas) con conexión; sin conexión, el nombre propio. */}
-                    <GooglePlaceCard
-                      placeId={item._kind === 'spot' ? googlePlaceIdOf(item) : null}
-                      variant="lean"
-                      fallback={<p className="text-sm font-medium text-foreground truncate">{item.title || item.name || t('home.dayCard.noTitle')}</p>}
-                    />
+                    {/* José (23 sep 2026): sin ficha de Google en Hoy/Mañana (cada
+                        carga se cobra y el spot ya está asignado); sale al abrir el detalle. */}
+                    <p className="text-sm font-medium text-foreground truncate">{item.title || item.name || t('home.dayCard.noTitle')}</p>
                     {!isDoc && !isNote && item.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.notes}</p>}
                     {isNote && <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.content}</p>}
                     {isDoc && !hasTime && <p className="text-xs text-muted-foreground mt-0.5">{(item.category || item.type) === 'hotel' ? t('home.dayCard.checkIn') : t('home.dayCard.noTime')}</p>}
