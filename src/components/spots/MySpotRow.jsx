@@ -1,17 +1,15 @@
 import { Pencil, Navigation } from 'lucide-react';
 import GooglePlaceCard, { googlePlaceIdOf } from './GooglePlaceCard';
 import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
-import useLikeSimple from './useLikeSimple';
 import { useTranslation } from 'react-i18next';
 
 // Fila de comentarios eliminada (14 sep 2026) -- ver comentario en
 // SpotCard.jsx sobre por qué se quitó la función de comentarios de spots.
 
 export default
-function MySpotRow({ spot, onTap, userId }) {
+function MySpotRow({ spot, onTap }) {
   const { t } = useTranslation();
   const tc = TYPE_CONFIG[spot.type] || TYPE_CONFIG.custom;
-  const { isLiked, count: likeCount, toggle: toggleLike } = useLikeSimple(spot.id, userId);
 
   // Un alojamiento no se asigna a un día (src/lib/cityStay.js): nunca "Sin día".
   const isStay = spot.type === 'hotel';
@@ -62,15 +60,8 @@ function MySpotRow({ spot, onTap, userId }) {
         </div>
       </button>
 
-      {/* Like row */}
+      {/* Cómo llegar (el Like se quitó el 23 sep 2026: no tenía uso en un viaje) */}
       <div className="flex items-center gap-4 px-4 pb-3">
-        <button onClick={e => { e.stopPropagation(); toggleLike(); }} className="flex items-center gap-1.5 text-xs transition-colors p-1 -m-1 rounded-lg">
-          {isLiked
-            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="hsl(var(--primary))" stroke="hsl(var(--primary))" strokeWidth="0"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-          }
-          <span className={isLiked ? 'text-primary' : 'text-muted-foreground'}>{likeCount > 0 ? likeCount : t('spots.sheet.like')}</span>
-        </button>
         {(spot.address || (spot.lat && spot.lng)) && (
           <a href={getMapsUrl(spot)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
             className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors p-1 -m-1 rounded-lg ml-auto">

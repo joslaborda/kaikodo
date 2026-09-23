@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
 import { X, MapPin, Navigation } from 'lucide-react';
@@ -7,7 +7,6 @@ import GooglePlaceCard, { googlePlaceIdOf } from './GooglePlaceCard';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
-import useLikeSimple from './useLikeSimple';
 import { useTranslation } from 'react-i18next';
 import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
 import { normalizeEmail } from '@/lib/utils';
@@ -38,7 +37,6 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
   // autor no tiene a nadie a quien pertenecerle más que al viaje: si el
   // usuario actual puede verlo (es miembro del viaje), puede borrarlo.
   const canDelete = normalizeEmail(spot?.created_by) === normalizeEmail(currentUserEmail) || !spot?.created_by;
-  const { isLiked, count: likeCount, toggle: toggleLike } = useLikeSimple(spot?.id, userId, spot?.created_by_user_id);
 
   // Build trip day options from cities — must be before early return.
   //
@@ -147,7 +145,9 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
           {/* Dirección + Cómo llegar — antes este sheet no tenía ningún enlace
               a Maps, a diferencia de SpotCard.jsx (misma info, otra vista) y
               SpotDetailModal.jsx (Home/Ruta). Mismo getMapsUrl que ya usan. */}
-          {(spot.address || (spot.lat && spot.lng)) && (
+          {/* Con ficha de Google no hace falta: la ficha ya trae dirección y
+              el botón de abrir en Google Maps (José, 23 sep 2026). */}
+          {!googlePlaceIdOf(spot) && (spot.address || (spot.lat && spot.lng)) && (
             <div className="flex items-center justify-between gap-3">
               {spot.address ? (
                 <p className="text-xs text-muted-foreground flex items-start gap-1.5 flex-1 min-w-0">
@@ -162,13 +162,6 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
             </div>
           )}
 
-          {/* José (23 sep 2026): ficha de Google vía Places UI Kit -- rating,
-              fotos, horario, teléfono y web los pinta Google en vivo, nunca
-              se guardan (términos EEA de Google Maps Platform). */}
-          {googlePlaceIdOf(spot) && (
-            <GooglePlaceCard placeId={googlePlaceIdOf(spot)} variant="full" className="rounded-xl overflow-hidden" />
-          )}
-
           {/* Notes */}
           <div>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('spots.sheet.myNote')}</p>
@@ -180,7 +173,27 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
             />
           </div>
 
-          {/* Day + Hour assignment — no aplica a un alojamiento */}
+          {/* José (23 sep 2026): ficha de Google vía Places UI Kit -- rating,
+              fotos, horario y precio los pinta Google en vivo, nunca se
+              guardan (términos EEA de Google Maps Platform). Va debajo de la
+              nota; día y hora van fijos abajo, así la ficha no los aleja. */}
+          {googlePlaceIdOf(spot) && (
+            <GooglePlaceCard placeId={googlePlaceIdOf(spot)} variant="full" className="rounded-xl overflow-hidden" />
+          )}
+
+          {/* Delete — solo quien lo creó, y con confirmación (antes borraba al instante) */}
+          {canDelete && (
+            <button onClick={() => setShowDeleteConfirm(true)}
+              className="w-full text-xs text-red-500 hover:text-red-700 transition-colors py-2 text-center">
+              {t('spots.sheet.deleteSpot')}
+            </button>
+          )}
+        </div>
+
+        {/* José (23 sep 2026): Día/Hora fijos encima de los botones (antes
+            aquí iba el Like, que se ha quitado: no tenía uso en un viaje).
+            La ficha de Google es larga y alejaba estos controles. */}
+        <div className="flex-shrink-0 px-5 pt-3 pb-1 border-t border-border bg-card">
           {isStay ? (
             <p className="text-xs text-muted-foreground bg-secondary/50 rounded-xl px-3 py-2.5">{t('spots.stayInfo')}</p>
           ) : (
@@ -233,28 +246,6 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
             </div>
           </div>
           )}
-
-          {/* Delete — solo quien lo creó, y con confirmación (antes borraba al instante) */}
-          {canDelete && (
-            <button onClick={() => setShowDeleteConfirm(true)}
-              className="w-full text-xs text-red-500 hover:text-red-700 transition-colors py-2 text-center">
-              {t('spots.sheet.deleteSpot')}
-            </button>
-          )}
-        </div>
-
-        {/* Like / Comentar row */}
-        <div className="flex-shrink-0 flex border-t border-border">
-          <button
-            onClick={e => { e.stopPropagation(); toggleLike(); }}
-            className="flex-1 flex items-center justify-center gap-2 py-3 hover:bg-secondary/30 transition-colors text-sm"
-          >
-            {isLiked
-              ? <svg width="17" height="17" viewBox="0 0 24 24" fill="hsl(var(--primary))" stroke="hsl(var(--primary))" strokeWidth="0"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-              : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-            }
-            <span className={isLiked ? 'text-primary' : 'text-muted-foreground'}>{t('spots.sheet.like')}{likeCount > 0 ? ` · ${likeCount}` : ''}</span>
-          </button>
         </div>
 
         {/* Sticky footer buttons */}
