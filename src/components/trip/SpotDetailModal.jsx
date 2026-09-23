@@ -213,19 +213,13 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
 
         <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
 
-          {/* Address */}
-          {spot.address && (
+          {/* Address -- con ficha de Google no hace falta: la ficha ya trae
+              dirección y botón de abrir en Google Maps (José, 23 sep 2026). */}
+          {!googlePlaceIdOf(spot) && spot.address && (
             <div className="flex items-start gap-2 text-sm text-muted-foreground">
               <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
               <span>{spot.address}</span>
             </div>
-          )}
-
-          {/* José (23 sep 2026): ficha de Google vía Places UI Kit -- rating,
-              fotos, horario, teléfono y web los pinta Google en vivo, nunca
-              se guardan (términos EEA de Google Maps Platform). */}
-          {googlePlaceIdOf(spot) && (
-            <GooglePlaceCard placeId={googlePlaceIdOf(spot)} variant="full" className="rounded-xl overflow-hidden" />
           )}
 
           {/* Tags */}
@@ -323,6 +317,15 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
               </button>
             )}
           </div>
+
+          {/* José (23 sep 2026): ficha de Google vía Places UI Kit -- rating,
+              fotos, horario y precio los pinta Google en vivo, nunca se
+              guardan (términos EEA de Google Maps Platform). Va DEBAJO de
+              nota/día/hora (lo que el usuario viene a tocar) y en versión
+              compacta, para no empujar esos controles fuera de pantalla. */}
+          {googlePlaceIdOf(spot) && (
+            <GooglePlaceCard placeId={googlePlaceIdOf(spot)} variant="full" className="rounded-xl overflow-hidden" />
+          )}
         </div>
 
         {/* Actions */}
