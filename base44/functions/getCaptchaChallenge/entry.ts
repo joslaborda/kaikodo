@@ -25,6 +25,15 @@ function randomChallenge() {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+async function hashIp(req: Request): Promise<string | null> {
+  const raw = req.headers.get("cf-connecting-ip")
+    || req.headers.get("x-real-ip")
+    || (req.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+  if (!raw) return null;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("kaikodo-captcha:" + raw));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -56,6 +65,25 @@ Deno.serve(async (req) => {
     // abusando tiene que esperar a que caduquen los suyos.
     const MAX_PENDING_CHALLENGES = 300;
     const pending = await service.entities.CaptchaChallenge.filter({ used: false });
+
+    // Escáner (24 sep 2026): el tope global de arriba evitaba llenar la base
+    // de datos, pero un solo script podía agotarlo y dejar a todo el mundo sin
+    // poder registrarse (denegación de servicio). Ahora, además, cada IP solo
+    // puede tener unos pocos retos pendientes a la vez. La IP no se guarda en
+    // claro: solo un hash, que caduca con el reto (TTL de 2 minutos).
+    const MAX_PENDING_PER_IP = 5;
+    const ipHash = await hashIp(req);
+    if (ipHash) {
+      const nowMs = Date.now();
+      const mine = pending.filter((r: any) => r.ip_hash === ipHash && new Date(r.expires_at).getTime() >= nowMs);
+      if (mine.length >= MAX_PENDING_PER_IP) {
+        return Response.json(
+          { error: "Demasiadas solicitudes ahora mismo. Inténtalo de nuevo en un momento." },
+          { status: 429 }
+        );
+      }
+    }
+
     if (pending.length >= MAX_PENDING_CHALLENGES) {
       return Response.json(
         { error: "Demasiadas solicitudes ahora mismo. Inténtalo de nuevo en un momento." },
@@ -70,6 +98,7 @@ Deno.serve(async (req) => {
       used: false,
       created_at: new Date(now).toISOString(),
       expires_at: new Date(now + TTL_SECONDS * 1000).toISOString(),
+      ...(ipHash ? { ip_hash: ipHash } : {}),
     });
 
     return Response.json({ challenge, difficulty: DIFFICULTY_BITS, expiresInSeconds: TTL_SECONDS });
