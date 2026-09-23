@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Loader2, CheckCircle2, XCircle, Check, Languages, Plane, Hotel, Shield, Utensils, Ticket, MapPin, Palette, CloudSun } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Check, Languages, Plane, Hotel, Shield, Utensils, Ticket, MapPin, CloudSun } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { normalizeUsername, validateUsername, checkUsernameAvailability } from '@/lib/username';
 import { searchUserProfiles } from '@/lib/userProfiles';
@@ -445,22 +445,29 @@ function SlideHoy() {
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground flex-shrink-0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <span className="text-xs text-muted-foreground">{t('onboarding.s6.searchExample')}</span>
           </div>
+          {/* José (24 sep 2026): igual que el buscador real ahora -- cada
+              resultado es una ficha (nombre, estrellas, tipo, abierto) con el
+              botón naranja "Guardar" abajo a la derecha. Datos de ejemplo:
+              sin atribución de Google, porque no son datos de Google. */}
           {[
-            { Icon: Utensils, bg: 'bg-orange-50', name: 'Ramen Ichiran Shibuya', sub: t('onboarding.s6.ramenSub'), badge: null },
-            { Icon: Palette, bg: 'bg-blue-50', name: 'TeamLab Planets', sub: t('onboarding.s6.teamlabSub'), badge: t('onboarding.s6.saved') },
+            { name: 'Ramen Ichiran Shibuya', rating: '4,5', count: '8.214', sub: t('onboarding.s6.ramenSub'), open: true, saved: false },
+            { name: 'TeamLab Planets', rating: '4,7', count: '31.052', sub: t('onboarding.s6.teamlabSub'), open: true, saved: true },
           ].map((spot, i, arr) => (
-            <div key={i} className={`flex items-center gap-2 py-2 ${i < arr.length - 1 ? 'border-b border-border' : ''}`}>
-              <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${spot.bg}`}><spot.Icon className="w-3.5 h-3.5 text-muted-foreground" /></div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-foreground leading-snug truncate">{spot.name}</p>
-                <p className="text-[10px] text-muted-foreground">{spot.sub}</p>
+            <div key={i} className={`relative py-2.5 ${i < arr.length - 1 ? 'border-b border-border' : ''}`}>
+              <p className="text-xs font-semibold text-foreground leading-snug truncate pr-2">{spot.name}</p>
+              <p className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                {spot.rating} <span className="text-amber-500">★</span> <span className="text-primary">({spot.count})</span>
+              </p>
+              <p className="text-[10px] text-muted-foreground">{spot.sub}</p>
+              {spot.open && <p className="text-[10px] text-green-700">{t('onboarding.s6.open')}</p>}
+              <div className="absolute right-0 bottom-2.5">
+                {spot.saved
+                  ? <span className="text-[10px] text-muted-foreground px-2 py-1">{t('onboarding.s6.saved')}</span>
+                  : <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-card border border-primary rounded-full px-2 py-0.5">
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      {t('common.save')}
+                    </span>}
               </div>
-              {spot.badge
-                ? <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full font-semibold border border-green-200 flex-shrink-0">{spot.badge}</span>
-                : <div className="w-5 h-5 rounded-full bg-orange-50 border border-orange-200 flex items-center justify-center flex-shrink-0">
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  </div>
-              }
             </div>
           ))}
         </div>
