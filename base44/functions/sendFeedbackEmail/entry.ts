@@ -14,10 +14,10 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  * forzar el envío de avisos falsos a FEEDBACK_INBOX — molesto, pero no un
  * vector para mandar correo arbitrario a terceros con la marca de Kaikōdo.
  *
- * El registro en la entidad Feedback lo sigue creando el cliente directamente
- * (RLS ya lo permite: create solo exige coincidir con el propio usuario) —
- * esta función solo se encarga del aviso por email, que es la parte que
- * necesitaba una integración sensible.
+ * Escáner (24 sep 2026): el límite contaba registros de Feedback que creaba el
+ * CLIENTE, así que quien llamara a esta función sin crearlos nunca llegaba al
+ * límite. Ahora el registro lo crea ESTA función (con el email de la sesión,
+ * no el que mande el cliente) antes de enviar: cada aviso cuenta sí o sí.
  *
  * Límite: aunque exige sesión, una cuenta (comprometida, o simplemente un
  * script) podía llamar a esto en bucle y mandar cientos de avisos,
@@ -54,27 +54,44 @@ Deno.serve(async (req) => {
       return Response.json({ error: "Demasiados envíos seguidos, inténtalo en unos minutos" }, { status: 429 });
     }
 
-    const { feedbackType, message, userEmail, userName, appLanguage } = await req.json();
+    const { feedbackType, message, userName, appLanguage } = await req.json();
     const trimmed = String(message || "").trim();
     if (!trimmed) {
       return Response.json({ error: "El mensaje no puede estar vacío" }, { status: 400 });
     }
 
-    const typeLabel = TYPE_LABEL[feedbackType] || feedbackType || "Feedback";
-    const from = userName || userEmail || user.email;
+    const safeType = TYPE_LABEL[feedbackType] ? feedbackType : "other";
+    const typeLabel = TYPE_LABEL[safeType];
+    const safeName = String(userName || "").slice(0, 80);
+    const from = safeName || user.email;
 
+    // Primero se guarda (así el límite cuenta este envío aunque el email falle).
+    await service.entities.Feedback.create({
+      feedback_type: safeType,
+      message: trimmed.slice(0, 5000),
+      user_email: user.email,
+      user_name: safeName,
+      app_language: String(appLanguage || "").slice(0, 8),
+      status: "new",
+    });
+
+    try {
     await base44.integrations.Core.SendEmail({
       to: FEEDBACK_INBOX,
       subject: `[Kaikōdo] ${typeLabel} de ${from}`,
       body: `Tipo: ${typeLabel}
-De: ${userName || "(sin nombre)"} <${userEmail || user.email}>
+De: ${safeName || "(sin nombre)"} <${user.email}>
 Idioma app: ${appLanguage || "?"}
 
 Mensaje:
-${trimmed}`,
+${trimmed.slice(0, 5000)}`,
     });
+    } catch (e) {
+      // El mensaje ya quedó guardado en Feedback: no se pierde.
+      return Response.json({ ok: true, emailed: false, warning: (e as Error).message });
+    }
 
-    return Response.json({ ok: true });
+    return Response.json({ ok: true, emailed: true });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
   }
