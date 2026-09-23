@@ -162,6 +162,14 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
             </div>
           )}
 
+          {/* José (23 sep 2026): ficha de Google vía Places UI Kit -- rating,
+              fotos, horario y precio los pinta Google en vivo, nunca se
+              guardan (términos EEA de Google Maps Platform). Va debajo de la
+              nota; día y hora van fijos abajo, así la ficha no los aleja. */}
+          {googlePlaceIdOf(spot) && (
+            <GooglePlaceCard placeId={googlePlaceIdOf(spot)} variant="full" className="rounded-xl overflow-hidden" />
+          )}
+
           {/* Notes */}
           <div>
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('spots.sheet.myNote')}</p>
@@ -172,14 +180,6 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
               className="w-full text-sm border border-border rounded-xl px-3 py-2.5 h-20 resize-none outline-none focus:border-primary bg-secondary"
             />
           </div>
-
-          {/* José (23 sep 2026): ficha de Google vía Places UI Kit -- rating,
-              fotos, horario y precio los pinta Google en vivo, nunca se
-              guardan (términos EEA de Google Maps Platform). Va debajo de la
-              nota; día y hora van fijos abajo, así la ficha no los aleja. */}
-          {googlePlaceIdOf(spot) && (
-            <GooglePlaceCard placeId={googlePlaceIdOf(spot)} variant="full" className="rounded-xl overflow-hidden" />
-          )}
 
           {/* Delete — solo quien lo creó, y con confirmación (antes borraba al instante) */}
           {canDelete && (
