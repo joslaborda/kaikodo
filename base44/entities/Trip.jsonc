@@ -86,10 +86,11 @@
       "description": "Lista de lugares ya incluidos en el itinerario (para evitar repeticiones)"
     }
   },
+  // José (24 sep 2026): start_date ya no es obligatorio -- un viaje puede
+  // crearse con "fechas por confirmar" (sus fechas salen de las paradas).
   "required": [
     "name",
-    "destination",
-    "start_date"
+    "destination"
   ],
   "rls": {
     "create": true,
