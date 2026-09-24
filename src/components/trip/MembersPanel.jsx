@@ -15,6 +15,12 @@ import { searchUserProfiles } from '@/lib/userProfiles';
 import Avatar from '@/components/trip/Avatar';
 import { GridAvatarItem } from '@/components/home/InviteModal';
 
+// José (24 sep 2026): referencia estable. Con `= []` como valor por defecto se
+// crea un array nuevo en cada render; el efecto de búsqueda depende de él y
+// llamaba a setSearchResults([]) (otro array nuevo) -> render -> efecto... en
+// bucle mientras la consulta de perfiles no tenía datos (cargando, o sin
+// conexión si falla): la pantalla se quedaba colgada.
+const NO_PROFILES = [];
 export default function MembersPanel({
   trip, currentUserEmail, isAdmin, profiles = []
 }) {
@@ -48,7 +54,7 @@ export default function MembersPanel({
   // aparecía aquí. Mismo patrón que esa modal: perfiles cacheados 2 min
   // (modo "descubrimiento abierto", nunca trae email) + filtrado client-side
   // mientras se teclea, sin esperar a pulsar nada.
-  const { data: allProfiles = [] } = useQuery({
+  const { data: allProfiles = NO_PROFILES } = useQuery({
     queryKey: ['allUserProfiles'],
     queryFn: () => searchUserProfiles({}),
     staleTime: 120000,
@@ -62,7 +68,7 @@ export default function MembersPanel({
     const raw = inviteEmail.trim();
     // Si parece un email, no tiene sentido buscar por username a la vez —
     // se invita directo por email al pulsar el botón, como ya hacía.
-    if (!raw || raw.includes('@') || raw.length < 2) { setSearchResults([]); setSearching(false); return; }
+    if (!raw || raw.includes('@') || raw.length < 2) { setSearchResults(r => (r.length ? NO_PROFILES : r)); setSearching(false); return; }
     setSearching(true);
     searchTimerRef.current = setTimeout(() => {
       try {

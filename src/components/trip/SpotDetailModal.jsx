@@ -1,14 +1,15 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { MapPin, X, Navigation, Clock, Trash2, Utensils, Landmark, Ticket, ShoppingBag, CirclePlus, Hotel, Compass, TrainFront, BusFront } from 'lucide-react';
+import { MapPin, X, Navigation, Trash2, Utensils, Landmark, Ticket, ShoppingBag, CirclePlus, Hotel, Compass, TrainFront, BusFront } from 'lucide-react';
 import GooglePlaceCard, { googlePlaceIdOf } from '@/components/spots/GooglePlaceCard';
 import { PlaneIcon } from '@/lib/icons';
 import { Textarea } from '@/components/ui/textarea';
 import { getMapsUrl } from '@/components/spots/spotsHelpers';
 import { useTranslation } from 'react-i18next';
-import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
+import DayTimeAssign from '@/components/spots/DayTimeAssign';
+import { getTripDays, sameCityName } from '@/lib/tripDays';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
 import { toast } from '@/components/ui/use-toast';
@@ -100,6 +101,9 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
   }, [spot?.id]);
 
   useBodyScrollLock(!!open && !!spot);
+  const timeSaveTimer = useRef(null);
+  useEffect(() => () => clearTimeout(timeSaveTimer.current), []);
+
   if (!open || !spot) return null;
 
   // Un alojamiento es de toda la estancia: ni día ni hora ni "quitar del día"
@@ -152,7 +156,8 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
     // devolver la ciudad equivocada aunque el usuario hubiera elegido
     // explícitamente la otra en el desplegable.
     const nextCityId = 'assignedCityId' in overrides ? overrides.assignedCityId : assignedCityId;
-    const timeChanged = (time || '') !== (spot.assigned_time || '');
+    const nextTime = 'time' in overrides ? overrides.time : time;
+    const timeChanged = (nextTime || '') !== (spot.assigned_time || '');
         const dateChanged = (nextDate || '') !== (spot.assigned_date || '');
         setSaving(true);
         try {
@@ -166,7 +171,7 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
                   ? { notes: notes.trim() || null, assigned_time: null, assigned_date: null, day_order: null }
                   : {
                           notes: notes.trim() || null,
-                          assigned_time: time || null,
+                          assigned_time: nextTime || null,
                           assigned_date: nextDate || null,
                           ...(timeChanged || dateChanged ? { day_order: null } : {}),
                           ...cityIdUpdate,
@@ -174,13 +179,22 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
       if (queryClient && tripId) {
         queryClient.invalidateQueries({ queryKey: ['spots', tripId] });
       }
-      if (!isStay && timeChanged && time) notifyTimeChange(time);
+      if (!isStay && timeChanged && nextTime) notifyTimeChange(nextTime);
       cancelSpotReminder(spot.id);
-      if (!isStay) scheduleSpotReminder({ id: spot.id, title: spot.title, assigned_date: nextDate || null, assigned_time: time || null });
-      if (onSave) onSave(spot, notes, time);
+      if (!isStay) scheduleSpotReminder({ id: spot.id, title: spot.title, assigned_date: nextDate || null, assigned_time: nextTime || null });
+      if (onSave) onSave(spot, notes, nextTime);
       setEditingTime(false);
       setEditingNotes(false);
     } finally { setSaving(false); }
+  };
+
+  // La hora se guarda sola al elegirla (como el día), con un pequeño margen:
+  // la rueda de hora del móvil puede ir mandando valores mientras gira, y
+  // cada guardado avisa al grupo del cambio de hora.
+  const changeTime = (v) => {
+    setTime(v);
+    clearTimeout(timeSaveTimer.current);
+    timeSaveTimer.current = setTimeout(() => handleSave({ time: v }), 900);
   };
 
   const modal = (
@@ -231,66 +245,23 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
             </div>
           )}
 
-          {/* Día */}
+          {/* Día y hora — mismo componente que en Spots (DayTimeAssign). Se
+              guardan al momento: antes el día sí, pero la hora pedía un
+              "Guardar" aparte. */}
           {isStay && <p className="text-xs text-muted-foreground bg-secondary/50 rounded-xl px-3 py-2.5">{t('spots.stayInfo')}</p>}
-          {!isStay && tripDayOptions.length > 0 && (
-            <div>
-              <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">{t('spots.sheet.day')}</p>
-              <select
-                // value combina fecha+ciudad (tripDayOptionValue) — con solo
-                // la fecha, un día de tránsito entre dos ciudades (misma
-                // fecha, dos City) no se puede distinguir cuál se eligió.
-                value={assignedDate ? tripDayOptionValue({ date: assignedDate, cityId: assignedCityId }) : ''}
-                onChange={e => {
-                  const { date, cityId } = parseTripDayOptionValue(e.target.value);
+          {!isStay && (
+            <div className={saving ? 'opacity-70 pointer-events-none' : ''}>
+              <DayTimeAssign
+                tripDayOptions={tripDayOptions}
+                date={assignedDate} cityId={assignedCityId} time={time}
+                onDayChange={({ date, cityId }) => {
                   setAssignedDate(date);
                   setAssignedCityId(cityId);
-                  // A diferencia de Hora/Notas (que piden confirmar con un botón
-                  // Guardar), el selector de día se guarda al instante: antes
-                  // cambiar el día aquí no hacía nada hasta que el usuario tocara
-                  // Hora o Notas, así que la reasignación se perdía en silencio.
                   handleSave({ assignedDate: date, assignedCityId: cityId });
                 }}
-                disabled={saving}
-                className="w-full h-9 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary"
-              >
-                <option value="">{t('spots.sheet.unassigned')}</option>
-                {tripDayOptions.map(d => (
-                  <option key={tripDayOptionValue(d)} value={tripDayOptionValue(d)}>{d.date} · {d.city}</option>
-                ))}
-              </select>
+                onTimeChange={changeTime}
+              />
             </div>
-          )}
-
-          {/* Hora */}
-          {!isStay && (
-          <div>
-            <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">{t('spots.sheet.time')}</p>
-            {editingTime ? (
-              <div className="flex items-center gap-2">
-                <input type="time" value={time} onChange={e => setTime(e.target.value)}
-                  className="h-9 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary w-[120px]" />
-                <button onClick={() => setTime('')} className="text-xs text-muted-foreground">{t('cities.day.remove')}</button>
-                <div className="ml-auto flex gap-2">
-                  <button onClick={() => setEditingTime(false)} className="text-xs text-muted-foreground">{t('common.cancel')}</button>
-                  <button onClick={handleSave} disabled={saving}
-                    className="text-xs text-white bg-primary px-3 py-1.5 rounded-full disabled:opacity-40">
-                    {saving ? '...' : t('common.save')}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                {time
-                  ? <span className="text-sm text-primary font-medium">{time}</span>
-                  : <span className="text-sm text-muted-foreground">{t('spots.modal.noTime')}</span>}
-                <button onClick={() => setEditingTime(true)} className="text-xs text-primary font-medium underline underline-offset-2 ml-1">
-                  {time ? t('common.edit') : t('spots.modal.addTime')}
-                </button>
-              </div>
-            )}
-          </div>
           )}
 
           {/* José (23 sep 2026): ficha de Google vía Places UI Kit -- rating,
