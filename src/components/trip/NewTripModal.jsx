@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, X, Shuffle, AlertTriangle } from 'lucide-react';
 import { getCountryMeta, normalizeCountry, getCountryOptions, searchCountries, getCountryLabel } from '@/lib/countryConfig';
 import CityInput from '@/components/trip/CityInput';
+import TripDateRangePicker from '@/components/trip/TripDateRangePicker';
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { format } from 'date-fns';
@@ -224,8 +225,17 @@ export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }
     !isPending;
 
   // ── helpers ──────────────────────────────────────────────────────────────
+  // José (24 sep 2026): repetir el país en cada parada era una pérdida de
+  // tiempo. Al elegir país en una parada, las siguientes que aún no tienen
+  // país (o lo tienen heredado y todavía sin ciudad) lo heredan. Si alguien
+  // elige otro país a mano en una parada (viaje multi-país), esa manda y
+  // deja de heredar.
   function applyStopCountry(idx, country) {
-    updateStop(idx, { city: '', country });
+    setStops(prev => prev.map((s, i) => {
+      if (i === idx) return { ...s, city: '', lat: null, lng: null, placeId: null, country, countryInherited: false };
+      if (i > idx && !s.city.trim() && (!s.country || s.countryInherited)) return { ...s, country, countryInherited: true };
+      return s;
+    }));
     if (idx === 0 && !currencyTouched) {
       const meta = getCountryMeta(country);
       setFormData(prev => ({
@@ -241,7 +251,7 @@ export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }
   function setMode_(m) { setMode(m); setStops(defaultStops(m)); }
   function updateStop(idx, patch) { setStops(prev => prev.map((s, i) => i === idx ? { ...s, ...patch } : s)); }
   function updateStopManual(idx, patch) { setStops(prev => prev.map((s, i) => i === idx ? { ...s, manual: { ...s.manual, ...patch } } : s)); }
-  function addStop() { setStops(prev => [...prev, { city: '', country: '', nights: '', manual: { start_date: '', end_date: '' } }]); }
+  function addStop() { setStops(prev => { const last = prev[prev.length - 1]; return [...prev, { city: '', country: last?.country || '', countryInherited: !!last?.country, nights: '', manual: { start_date: '', end_date: '' } }]; }); }
   function removeStop(idx) { setStops(prev => prev.filter((_, i) => i !== idx)); }
 
   function autoDistributeNights() {
@@ -377,47 +387,21 @@ export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }
             </div>
           </div>
 
-          {/* 3. Fechas */}
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">
-                {t('trip.dialog.startDate')} <span className="text-primary">*</span>
-              </label>
-              <input
-                ref={startDateRef}
-                type="date"
-                value={formData.start_date}
-                onChange={e => setFormData(p => ({ ...p, start_date: e.target.value }))}
-                className={`w-full h-10 border rounded-xl px-3 text-sm outline-none transition-colors ${
-                  missingStart ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-border bg-card focus:border-primary'
-                }`}
-              />
-              {missingStart && <p className="text-xs text-red-500">{t('trip.new.startRequired')}</p>}
-            </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">
-                {t('trip.dialog.endDate')} <span className="text-muted-foreground font-normal text-xs">{t('trip.new.orByNights')}</span>
-              </label>
-              <input
-                ref={endDateRef}
-                type="date"
-                value={formData.end_date}
-                min={formData.start_date || undefined}
-                onChange={e => {
-                  // El min del <input> nativo no siempre se respeta en el
-                  // WebView de Android (varía por fabricante/versión) — sin
-                  // este chequeo en JS se podía seleccionar una fecha fin
-                  // anterior al inicio pese al atributo min. Se ignora el
-                  // valor si viola la regla, en vez de aceptarlo y confiar
-                  // solo en el aviso de "invalidEndDate" al enviar.
-                  const v = e.target.value;
-                  if (formData.start_date && v && v < formData.start_date) return;
-                  setFormData(p => ({ ...p, end_date: v }));
-                }}
-                className={`w-full h-10 border rounded-xl px-3 text-sm outline-none transition-colors ${invalidEndDate ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-border bg-card focus:border-primary'}`}
-              />
-              {invalidEndDate && <p className="text-xs text-red-500">{t('trip.dialog.endBeforeStart')}</p>}
-            </div>
+          {/* 3. Fechas — un solo calendario de rango (ver TripDateRangePicker). */}
+          <div>
+            <label className="text-sm font-medium text-foreground mb-1.5 block">
+              {t('trip.dates.title')} <span className="text-primary">*</span>
+            </label>
+            <TripDateRangePicker
+              ref={startDateRef}
+              start={formData.start_date}
+              end={formData.end_date}
+              endOptional
+              hasError={missingStart}
+              onChange={({ start, end }) => setFormData(p => ({ ...p, start_date: start, end_date: end }))}
+            />
+            {missingStart && <p className="text-xs text-red-500 mt-1">{t('trip.new.startRequired')}</p>}
+            {invalidEndDate && <p className="text-xs text-red-500 mt-1">{t('trip.dialog.endBeforeStart')}</p>}
           </div>
 
           {/* 4. Paradas */}
@@ -498,45 +482,20 @@ export default function NewTripModal({ open, onOpenChange, onSubmit, isPending }
                           )}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 pl-1 flex-wrap">
-                          {/* El min del start_date de una parada N>0 solo miraba
-                              formData.start_date (el inicio del viaje entero),
-                              no el end_date de la parada N-1 — así que nada
-                              impedía elegir un start_date muy anterior al fin
-                              de la parada previa, solapando varios días entre
-                              dos paradas consecutivas. Igual que en
-                              SettingsDialog.jsx, se acota al end_date de la
-                              parada anterior (o al inicio del viaje si es la
-                              primera). */}
-                          <input type="date" value={stop.manual.start_date}
-                            min={(idx > 0 ? stops[idx - 1]?.manual?.end_date : null) || formData.start_date || undefined}
-                            max={formData.end_date || undefined}
-                            onChange={e => {
-                              // Mismo refuerzo en JS que en los campos de
-                              // fecha del propio viaje (min/max nativo del
-                              // input no siempre se respeta en el WebView
-                              // de Android) — se ignora si viola el rango.
-                              const v = e.target.value;
-                              const lo = (idx > 0 ? stops[idx - 1]?.manual?.end_date : null) || formData.start_date;
-                              const hi = formData.end_date;
-                              if (lo && v && v < lo) return;
-                              if (hi && v && v > hi) return;
-                              updateStopManual(idx, { start_date: v });
-                            }}
-                            className="w-36 h-8 border border-border rounded-lg px-2 text-xs outline-none focus:border-primary bg-secondary"
-                          />
-                          <span className="text-xs text-muted-foreground">→</span>
-                          <input type="date" value={stop.manual.end_date}
-                            min={stop.manual.start_date || formData.start_date || undefined} max={formData.end_date || undefined}
-                            onChange={e => {
-                              const v = e.target.value;
-                              const lo = stop.manual.start_date || formData.start_date;
-                              const hi = formData.end_date;
-                              if (lo && v && v < lo) return;
-                              if (hi && v && v > hi) return;
-                              updateStopManual(idx, { end_date: v });
-                            }}
-                            className="w-36 h-8 border border-border rounded-lg px-2 text-xs outline-none focus:border-primary bg-secondary"
+                        <div className="pl-1">
+                          {/* Límites: desde el fin de la parada anterior (o el
+                              inicio del viaje) hasta el fin del viaje, para que
+                              dos paradas no se solapen. Ahora con días fuera de
+                              rango desactivados de verdad en el calendario. */}
+                          <TripDateRangePicker
+                            compact
+                            start={stop.manual.start_date}
+                            end={stop.manual.end_date}
+                            minDate={(idx > 0 ? stops[idx - 1]?.manual?.end_date : null) || formData.start_date || undefined}
+                            maxDate={formData.end_date || undefined}
+                            startLabel={t('trip.dates.from')}
+                            endLabel={t('trip.dates.to')}
+                            onChange={({ start, end }) => updateStopManual(idx, { start_date: start, end_date: end })}
                           />
                         </div>
                       )}
