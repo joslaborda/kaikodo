@@ -48,7 +48,7 @@ export default function DayTimeAssign({ tripDayOptions = [], date, cityId, time,
                   onClick={() => (on ? onDayChange({ date: '', cityId: '' }) : onDayChange({ date: d.date, cityId: d.cityId || '' }))}
                   aria-pressed={on}
                   className={`snap-start flex-shrink-0 w-[60px] rounded-2xl border py-2 text-center transition-colors ${
-                    on ? 'bg-primary border-primary text-white' : 'bg-card border-border text-foreground hover:bg-secondary/40'}`}>
+                    on ? 'bg-primary border-primary text-white' : 'bg-card border-border text-foreground'}`}>
                   <span className={`block text-[10px] uppercase ${on ? 'text-white/80' : 'text-muted-foreground'}`}>{fmt(d.date, 'EEE')}</span>
                   <span className="block text-lg font-bold leading-tight">{fmt(d.date, 'd')}</span>
                   <span className={`block text-[10px] truncate px-1 ${on ? 'text-white/80' : 'text-muted-foreground'}`}>{d.city}</span>
