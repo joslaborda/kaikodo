@@ -141,10 +141,10 @@
     "step": "{{current}} / {{total}}",
     "mandatory": "Required",
     "slide0": {
-      "title": "Tell us a bit\nabout yourself",
-      "subtitle": "Help us get to know you better so we can offer you a personalized experience.",
+      "title": "Tell us who you are",
+      "subtitle": "This is how the people you travel with will see you.",
       "nameLabel": "Full name",
-      "usernameLabel": "@username",
+      "usernameLabel": "Username",
       "usernameHint": "Letters, numbers and _ · min. 3 characters",
       "usernameTaken": "This @username is already taken, try another one",
       "usernameAvailable": "Available!",
@@ -156,17 +156,18 @@
       "termsRequired": "You need to accept the Terms and Privacy Policy to continue"
     },
     "slide1": {
-      "title": "Tell us a bit\nabout yourself",
-      "subtitle": "This information is used to calculate visa requirements, mandatory vaccines and consular information when you're abroad.",
-      "nationalityLabel": "Passport nationality",
+      "title": "Your passport",
+      "subtitle": "We use it to tell you which visas, vaccines and paperwork you need for each destination.",
+      "nationalityLabel": "Nationality",
       "nationalityPlaceholder": "Select your nationality",
-      "residenceLabel": "Country of residence",
+      "residenceLabel": "Where do you live?",
       "residencePlaceholder": "Where do you live?",
       "residenceHint": "Currency is automatically detected from your country.",
       "secondPassportLabel": "Second passport",
-      "secondPassportPlaceholder": "I don't have one",
+      "secondPassportPlaceholder": "Add",
       "secondPassportHint": "If you have two passports, Kaikōdo compares them to make visa processing easier.",
-      "removeSecond": "Remove second passport"
+      "removeSecond": "Remove second passport",
+      "currencyHint": "Your currency for expenses: {{currency}}"
     },
     "slide2": {
       "number": "3 / 6",
@@ -1580,7 +1581,10 @@
       "essential": "essential",
       "souvEmptyTitle": "List empty",
       "souvEmptyHint": "Note down what you want to buy on the trip",
-      "souvPlaceholder": "What do you want to buy?"
+      "souvPlaceholder": "What do you want to buy?",
+      "whereGoes": "Where does it go?",
+      "importance": "Importance",
+      "essentialLabel": "Essential"
     },
     "reqs": {
       "checkConsulate": "Check with your country's consulate or embassy",
@@ -2017,6 +2021,8 @@
   "forms": {
     "pickDate": "Pick a date",
     "pickTime": "Time",
-    "clear": "Clear"
+    "clear": "Clear",
+    "hour": "Hour",
+    "minutes": "Minutes"
   }
 }
