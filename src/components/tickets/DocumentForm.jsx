@@ -574,7 +574,7 @@ export default function DocumentForm({
             const on = category === cat.key;
             return (
               <button key={cat.key} type="button" onClick={() => setCategory(cat.key)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-colors ${
+                className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-colors ${
                   on ? 'bg-primary text-white border-primary' : 'bg-card text-foreground border-border hover:bg-secondary/40'}`}>
                 <cat.Icon size={14} className="flex-shrink-0" />{t(cat.labelKey)}
               </button>
