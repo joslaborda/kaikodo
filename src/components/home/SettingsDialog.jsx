@@ -8,6 +8,7 @@ import { format, differenceInDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ChevronDown, Trash2, LogOut, Link2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import TripDateRangePicker from '@/components/trip/TripDateRangePicker';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import CountryInput from '@/components/trip/CountryInput';
@@ -344,7 +345,11 @@ function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-card border-border p-0 max-w-md max-h-[90vh] overflow-y-auto gap-0">
+      {/* José (24 sep 2026): Radix enfoca el primer campo al abrir -- el nombre
+          del viaje salía seleccionado y saltaba el teclado. Se abre sin foco;
+          el nombre se edita solo si el usuario lo toca. */}
+      <DialogContent className="bg-card border-border p-0 max-w-md max-h-[90vh] overflow-y-auto gap-0"
+        onOpenAutoFocus={e => e.preventDefault()}>
         <DialogHeader className="px-5 py-4 border-b border-border">
           <DialogTitle className="text-foreground text-base font-semibold">{t('trip.settings')}</DialogTitle>
         </DialogHeader>
@@ -377,36 +382,16 @@ function SettingsDialog({
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground mb-1.5">{t('trip.dialog.tripDates')}</p>
             {isAdmin && !datesFromStops ? (
-              <div className="flex items-center gap-2">
-                <Input
-                  type="date"
-                  value={startDate}
-                  max={endDate || undefined}
-                  onChange={e => {
-                    // Ver el mismo comentario en NewTripModal.jsx: el
-                    // min/max nativo del <input type="date"> no siempre se
-                    // respeta en el WebView de Android, así que se
-                    // refuerza en JS para que nunca quede start > end.
-                    const v = e.target.value;
-                    if (endDate && v && v > endDate) return;
-                    setStartDate(v);
-                  }}
-                  className="h-8 text-sm flex-1"
-                />
-                <span className="text-muted-foreground text-sm">→</span>
-                <Input
-                  type="date"
-                  value={endDate}
-                  min={startDate || undefined}
-                  onChange={e => {
-                    const v = e.target.value;
-                    if (startDate && v && v < startDate) return;
-                    setEndDate(v);
-                  }}
-                  className="h-8 text-sm flex-1"
+              <div>
+                {/* José (24 sep 2026): mismo calendario de rango que al crear el viaje. */}
+                <TripDateRangePicker
+                  compact
+                  start={startDate}
+                  end={endDate}
+                  onChange={({ start, end }) => { setStartDate(start); setEndDate(end); }}
                 />
                 {totalDays && (
-                  <span className="text-xs bg-accent text-primary px-2 py-1 rounded-full font-medium shrink-0">
+                  <span className="inline-block mt-1.5 text-xs bg-accent text-primary px-2 py-1 rounded-full font-medium">
                     {totalDays}d
                   </span>
                 )}
@@ -472,29 +457,14 @@ function SettingsDialog({
                     <CountryInput value={cityDraft.country || ''} onChange={v => setCityDraft(p => ({ ...p, country: v }))} placeholder={t('common.country')} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">{t('trip.dialog.startDate')}</p>
-                    <Input type="date" value={cityDraft.start_date || ''} max={cityDraft.end_date || undefined}
-                      onChange={e => {
-                        // Mismo refuerzo en JS que en las fechas del viaje:
-                        // el min/max nativo no siempre se respeta en el
-                        // WebView de Android.
-                        const v = e.target.value;
-                        if (cityDraft.end_date && v && v > cityDraft.end_date) return;
-                        setCityDraft(p => ({ ...p, start_date: v }));
-                      }} className="h-8 text-sm" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">{t('trip.dialog.endDate')}</p>
-                    <Input type="date" value={cityDraft.end_date || ''} min={cityDraft.start_date || undefined}
-                      onChange={e => {
-                        const v = e.target.value;
-                        if (cityDraft.start_date && v && v < cityDraft.start_date) return;
-                        setCityDraft(p => ({ ...p, end_date: v }));
-                      }} className="h-8 text-sm" />
-                  </div>
-                </div>
+                <TripDateRangePicker
+                  compact
+                  start={cityDraft.start_date || ''}
+                  end={cityDraft.end_date || ''}
+                  startLabel={t('trip.dialog.startDate')}
+                  endLabel={t('trip.dialog.endDate')}
+                  onChange={({ start, end }) => setCityDraft(p => ({ ...p, start_date: start, end_date: end }))}
+                />
                 <div className="flex items-center justify-between">
                   {cities.length > 1 ? (
                     <button
@@ -540,26 +510,14 @@ function SettingsDialog({
                 <CountryInput value={cityDraft.country || ''} onChange={v => setCityDraft(p => ({ ...p, country: v }))} placeholder={t('common.country')} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">{t('trip.dialog.startDate')}</p>
-                <Input type="date" value={cityDraft.start_date || ''} max={cityDraft.end_date || undefined}
-                  onChange={e => {
-                    const v = e.target.value;
-                    if (cityDraft.end_date && v && v > cityDraft.end_date) return;
-                    setCityDraft(p => ({ ...p, start_date: v }));
-                  }} className="h-8 text-sm" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">{t('trip.dialog.endDate')}</p>
-                <Input type="date" value={cityDraft.end_date || ''} min={cityDraft.start_date || undefined}
-                  onChange={e => {
-                    const v = e.target.value;
-                    if (cityDraft.start_date && v && v < cityDraft.start_date) return;
-                    setCityDraft(p => ({ ...p, end_date: v }));
-                  }} className="h-8 text-sm" />
-              </div>
-            </div>
+            <TripDateRangePicker
+              compact
+              start={cityDraft.start_date || ''}
+              end={cityDraft.end_date || ''}
+              startLabel={t('trip.dialog.startDate')}
+              endLabel={t('trip.dialog.endDate')}
+              onChange={({ start, end }) => setCityDraft(p => ({ ...p, start_date: start, end_date: end }))}
+            />
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" className="h-7 text-xs" onClick={closeCityEdit}>
                 {t('common.cancel')}
