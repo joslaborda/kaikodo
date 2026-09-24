@@ -46,14 +46,18 @@ export function FormRow({ icon: Icon, children, align = 'center' }) {
 
 // Panel desplegable bajo una pastilla (no es un popover flotante: empuja el
 // contenido, así no se corta dentro de modales con scroll).
-function Panel({ children, onClose }) {
+function Panel({ children, onClose, floating = false }) {
   const ref = useRef(null);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose?.(); };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, [onClose]);
-  return <div ref={ref} className="mt-2 bg-card border border-border rounded-2xl p-2 shadow-sm">{children}</div>;
+  return (
+    <div ref={ref} className={floating
+      ? `absolute ${floating === 'right' ? 'right-0' : 'left-0'} top-full z-50 mt-2 w-64 max-w-[80vw] bg-card border border-border rounded-2xl p-2 shadow-lg`
+      : 'mt-2 bg-card border border-border rounded-2xl p-2 shadow-sm'}>{children}</div>
+  );
 }
 
 const dayPickerClassNames = {
@@ -108,48 +112,108 @@ export function DatePill({ value, onChange, minDate, maxDate, placeholder, clear
   );
 }
 
-// Hora: pastilla con el selector nativo de hora encima (invisible). La rueda
-// de hora nativa es la mejor forma de elegir una hora en el móvil; lo que
-// era feo era la caja, no la rueda.
+// Hora.
+//  - Móvil (pantalla táctil): pastilla con el selector nativo de hora encima,
+//    invisible. La rueda del móvil es la mejor forma de elegir una hora.
+//  - Escritorio (ratón): el selector nativo invisible no abre nada al hacer
+//    clic (José, 24 sep 2026: "en desktop no saca nada"), así que se abre un
+//    panel propio con horas y minutos.
+const isTouchDevice = () =>
+  typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+
 export function TimePill({ value, onChange, placeholder, clearable = true }) {
   const { t } = useTranslation();
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span className={`${pillCls(false, !value)} relative`}>
-        <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-        <span>{value || placeholder || t('forms.pickTime')}</span>
-        <input type="time" value={value || ''} onChange={e => onChange(e.target.value)}
-          aria-label={placeholder || t('forms.pickTime')}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+  const [open, setOpen] = useState(false);
+  const touch = isTouchDevice();
+  const [h, m] = (value || '').split(':');
+  const label = <><Clock className="w-3.5 h-3.5 flex-shrink-0" /><span>{value || placeholder || t('forms.pickTime')}</span></>;
+  const clearBtn = clearable && value && (
+    <button type="button" aria-label={t('forms.clear')} onClick={() => { onChange(''); setOpen(false); }}
+      className="w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:bg-secondary"><X className="w-3.5 h-3.5" /></button>
+  );
+
+  if (touch) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className={`${pillCls(false, !value)} relative`}>
+          {label}
+          <input type="time" value={value || ''} onChange={e => onChange(e.target.value)}
+            aria-label={placeholder || t('forms.pickTime')}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+        </span>
+        {clearBtn}
       </span>
-      {clearable && value && (
-        <button type="button" aria-label={t('forms.clear')} onClick={() => onChange('')}
-          className="w-6 h-6 rounded-full flex items-center justify-center text-muted-foreground hover:bg-secondary"><X className="w-3.5 h-3.5" /></button>
+    );
+  }
+
+  const pick = (nh, nm) => onChange(`${nh}:${nm}`);
+  return (
+    <div className="inline-block max-w-full">
+      <span className="inline-flex items-center gap-1">
+        <button type="button" onClick={() => setOpen(o => !o)} className={pillCls(open, !value)}>{label}</button>
+        {clearBtn}
+      </span>
+      {open && (
+        <Panel onClose={() => setOpen(false)}>
+          <div className="flex gap-3 p-1">
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-muted-foreground mb-1 px-1">{t('forms.hour')}</p>
+              <div className="grid grid-cols-6 gap-1">
+                {HOURS.map(hh => (
+                  <button key={hh} type="button" onClick={() => pick(hh, m || '00')}
+                    className={`h-8 rounded-lg text-xs font-medium transition-colors ${hh === h ? 'bg-primary text-white' : 'text-foreground hover:bg-secondary'}`}>{hh}</button>
+                ))}
+              </div>
+            </div>
+            <div className="w-[5.5rem] flex-shrink-0">
+              <p className="text-[11px] text-muted-foreground mb-1 px-1">{t('forms.minutes')}</p>
+              <div className="grid grid-cols-2 gap-1">
+                {MINUTES.map(mm => (
+                  <button key={mm} type="button" onClick={() => { pick(h || '09', mm); if (h) setOpen(false); }}
+                    className={`h-8 rounded-lg text-xs font-medium transition-colors ${mm === m ? 'bg-primary text-white' : 'text-foreground hover:bg-secondary'}`}>{mm}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Panel>
       )}
-    </span>
+    </div>
   );
 }
 
 // Sustituto de <select>: pastilla + lista de opciones debajo.
 // options: [{ value, label, sublabel? }]
-export function OptionPill({ value, onChange, options = [], placeholder, icon: Icon = ChevronDown, allowEmpty = false, emptyLabel }) {
+export function OptionPill({ value, onChange, options = [], placeholder, icon: Icon = ChevronDown, allowEmpty = false, emptyLabel, block = false, floating = false }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
   const sel = options.find(o => o.value === value);
+  // Listas largas (países, monedas, idiomas): con buscador arriba.
+  const searchable = options.length > 12;
+  const norm = (x) => (x || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const shown = searchable && q.trim() ? options.filter(o => norm(o.label).includes(norm(q)) || norm(o.value).includes(norm(q))) : options;
   return (
-    <div className="max-w-full">
-      <button type="button" onClick={() => setOpen(o => !o)} className={pillCls(open, !sel)}>
+    <div className={`max-w-full ${floating ? 'relative' : ''}`}>
+      <button type="button" onClick={() => { setOpen(o => !o); setQ(''); }} className={`${pillCls(open, !sel)} ${block ? 'w-full justify-between' : ''}`}>
         {Icon !== ChevronDown && <Icon className="w-3.5 h-3.5 flex-shrink-0" />}
         <span className="truncate">{sel ? sel.label : placeholder}</span>
         <ChevronDown className="w-3.5 h-3.5 flex-shrink-0 opacity-70" />
       </button>
       {open && (
-        <Panel onClose={() => setOpen(false)}>
+        <Panel onClose={() => setOpen(false)} floating={floating}>
+          {searchable && (
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder={t('common.search')}
+              autoComplete="off" autoCorrect="off" spellCheck={false}
+              className="w-full h-9 mb-1 px-3 rounded-xl border border-border bg-secondary text-sm outline-none focus:border-primary" />
+          )}
           <div className="max-h-64 overflow-y-auto">
             {allowEmpty && (
               <button type="button" onClick={() => { onChange(''); setOpen(false); }}
                 className="w-full text-left px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-secondary/40">{emptyLabel || placeholder}</button>
             )}
-            {options.map(o => (
+            {shown.map(o => (
               <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }}
                 className={`w-full flex items-center gap-2 text-left px-3 py-2.5 rounded-xl text-sm transition-colors ${o.value === value ? 'bg-orange-50 dark:bg-orange-950/30 text-primary font-semibold' : 'text-foreground hover:bg-secondary/40'}`}>
                 <span className="flex-1 min-w-0">
