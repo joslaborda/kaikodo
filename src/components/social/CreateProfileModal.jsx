@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Loader2, CheckCircle2, XCircle, Check, Languages, Plane, Hotel, Shield, Utensils, Ticket, MapPin, CloudSun } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Check, Languages, Plane, Hotel, Shield, Utensils, Ticket, MapPin, CloudSun, ChevronDown } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { normalizeUsername, validateUsername, checkUsernameAvailability } from '@/lib/username';
 import { searchUserProfiles } from '@/lib/userProfiles';
@@ -62,29 +62,29 @@ function CountryPicker({ value, onChange, placeholder }) {
 
   return (
     <div className="relative">
+      {/* José (24 sep 2026): pastilla, como el resto de formularios. */}
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-2xl border text-sm text-left transition-colors ${value ? 'border-primary bg-card' : 'border-border bg-secondary/40'}`}
+        className={`inline-flex items-center gap-2 max-w-full rounded-full px-3.5 py-2 text-sm font-semibold transition-colors ${
+          selected
+            ? 'bg-orange-50 dark:bg-orange-950/30 text-primary border border-orange-200 dark:border-orange-900/50'
+            : 'bg-secondary text-muted-foreground border border-dashed border-muted-foreground/40'
+        } ${open ? 'ring-1 ring-primary' : ''}`}
       >
         {selected ? (
-          <span className="flex items-center gap-2 font-medium text-foreground">
-            <span className="text-lg">{selected.flag}</span>
-            <span>{selected.label}</span>
-            {selected.currency && (
-              <span className="text-xs text-primary font-semibold ml-1">{selected.currency} ✓</span>
-            )}
-          </span>
+          <>
+            <span className="text-base leading-none">{selected.flag}</span>
+            <span className="truncate">{selected.label}</span>
+          </>
         ) : (
-          <span className="text-muted-foreground">{placeholder}</span>
+          <span className="truncate">{placeholder}</span>
         )}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground flex-shrink-0">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <ChevronDown className="w-4 h-4 flex-shrink-0 opacity-70" />
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-2xl shadow-lg overflow-hidden">
+        <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-card border border-border rounded-2xl shadow-lg overflow-hidden">
           <div className="p-2 border-b border-border">
             <input
               autoFocus
@@ -186,11 +186,12 @@ function SlideIdioma({ onSelect }) {
 
 function ProgressDots({ current, total }) {
   return (
-    <div className="flex items-center gap-1.5">
+    // José (24 sep 2026): barra de progreso (antes puntos + "PASO 1 / 6" en mayúsculas).
+    <div className="flex items-center gap-1 flex-1 max-w-[220px]">
       {Array.from({ length: total }).map((_, i) => (
         <div
           key={i}
-          className={`h-1.5 rounded-full transition-all duration-300 ${i === current ? 'bg-primary w-4' : i < current ? 'bg-primary/40 w-1.5' : 'bg-border w-1.5'}`}
+          className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i <= current ? 'bg-primary' : 'bg-border'}`}
         />
       ))}
     </div>
@@ -202,7 +203,6 @@ function SlideGrupo() {
   const { t } = useTranslation();
   return (
     <div className="flex-1 flex flex-col">
-      <p className="text-xs font-bold text-primary uppercase tracking-wider mb-1">3 / 6</p>
       <h2 className="text-2xl font-black text-foreground leading-tight mb-2">{t('onboarding.s3.title1')}<br />{t('onboarding.s3.title2')}</h2>
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
         {t('onboarding.s3.body')}
@@ -251,7 +251,6 @@ function SlidePreparativos() {
   const { t } = useTranslation();
   return (
     <div className="flex-1 flex flex-col">
-      <p className="text-xs font-bold text-primary uppercase tracking-wider mb-1">4 / 6</p>
       <h2 className="text-2xl font-black text-foreground leading-tight mb-2">{t('onboarding.s4.title1')}<br />{t('onboarding.s4.title2')}</h2>
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
         {t('onboarding.s4.body')}
@@ -327,7 +326,6 @@ function SlideGastos() {
   const { t } = useTranslation();
   return (
     <div className="flex-1 flex flex-col">
-      <p className="text-xs font-bold text-primary uppercase tracking-wider mb-1">5 / 6</p>
       <h2 className="text-2xl font-black text-foreground leading-tight mb-2">{t('onboarding.s5.title1')}<br />{t('onboarding.s5.title2')}</h2>
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
         {t('onboarding.s5.body')}
@@ -392,7 +390,6 @@ function SlideHoy() {
   const { t } = useTranslation();
   return (
     <div className="flex-1 flex flex-col">
-      <p className="text-xs font-bold text-primary uppercase tracking-wider mb-1">6 / 6</p>
       <h2 className="text-2xl font-black text-foreground leading-tight mb-2">{t('onboarding.s6.title1')}<br />{t('onboarding.s6.title2')}</h2>
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
         {t('onboarding.s6.body')}
@@ -655,7 +652,6 @@ export default function CreateProfileModal({ user, open, onComplete }) {
         {/* SLIDE 0: Perfil */}
         {slide === 0 && (
           <div className="flex-1 flex flex-col">
-            <p className="text-xs font-bold text-primary uppercase tracking-wider mb-1">{t('onboarding.step', { current: 1, total: 6 })}</p>
             <h2 className="text-2xl font-black text-foreground leading-tight mb-2">{t('onboarding.slide0.title')}</h2>
             <p className="text-sm text-muted-foreground leading-relaxed mb-6">
               {t('onboarding.slide0.subtitle')}
@@ -663,7 +659,7 @@ export default function CreateProfileModal({ user, open, onComplete }) {
 
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('onboarding.slide0.nameLabel')}</p>
+                <p className="text-sm font-bold text-foreground mb-2">{t('onboarding.slide0.nameLabel')}</p>
                 <input
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
@@ -673,7 +669,7 @@ export default function CreateProfileModal({ user, open, onComplete }) {
               </div>
 
               <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('onboarding.slide0.usernameLabel')}</p>
+                <p className="text-sm font-bold text-foreground mb-2">{t('onboarding.slide0.usernameLabel')}</p>
                 <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-semibold">@</span>
                   <input
@@ -704,12 +700,12 @@ export default function CreateProfileModal({ user, open, onComplete }) {
               {/* Consentimiento RGPD: bloquea el registro hasta aceptar
                   explícitamente — antes no existía ningún checkbox ni
                   registro de consentimiento en todo el flujo de alta. */}
-              <label className="flex items-start gap-2.5 cursor-pointer">
+              <label className="flex items-start gap-2.5 cursor-pointer bg-card border border-border rounded-2xl p-3">
                 <input
                   type="checkbox"
                   checked={termsAccepted}
                   onChange={e => setTermsAccepted(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-border text-primary flex-shrink-0"
+                  className="mt-0.5 w-[18px] h-[18px] rounded-md border-border accent-[#c2410c] flex-shrink-0"
                 />
                 <span className="text-xs text-muted-foreground leading-relaxed">
                   {t('onboarding.slide0.termsPrefix')}{' '}
@@ -731,7 +727,6 @@ export default function CreateProfileModal({ user, open, onComplete }) {
         {/* SLIDE 1: Pasaporte */}
         {slide === 1 && (
           <div className="flex-1 flex flex-col">
-            <p className="text-xs font-bold text-primary uppercase tracking-wider mb-1">{t('onboarding.step', { current: 2, total: 6 })}</p>
             <h2 className="text-2xl font-black text-foreground leading-tight mb-2">{t('onboarding.slide1.title')}</h2>
             <p className="text-sm text-muted-foreground leading-relaxed mb-6">
               {t('onboarding.slide1.subtitle')}
@@ -739,7 +734,7 @@ export default function CreateProfileModal({ user, open, onComplete }) {
 
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('onboarding.slide1.nationalityLabel')}</p>
+                <p className="text-sm font-bold text-foreground mb-2">{t('onboarding.slide1.nationalityLabel')}</p>
                 <CountryPicker
                   value={nationality}
                   onChange={handleNationalitySelect}
@@ -748,18 +743,18 @@ export default function CreateProfileModal({ user, open, onComplete }) {
               </div>
 
               <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{t('onboarding.slide1.residenceLabel')}</p>
+                <p className="text-sm font-bold text-foreground mb-2">{t('onboarding.slide1.residenceLabel')}</p>
                 <CountryPicker
                   value={homeCountry}
                   onChange={handleResidenceSelect}
                   placeholder={t('onboarding.slide1.residencePlaceholder')}
                 />
-                <p className="text-xs text-muted-foreground mt-1.5">{t('onboarding.slide1.residenceHint')}</p>
+                <p className="text-xs text-muted-foreground mt-1.5">{homeCurrency ? t('onboarding.slide1.currencyHint', { currency: homeCurrency }) : t('onboarding.slide1.residenceHint')}</p>
               </div>
 
               <div>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                  {t('onboarding.slide1.secondPassportLabel')} <span className="font-normal text-muted-foreground normal-case tracking-normal">— {t('common.optional')}</span>
+                <p className="text-sm font-bold text-foreground mb-2">
+                  {t('onboarding.slide1.secondPassportLabel')} <span className="font-normal text-xs text-muted-foreground">— {t('common.optional')}</span>
                 </p>
                 <CountryPicker
                   value={secondNationality}
