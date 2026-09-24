@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { TYPE_CONFIG, getMapsUrl } from './spotsHelpers';
 import { useTranslation } from 'react-i18next';
-import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
+import DayTimeAssign from '@/components/spots/DayTimeAssign';
+import { getTripDays, sameCityName } from '@/lib/tripDays';
 import { normalizeEmail } from '@/lib/utils';
 
 export default
@@ -208,54 +209,12 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
           {isStay ? (
             <p className="text-xs text-muted-foreground bg-secondary/50 rounded-xl px-3 py-2.5">{t('spots.stayInfo')}</p>
           ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('spots.sheet.day')}</p>
-              {hasTripDays ? (
-                <select
-                  // value combina fecha+ciudad (tripDayOptionValue), no solo
-                  // la fecha — con solo la fecha, un día de tránsito entre
-                  // dos ciudades distintas (misma fecha, dos City) no se
-                  // puede distinguir cuál eligió el usuario en el <select>.
-                  value={assignedDate ? tripDayOptionValue({ date: assignedDate, cityId: assignedCityId }) : ''}
-                  onChange={e => {
-                    const { date, cityId } = parseTripDayOptionValue(e.target.value);
-                    setAssignedDate(date);
-                    setAssignedCityId(cityId);
-                  }}
-                  className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary"
-                >
-                  <option value="">{t('spots.sheet.unassigned')}</option>
-                  {tripDayOptions.map(d => (
-                    <option key={tripDayOptionValue(d)} value={tripDayOptionValue(d)}>{d.date} · {d.city}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="date"
-                  value={assignedDate}
-                  onChange={e => setAssignedDate(e.target.value)}
-                  className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary"
-                />
-              )}
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('spots.sheet.time')}</p>
-              <select
-                value={assignedTime || ''}
-                onChange={e => setAssignedTime(e.target.value)}
-                className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary appearance-none"
-              >
-                <option value="">{t('spots.sheet.noTime')}</option>
-                {Array.from({ length: 24 * 4 }, (_, i) => {
-                  const h = Math.floor(i / 4).toString().padStart(2, '0');
-                  const m = ((i % 4) * 15).toString().padStart(2, '0');
-                  const val = `${h}:${m}`;
-                  return <option key={val} value={val}>{val}</option>;
-                })}
-              </select>
-            </div>
-          </div>
+          <DayTimeAssign
+            tripDayOptions={hasTripDays ? tripDayOptions : []}
+            date={assignedDate} cityId={assignedCityId} time={assignedTime}
+            onDayChange={({ date, cityId }) => { setAssignedDate(date); setAssignedCityId(cityId); }}
+            onTimeChange={setAssignedTime}
+          />
           )}
         </div>
 

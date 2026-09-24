@@ -166,8 +166,13 @@ export default function GooglePlaceCard({ placeId, variant = 'compact', fallback
     let cancelled = false;
     const node = containerRef.current;
 
+    // José (24 sep 2026): un elemento del DOM solo puede estar en un sitio.
+    // Si el mismo sitio sale dos veces en pantalla (dos spots con el mismo
+    // place id), reutilizar el ya pintado lo MOVÍA a la segunda fila y la
+    // primera se quedaba vacía. Solo se reutiliza si no está puesto en otra
+    // fila; si lo está, se crea uno nuevo.
     const reused = kept.get(key);
-    if (reused) {
+    if (reused && !reused.isConnected) {
       remember(key, reused);
       node?.replaceChildren(reused);
       return () => { if (node?.contains(reused)) node.removeChild(reused); };
