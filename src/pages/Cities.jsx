@@ -997,7 +997,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
 }
 
 // ── Day row ───────────────────────────────────────────────────────────────────
-function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isTomorrow_, queryClient, defaultOpen, trip, cities, itineraryDays, profiles, userId, currentUserEmail }) {
+function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, cityName, dayNumber, isToday_, isTomorrow_, queryClient, defaultOpen, trip, cities, itineraryDays, profiles, userId, currentUserEmail }) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language === 'en' ? undefined : es;
   const [open, setOpen] = useState(defaultOpen);
@@ -1063,15 +1063,14 @@ function DayRow({ day, dateStr, allDocs, allSpots, tripId, cityId, isToday_, isT
             </div>
             {/* Info */}
             <div className="flex-1 min-w-0">
-              {/* Sin título y con contenido, las pastillas de abajo YA dicen "1 doc" —
-                  antes se repetía el mismo texto arriba. */}
-              {(day?.title || !hasContent) && (
-                <p className={`text-sm font-semibold truncate ${!day?.title && !hasContent ? 'text-muted-foreground italic font-normal' : 'text-foreground'}`}>
-                  {day?.title || t('cities.day.tapToPlan')}
-                </p>
-              )}
+              {/* José (24 sep 2026): sin título propio, el día se llama
+                  "Tokio · Día 1" (calculado, no se guarda) en vez de "Toca
+                  para planificar". Si el usuario le pone título, manda el suyo. */}
+              <p className="text-sm font-semibold truncate text-foreground">
+                {day?.title || (cityName && dayNumber ? t('cities.day.defaultTitle', { city: cityName, n: dayNumber }) : t('cities.day.tapToPlan'))}
+              </p>
               {hasContent && (
-                <div className={`flex gap-1.5 flex-wrap ${day?.title ? 'mt-1.5' : ''}`}>
+                <div className="flex gap-1.5 flex-wrap mt-1.5">
                   {pillItems.map((p, i) => (
                     <span key={i} className={`text-label font-bold px-2 py-0.5 rounded-full ${p.cls}`}>{p.label}</span>
                   ))}
@@ -1231,7 +1230,7 @@ function CityBlock({ city, idx, total, allDocs, allSpots, itineraryDays, tripId,
               <p className="text-xs text-primary">{t('cities.editTripForDates')}</p>
             </div>
           )}
-          {cityDays.map(dateStr => (
+          {cityDays.map((dateStr, dayIdx) => (
             <DayRow
               key={dateStr}
               day={daysByDate[dateStr] || null}
@@ -1240,6 +1239,8 @@ function CityBlock({ city, idx, total, allDocs, allSpots, itineraryDays, tripId,
               allSpots={allSpots}
               tripId={tripId}
               cityId={city.id}
+              cityName={city.name}
+              dayNumber={dayIdx + 1}
               isToday_={dateStr === todayStr}
               isTomorrow_={dateStr === tomorrowStr}
               queryClient={queryClient}
@@ -1541,7 +1542,7 @@ export default function Cities() {
                       </Link>
                     )}
                   </div>
-                  {cityDays.map(dateStr => (
+                  {cityDays.map((dateStr, dayIdx) => (
                     <DayRow
                       key={dateStr}
                       day={daysByDate[dateStr] || null}
@@ -1550,6 +1551,8 @@ export default function Cities() {
                       allSpots={allSpots}
                       tripId={tripId}
                       cityId={city.id}
+                      cityName={city.name}
+                      dayNumber={dayIdx + 1}
                       isToday_={dateStr === todayStr}
                       isTomorrow_={dateStr === tomorrowStr}
                       queryClient={queryClient}

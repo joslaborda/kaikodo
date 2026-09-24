@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Link } from 'react-router-dom';
 import OTabBar from '@/components/trip/OTabBar';
 import { useTranslation } from 'react-i18next';
+import { isNativeSpeechAvailable, requestSpeechAccess, startNativeListening, nativeSpeak, nativeStopSpeaking } from '@/lib/nativeSpeech';
 
 // ── Languages ─────────────────────────────────────────────────────────────────
 const LANGUAGES = [
@@ -54,6 +55,9 @@ async function translateText(text, fromCode, toCode) {
 }
 
 function speakText(text, bcpLang) {
+  // Dentro de la app nativa, lectura del sistema (el WebView de Android no
+  // trae síntesis de voz). En la web, la del navegador.
+  if (isNativeSpeechAvailable()) { nativeSpeak(text, bcpLang, 0.85); return; }
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
@@ -180,7 +184,63 @@ function VozTab({ fromLang, toLang, onSaveToHistory }) {
     }
   };
 
+  const nativeErrorText = code => (
+    code === 'not-allowed' ? t('translator.errors.micDeniedNative')
+    : code === 'unavailable' ? t('translator.errors.voiceUnavailable')
+    : code === 'no-speech' ? t('translator.errors.noSpeech')
+    : code === 'network' ? t('translator.errors.voiceNetwork')
+    : t('translator.errors.recordError')
+  );
+
+  // José (24 sep 2026): en la app nativa (iOS y Android) el micrófono va por
+  // el reconocimiento de voz del sistema -- ver src/lib/nativeSpeech.js.
+  const startingRef = useRef(false);
+  const startNative = async () => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setError('');
+    setResult({ original: '', translated: '' });
+    setInterim('');
+    pendingTextRef.current = '';
+    interimRef.current = '';
+    try {
+      nativeStopSpeaking();
+      const access = await requestSpeechAccess();
+      if (!access?.granted) { setError(t('translator.errors.micDeniedNative')); return; }
+      if (access?.available === false) { setError(t('translator.errors.voiceUnavailable')); return; }
+      const session = await startNativeListening({
+        lang: fromL.bcp,
+        onText: text => { pendingTextRef.current = text; interimRef.current = text; setInterim(text); },
+        onError: code => { recognitionRef.current = null; setRecording(false); setError(nativeErrorText(code)); },
+      });
+      recognitionRef.current = { native: true, stop: session.stop };
+      setRecording(true);
+    } catch (e) {
+      recognitionRef.current = null;
+      setRecording(false);
+      setError(nativeErrorText(e?.code || e?.message));
+    } finally {
+      startingRef.current = false;
+    }
+  };
+
+  const stopNative = async () => {
+    const session = recognitionRef.current;
+    recognitionRef.current = null;
+    setRecording(false);
+    let text = '';
+    try { text = (await session?.stop?.()) || ''; } catch { /* se usa lo último recibido */ }
+    text = (text || pendingTextRef.current || interimRef.current || '').trim();
+    pendingTextRef.current = '';
+    if (text) doTranslate(text);
+    else setError(t('translator.errors.noText'));
+  };
+
   const toggleRecording = () => {
+    if (isNativeSpeechAvailable()) {
+      if (recording) stopNative(); else startNative();
+      return;
+    }
     // STOP: save what we have and translate
     if (recording) {
       const textToTranslate = (pendingTextRef.current || interimRef.current || '').trim();
@@ -257,7 +317,7 @@ function VozTab({ fromLang, toLang, onSaveToHistory }) {
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try { recognitionRef.current.stop(); } catch { /* noop */ }
         recognitionRef.current = null;
       }
     };

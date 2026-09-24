@@ -12,13 +12,15 @@ import { Link } from 'react-router-dom';
 import OTabBar from '@/components/trip/OTabBar';
 import { createPageUrl } from '@/utils';
 import { getCountryMeta, normalizeCountry, getCountryLabel } from '@/lib/countryConfig';
-import { getTripCoverImage } from '@/lib/tripImage';
 import { getTripStatus } from '@/components/trip/TripCard';
 import { searchNewPlaces, fetchPlaceDetails } from '@/components/spots/placesAutocomplete';
 import { matchTripCity } from '@/lib/tripCityMatch';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
 import { normalizeEmail, isSafeHttpUrl } from '@/lib/utils';
+import GooglePlaceCard, { googlePlaceIdOf, isGoogleCardControl } from '@/components/spots/GooglePlaceCard';
+import { TYPE_CONFIG, getMapsUrl } from '@/components/spots/spotsHelpers';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -49,69 +51,79 @@ function fmtShortDate(dateStr, lang) {
 function CollectionRow({ spot, tripName, onDelete, deleting, onOpenSheet }) {
   const { t, i18n } = useTranslation();
   const [confirming, setConfirming] = useState(false);
-  const SpotTypeIcon = SPOT_ICONS_MAP[spot.type] || MapPin;
-  const coverImg = spot.photo_url || spot.image_url || (spot.city_name || spot.country
-    ? getTripCoverImage(spot.city_name, spot.country)
-    : null);
+  const tc = TYPE_CONFIG[spot.type] || TYPE_CONFIG.custom;
   const inItinerary = spot.owner === 'mine' && !!spot.assigned_date;
+  const placeId = googlePlaceIdOf(spot);
+  const online = useOnlineStatus();
+  // José (24 sep 2026): estas filas tienen que verse igual que las de Spots
+  // (MySpotRow). Antes llevaban la portada genérica de la ciudad -- la misma
+  // foto repetida en todas -- y el nombre tecleado al buscar ("Restaurante").
+  // Ahora, igual que en Spots: ficha de Google (Places UI Kit, carga
+  // diferida; nombre, foto y estrellas reales del sitio, términos EEA) y, sin
+  // place id o sin conexión, la fila propia con el icono del tipo.
+  const showOwnMeta = !placeId || !online;
+  const cityLabel = spot.city_name || spot.city || '';
+
+  const ownHeader = (
+    <div className="flex items-center gap-3 min-w-0">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${tc.color}`}>{tc.Icon && <tc.Icon size={16} />}</div>
+      <p className="text-sm font-medium text-foreground truncate">{spot.title}</p>
+    </div>
+  );
+
+  const badges = (spot.owner === 'mine' || spot.importedToTripName) ? (
+    <span className="flex items-center gap-1.5 min-w-0">
+      {spot.owner === 'mine' && (
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50 shrink-0">
+          {t('profile.yours')}
+        </span>
+      )}
+      {spot.importedToTripName && (
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-50 dark:bg-orange-950/30 text-primary border border-orange-200 dark:border-orange-900/50 truncate max-w-[9rem]">
+          {t('profile.inYourTrip', { trip: spot.importedToTripName })}
+        </span>
+      )}
+    </span>
+  ) : null;
+
+  const trashBtn = !confirming && (
+    <button
+      aria-label={t('profile.deleteSpot', { title: spot.title })}
+      onClick={() => setConfirming(true)}
+      disabled={deleting}
+      className="w-9 h-9 -m-1.5 rounded-full flex items-center justify-center flex-shrink-0 text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40">
+      <Trash2 className="w-4 h-4" />
+    </button>
+  );
 
   return (
-    <div className="px-3 py-2.5">
-      <div className="flex items-center gap-2.5">
-        <button onClick={() => onOpenSheet?.(spot)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
-          {coverImg ? (
-            <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-secondary relative">
-              <img src={coverImg} alt={spot.title} loading="lazy" className="w-full h-full object-cover"
-                onError={e => { e.currentTarget.style.display = 'none'; }} />
-            </div>
-          ) : (
-            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
-              <SpotTypeIcon size={16} className="text-muted-foreground" />
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground truncate">{spot.title}</p>
-            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
-              {typeof spot.rating === 'number' && (
-                <span className="inline-flex items-center gap-0.5 text-foreground font-medium shrink-0">
-                  <Star className="w-3 h-3 fill-current text-amber-400" />{spot.rating.toFixed(1)}
-                </span>
-              )}
-              {/* José (15 sep 2026): la ciudad es lo que de verdad distingue
-                  un spot de otro dentro de un mismo país filtrado -- se
-                  queda sola en su propia línea, más visible, en vez de
-                  compartir sitio con las etiquetas de abajo. */}
-              <span className="truncate">{spot.city_name || spot.city || t('profile.unknownLocation')}</span>
-            </p>
-            {(spot.owner === 'mine' || spot.importedToTripName) && (
-              <p className="mt-1 flex items-center gap-1.5 flex-wrap">
-                {spot.owner === 'mine' && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50">
-                    {t('profile.yours')}
-                  </span>
-                )}
-                {spot.importedToTripName && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-50 dark:bg-orange-950/30 text-primary border border-orange-200 dark:border-orange-900/50">
-                    {t('profile.inYourTrip', { trip: spot.importedToTripName })}
-                  </span>
-                )}
-              </p>
-            )}
-          </div>
-        </button>
-        {!confirming && (
-          <button
-            aria-label={t('profile.deleteSpot', { title: spot.title })}
-            onClick={() => setConfirming(true)}
-            disabled={deleting}
-            className="w-10 h-10 -m-1.5 rounded-full flex items-center justify-center flex-shrink-0 text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40">
-            <Trash2 className="w-4 h-4" />
-          </button>
-        )}
-      </div>
+    <div className="relative bg-card">
+      {/* Fila pulsable: abre la ficha del spot. */}
+      <button onClick={e => { if (isGoogleCardControl(e)) return; onOpenSheet?.(spot); }}
+        className={`w-full block px-4 pt-3 text-left hover:bg-secondary/20 transition-colors ${showOwnMeta ? 'pb-1' : 'pb-3'}`}>
+        <GooglePlaceCard placeId={placeId} variant="compact" orientation="horizontal" fallback={ownHeader} />
+      </button>
+
+      {showOwnMeta ? (
+        <div className="flex items-center gap-2 px-4 pb-3 pt-1">
+          <span className="flex-1 min-w-0 text-xs text-muted-foreground truncate">
+            {t(tc.tk)}{cityLabel ? ' · ' + cityLabel : ''}
+          </span>
+          {badges}
+          {trashBtn}
+        </div>
+      ) : (
+        // Con ficha de Google: como en Spots, los controles van abajo a la
+        // derecha, a la altura de la atribución "Google Maps" (que queda a la
+        // izquierda y no se tapa).
+        <div className="absolute right-4 bottom-3 flex items-center gap-2">
+          {badges}
+          {trashBtn}
+        </div>
+      )}
 
       {confirming && (
-        <div className="mt-2">
+        <div className="px-4 pb-3">
           {inItinerary && (
             <p className="text-xs text-accent-foreground bg-accent border border-orange-200 dark:border-orange-900/50 rounded-lg px-2.5 py-2 mb-2 leading-snug">
               {t('profile.inItineraryWarning', { trip: tripName || t('profile.thisTrip'), date: fmtShortDate(spot.assigned_date, i18n.language) })}
@@ -161,9 +173,13 @@ function EmptyCollection({ onFocusSearch }) {
 function SpotDetailSheet({ spot, onClose }) {
   const { t } = useTranslation();
   const SpotTypeIcon = SPOT_ICONS_MAP[spot.type] || MapPin;
+  // José (24 sep 2026): igual que la ficha de Spots -- con place id, la
+  // cabecera es la ficha de Google (nombre, foto y estrellas reales); sin él
+  // o sin conexión, la cabecera propia de siempre.
+  const placeId = googlePlaceIdOf(spot);
   const coverImg = spot.photo_url || spot.image_url || null;
 
-  const mapsUrl = (spot.lat && spot.lng)
+  const mapsUrl = placeId ? getMapsUrl(spot) : (spot.lat && spot.lng)
     ? `https://www.google.com/maps/search/?api=1&query=${spot.lat},${spot.lng}`
     : (spot.address || spot.city_name)
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([spot.address, spot.city_name, spot.country].filter(Boolean).join(', '))}`
@@ -173,6 +189,14 @@ function SpotDetailSheet({ spot, onClose }) {
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-card w-full max-w-3xl rounded-t-3xl px-5 pt-3 pb-8 max-h-[85vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="spot-sheet-title">
         <div className="w-9 h-1 rounded-full bg-border mx-auto mb-4" />
+        {placeId && (
+          <div className="flex justify-end -mt-2 mb-1">
+            <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 -m-1 rounded-full flex items-center justify-center text-muted-foreground hover:bg-secondary flex-shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        <GooglePlaceCard placeId={placeId} variant="full" className="mb-3" fallback={
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3 min-w-0">
             {coverImg ? (
@@ -194,12 +218,15 @@ function SpotDetailSheet({ spot, onClose }) {
               <p className="text-xs text-muted-foreground truncate">{[spot.city_name, spot.country].filter(Boolean).join(', ')}</p>
             </div>
           </div>
-          <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 -m-1 rounded-full flex items-center justify-center text-muted-foreground hover:bg-secondary flex-shrink-0">
-            <X className="w-4 h-4" />
-          </button>
+          {!placeId && (
+            <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 -m-1 rounded-full flex items-center justify-center text-muted-foreground hover:bg-secondary flex-shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
+        } />
 
-        {spot.address && <p className="text-sm text-foreground mb-3">{spot.address}</p>}
+        {!placeId && spot.address && <p className="text-sm text-foreground mb-3">{spot.address}</p>}
         {spot.notes && (
           <p className="text-sm text-muted-foreground bg-secondary/60 rounded-xl px-3 py-2.5 mb-3">{spot.notes}</p>
         )}

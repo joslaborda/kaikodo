@@ -5,7 +5,7 @@ import { base44 } from '@/api/base44Client';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { useAuth } from '@/lib/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Map, Plus } from 'lucide-react';
+import { Map, Plus, Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import TripCard, { HeroTripCard, getTripStatus } from '@/components/trip/TripCard';
 import { applyCityDates } from '@/lib/tripDates';
@@ -14,6 +14,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import CreateProfileModal from '@/components/social/CreateProfileModal';
 import { createPageUrl } from '@/utils';
 import { normalizeCountry } from '@/lib/countryConfig';
+import { matchTripCity } from '@/lib/tripCityMatch';
 import { normalizeEmail } from '@/lib/utils';
 import { computeEditors } from '@/lib/syncTripMembers';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +47,8 @@ function EmptyState({ onCreateTrip }) {
 export default function TripsList() {
   const { t } = useTranslation();
   const [dialogOpen, setDialogOpen]           = useState(false);
-  const [newTripPopup, setNewTripPopup]       = useState(null); // { trip, spotCount, country }
+  const [newTripPopup, setNewTripPopup]       = useState(null); // { trip, cities, spots, country }
+  const [importingSaved, setImportingSaved]   = useState(false);
   const [showPast, setShowPast] = useState(false);
   // CreateProfileModal crea el perfil e invalida la query de `myProfile` para
   // pasar a las slides de "tour" (2-5) — pero esa misma invalidación hace que
@@ -163,9 +165,10 @@ export default function TripsList() {
         // desde el primer momento, igual que roles.
         admins: email ? [email] : [],
       });
+      const createdCities = [];
       for (let i = 0; i < stops.length; i++) {
         const dates = allocations[i] || { start_date: formData.start_date, end_date: formData.end_date };
-        await base44.entities.City.create({
+        const createdCity = await base44.entities.City.create({
           trip_id: trip.id, name: stops[i],
           country: normalizeCountry(stopCountries[i] || formData.country || ''),
           // José (14 sep 2026): coordenadas reales si CityInput las
@@ -184,10 +187,11 @@ export default function TripsList() {
           trip_members: trip.members || [],
           trip_editors: computeEditors(trip.members || [], trip),
         });
+        if (createdCity) createdCities.push(createdCity);
       }
-      return trip;
+      return { trip, cities: createdCities };
     },
-    onSuccess: async (trip) => {
+    onSuccess: async ({ trip, cities }) => {
       queryClient.invalidateQueries({ queryKey: ['trips', user?.email] });
       queryClient.invalidateQueries({ queryKey: ['allCities'] });
       setDialogOpen(false);
@@ -199,9 +203,14 @@ export default function TripsList() {
         ].filter(Boolean);
         if (!countries.length || !user?.id) return;
         const mySaved = await base44.entities.SavedSpot.filter({ user_id: user.id });
-        const matching = mySaved.filter(s => s.country && countries.includes(normalizeCountry(s.country)));
+        // José (24 sep 2026): mismo criterio que Perfil y Spots
+        // (src/lib/tripCityMatch.js) -- solo cuenta lo que de verdad cae en
+        // una ciudad del viaje. Antes contaba todo el país y el popup
+        // prometía spots que luego no se podían importar.
+        const matching = mySaved.filter(s =>
+          s.country && countries.includes(normalizeCountry(s.country)) && !!matchTripCity(s, cities));
         if (matching.length > 0) {
-          setNewTripPopup({ trip, spotCount: matching.length, country: countries[0] });
+          setNewTripPopup({ trip, cities, spots: matching, country: countries[0] });
         }
       } catch {
         // silencioso — el popup es una mejora, no crítico
@@ -210,6 +219,59 @@ export default function TripsList() {
   
     onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
   });
+
+  // José (24 sep 2026): "Importar" del popup de viaje nuevo no importaba
+  // nada -- solo llevaba a Spots con un panel donde había que volver a
+  // pulsar "+" en cada spot, y ese panel dependía de un parámetro de la URL:
+  // al volver a Spots ya no estaba y parecía que el spot había desaparecido.
+  // Ahora el botón importa de verdad (mismos campos que el import de Perfil
+  // y Spots: Spot NUEVO en el viaje, el SavedSpot original no se toca) y
+  // después lleva a Spots.
+  const importSavedIntoNewTrip = async () => {
+    if (!newTripPopup || importingSaved) return;
+    const { trip, cities, spots } = newTripPopup;
+    setImportingSaved(true);
+    let imported = 0;
+    try {
+      for (const s of spots) {
+        const targetCity = matchTripCity(s, cities);
+        if (!targetCity) continue;
+        await base44.entities.Spot.create({
+          trip_id: trip.id,
+          city_id: targetCity.id,
+          city_name: targetCity.name,
+          country: normalizeCountry(s.country || ''),
+          title: s.title,
+          type: s.type || 'custom',
+          address: s.address || '',
+          lat: s.lat, lng: s.lng,
+          notes: s.notes || '',
+          image_url: s.image_url || null,
+          visibility: 'trip_members',
+          visited: false,
+          created_by: user?.email,
+          created_by_user_id: user?.id,
+          source: 'saved_import',
+          // El rls de create de Spot exige que trip_members incluya al usuario.
+          trip_members: trip.members || [],
+          // Términos EEA de Google: solo el place id; la ficha de UI Kit
+          // enseña nombre/estrellas en vivo dentro del viaje.
+          ...(s.google_place_id ? { osm_id: s.google_place_id, place_refreshed_at: s.place_refreshed_at || null, title_is_own: !!s.title_is_own } : {}),
+        });
+        imported++;
+      }
+      toast({ title: t('profile.importSuccess', { count: imported, trip: trip.destination || trip.name || '' }) });
+      queryClient.invalidateQueries({ queryKey: ['spots', trip.id] });
+      setNewTripPopup(null);
+      navigate(createPageUrl('Restaurants') + '?trip_id=' + trip.id);
+    } catch (e) {
+      // Los que ya se crearon se quedan: se avisa y se refresca igualmente.
+      if (imported > 0) queryClient.invalidateQueries({ queryKey: ['spots', trip.id] });
+      toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' });
+    } finally {
+      setImportingSaved(false);
+    }
+  };
 
   // Classify trips
   const { heroTrips, heroCitiesById, upcomingTrips, pastTrips, singleActiveTripId, heroIsPastFallback } = useMemo(() => {
@@ -443,7 +505,7 @@ export default function TripsList() {
       {/* ── Post-creation spot discovery popup ─────────────────────── */}
       {newTripPopup && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 pb-[80px]"
-          onClick={() => setNewTripPopup(null)}>
+          onClick={() => { if (!importingSaved) setNewTripPopup(null); }}>
           <div className="bg-card w-full max-w-lg rounded-t-3xl overflow-hidden"
             onClick={e => e.stopPropagation()}>
             <div className="pt-3 pb-0 flex justify-center">
@@ -452,7 +514,7 @@ export default function TripsList() {
             <div className="px-5 py-5">
               <Map className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
               <p className="text-base font-medium text-foreground mb-1">
-                {t('tripslist.savedSpots', { count: newTripPopup.spotCount, country: newTripPopup.country })}
+                {t('tripslist.savedSpots', { count: newTripPopup.spots.length, country: newTripPopup.country })}
               </p>
               <p className="text-sm text-muted-foreground mb-5">
                 {t('tripslist.importSpots')}
@@ -460,17 +522,19 @@ export default function TripsList() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setNewTripPopup(null)}
-                  className="flex-1 py-3 bg-secondary border border-border rounded-xl text-sm text-muted-foreground"
+                  disabled={importingSaved}
+                  className="flex-1 py-3 bg-secondary border border-border rounded-full text-sm text-muted-foreground disabled:opacity-50"
                 >
                   {t('tripslist.notNow')}
                 </button>
-                <Link
-                  to={createPageUrl('Restaurants') + '?trip_id=' + newTripPopup.trip.id + '&import_saved=1'}
-                  onClick={() => setNewTripPopup(null)}
-                  className="flex-1 py-3 bg-primary text-white rounded-full text-sm font-semibold text-center"
+                <button
+                  onClick={importSavedIntoNewTrip}
+                  disabled={importingSaved}
+                  className="flex-1 py-3 bg-primary text-white rounded-full text-sm font-semibold text-center inline-flex items-center justify-center gap-2 disabled:opacity-70"
                 >
+                  {importingSaved && <Loader2 className="w-4 h-4 animate-spin" />}
                   {t('tripslist.importNow')}
-                </Link>
+                </button>
               </div>
             </div>
           </div>

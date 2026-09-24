@@ -933,12 +933,62 @@ function EmergencyContent({ country, homeCountry, secondNationality, meta, activ
   // NO había `police`. Ahora va siempre el primero de la lista cuando
   // existe, y el resto de números específicos se filtran para no repetir
   // el mismo número dos veces (varios países solo tienen el 112 para todo).
-  const numbers = data ? [
-    data.emergency_general && { label:t('utilities.emerg.general'), number:data.emergency_general, Icon: ShieldAlert, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30' },
-    data.police && data.police !== data.emergency_general && { label:t('utilities.emerg.police'), number:data.police, Icon: Shield, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/30' },
-    data.ambulance && data.ambulance !== data.police && data.ambulance !== data.emergency_general && { label:t('utilities.emerg.ambulance'), number:data.ambulance, Icon: Cross, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30' },
-    data.fire && data.fire !== data.police && data.fire !== data.ambulance && data.fire !== data.emergency_general && { label:t('utilities.emerg.fire'), number:data.fire, Icon: Flame, color: 'text-primary', bg: 'bg-orange-50 dark:bg-orange-950/30' },
-  ].filter(Boolean) : [];
+  //
+  // José (24 sep 2026, Japón): en muchos países `emergency_general` no es un
+  // número único sino un resumen de los específicos ("110 (policía) / 119
+  // (bomberos y ambulancia)", "112/999"...). Se comparaba el texto entero,
+  // así que nunca coincidía: salía una fila "Emergencias" con el resumen
+  // repetido encima de Policía/Ambulancia, y partido en dos líneas. Ahora se
+  // separa en números sueltos y en la fila general solo quedan los que no
+  // son ya de policía/ambulancia/bomberos (p. ej. el 112 de "112/999"). Y
+  // si un mismo número sirve para varios servicios (119 en Japón =
+  // ambulancia y bomberos) va en una sola fila con las dos etiquetas.
+  const numbers = (() => {
+    if (!data) return [];
+    const clean = v => (v == null ? '' : String(v).trim());
+    const services = [
+      { key: 'police', number: clean(data.police), Icon: Shield, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-950/30' },
+      { key: 'ambulance', number: clean(data.ambulance), Icon: Cross, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-950/30' },
+      { key: 'fire', number: clean(data.fire), Icon: Flame, color: 'text-primary', bg: 'bg-orange-50 dark:bg-orange-950/30' },
+    ].filter(sv => sv.number);
+    const specific = new Set(services.map(sv => sv.number));
+    // "110 (policía) / 119 (...)" -> ['110', '119']; "112/999" -> ['112', '999']
+    const generalNums = [...new Set(
+      clean(data.emergency_general).split('/')
+        .map(part => (part.match(/\d[\d-]*/) || [''])[0].replace(/-+$/, ''))
+        .filter(Boolean)
+    )].filter(n => !specific.has(n));
+
+    const rows = [];
+    if (generalNums.length) {
+      rows.push({ label: t('utilities.emerg.general'), number: generalNums.join(' / '), Icon: ShieldAlert, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30' });
+    }
+    // Agrupa servicios que comparten número, en el orden policía -> ambulancia -> bomberos.
+    const groups = [];
+    services.forEach(sv => {
+      const g = groups.find(x => x.number === sv.number);
+      if (g) g.keys.push(sv.key); else groups.push({ ...sv, keys: [sv.key] });
+    });
+    const labelFor = keys => {
+      const k = keys.join('+');
+      if (k === 'police') return t('utilities.emerg.police');
+      if (k === 'ambulance') return t('utilities.emerg.ambulance');
+      if (k === 'fire') return t('utilities.emerg.fire');
+      if (k === 'ambulance+fire') return t('utilities.emerg.ambulanceFire');
+      if (k === 'police+ambulance') return t('utilities.emerg.policeAmbulance');
+      if (k === 'police+fire') return t('utilities.emerg.policeFire');
+      return t('utilities.emerg.allServices');
+    };
+    groups.forEach(g => {
+      // Un solo número para todo (911, 999...): es el número de emergencias.
+      if (g.keys.length === 3 && !generalNums.length) {
+        rows.push({ label: t('utilities.emerg.general'), number: g.number, Icon: ShieldAlert, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-950/30' });
+      } else {
+        rows.push({ label: labelFor(g.keys), number: g.number, Icon: g.Icon, color: g.color, bg: g.bg });
+      }
+    });
+    return rows;
+  })();
 
   return (
     <div className="space-y-4">
@@ -974,15 +1024,17 @@ function EmergencyContent({ country, homeCountry, secondNationality, meta, activ
             </p>
           </div>
           {numbers.map((n, i) => (
-            <div key={i} className="flex items-center justify-between px-4 py-3.5 border-b border-border last:border-0">
-              <div className="flex items-center gap-2.5">
+            // Pulsable: llama directamente (el primer número si hay varios).
+            <a key={i} href={`tel:${n.number.split('/')[0].replace(/[^\d+]/g, '')}`}
+              className="flex items-center justify-between gap-3 px-4 py-3.5 border-b border-border last:border-0 hover:bg-secondary/20 transition-colors">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${n.bg}`}>
                   <n.Icon className={`w-4 h-4 ${n.color}`} />
                 </div>
-                <span className="text-sm font-medium text-foreground">{n.label}</span>
+                <span className="text-sm font-medium text-foreground leading-snug">{n.label}</span>
               </div>
-              <span className="text-xl font-medium text-primary tracking-tight">{n.number}</span>
-            </div>
+              <span className="text-xl font-medium text-primary tracking-tight whitespace-nowrap flex-shrink-0">{n.number}</span>
+            </a>
           ))}
         </div>
       )}
