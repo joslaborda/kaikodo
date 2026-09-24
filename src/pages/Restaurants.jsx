@@ -31,7 +31,7 @@ import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey, loadGoogleMaps,
 // seguir el mismo patrón que esos tres — Leaflet/CARTO se mantiene SOLO como
 // red de seguridad, ya no como mapa por defecto.
 import { matchTripCity, isSameSpot } from '@/lib/tripCityMatch';
-import GooglePlaceCard from '@/components/spots/GooglePlaceCard';
+import GooglePlaceCard, { isGoogleCardControl } from '@/components/spots/GooglePlaceCard';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from '@/components/spots/mapTiles';
 
 
@@ -737,6 +737,57 @@ function PlaceResultCard({ place, onSave, saving, isDuplicate }) {
   );
 }
 
+// José (24 sep 2026): tocar un resultado de Google abre su ficha completa
+// (Places UI Kit: fotos, valoración, horario...) y, debajo, el día y la hora
+// -- el mismo patrón que la ficha de un spot ya guardado. "Guardar" lo añade
+// al viaje ya asignado (sin el paso extra de "¿Qué día?"). Nada de la ficha se
+// guarda: solo el place id (términos EEA de Google).
+function PlacePreviewSheet({ place, tripCities = [], onClose, onSave, saving, alreadySaved }) {
+  const { t } = useTranslation();
+  const [day, setDay] = useState({ date: '', cityId: '' });
+  const [time, setTime] = useState('');
+  const dayOptions = useMemo(() => getTripDays(tripCities), [tripCities]);
+  if (!place) return null;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-card w-full max-w-lg rounded-t-3xl flex flex-col" style={{ maxHeight: '90vh', paddingBottom: 'env(safe-area-inset-bottom)' }} onClick={e => e.stopPropagation()}>
+        <div className="flex-shrink-0 flex items-center justify-between px-5 pt-4 pb-2">
+          <div className="w-9 h-1 bg-border rounded-full absolute left-1/2 -translate-x-1/2 top-2" />
+          <span />
+          <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
+            <X className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-5">
+          <GooglePlaceCard placeId={place._placeId} variant="full" fallback={(
+            <div>
+              <p className="text-base font-semibold text-foreground">{place.name}</p>
+              {place.address && <p className="text-xs text-muted-foreground mt-0.5">{place.address}</p>}
+            </div>
+          )} />
+          {!alreadySaved && (
+            <DayTimeAssign tripDayOptions={dayOptions} date={day.date} cityId={day.cityId} time={time}
+              onDayChange={setDay} onTimeChange={setTime} />
+          )}
+        </div>
+        <div className="flex-shrink-0 flex gap-3 px-5 pb-5 pt-2 border-t border-border">
+          <button onClick={onClose} className="flex-1 py-3 border border-border rounded-full text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors">
+            {t('common.cancel')}
+          </button>
+          {alreadySaved ? (
+            <span className="flex-1 py-3 text-center text-sm text-muted-foreground">{t('spots.savedBadge')}</span>
+          ) : (
+            <button onClick={() => onSave(place, day.date ? { date: day.date, cityId: day.cityId, time } : null)} disabled={saving}
+              className="flex-1 py-3 bg-primary text-white rounded-full text-sm font-semibold disabled:opacity-50">
+              {saving ? t('common.loading') : t('common.save')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Assign date modal (shown after saving a spot) ─────────────────────────────
 function AssignDateModal({ spot, tripCities = [], onAssign, onSkip, onUndo }) {
   useBodyScrollLock(true);
@@ -1006,6 +1057,7 @@ export default function Restaurants() {
   const [savedToast, setSavedToast] = useState({ visible: false, spot: null });
   const [lastSavedId, setLastSavedId] = useState(null);
   const [selectedSpot, setSelectedSpot] = useState(null);
+  const [previewPlace, setPreviewPlace] = useState(null); // resultado de Google abierto en vista previa
   const [mySpotSearch, setMySpotSearch] = useState('');
   const [showCityInput, setShowCityInput] = useState(false);
   const [customCity, setCustomCity] = useState('');
@@ -1225,7 +1277,7 @@ export default function Restaurants() {
   // salvo un toast — no se creaba el spot, el botón parecía guardar y no
   // guardaba nada. Volver a un sitio es un caso de uso válido, así que ahora
   // se crea igual; el toast solo informa si aplica. Corregido 5 sept 2026.
-  const savePlaceResult = async place => {
+  const savePlaceResult = async (place, assignment = null) => {
     if (!tripId) return;
     setSavingId(place.id);
     try {
@@ -1246,6 +1298,12 @@ export default function Restaurants() {
                 trip_id: tripId || undefined, city_id: effectiveCityId||undefined,
           city_name: effectiveCityName, country: normalizeCountry(country),
           title: ownTitle, title_is_own: true, type: resolved.type || 'sight',
+          // Día y hora elegidos ya en la ficha de vista previa (PlacePreviewSheet).
+          ...(assignment?.date && resolved.type !== 'hotel' ? {
+            assigned_date: assignment.date,
+            assigned_time: assignment.time || null,
+            ...(assignment.cityId ? { city_id: assignment.cityId, city_name: (tripCitiesCtx || []).find(c => c.id === assignment.cityId)?.name || effectiveCityName } : {}),
+          } : {}),
           address: '', lat: resolved.lat, lng: resolved.lng,
           // osm_id: el nombre del campo se queda igual a propósito — lo lee
           // backfillSpotPlaces (backend) para distinguir un Google Place ID
@@ -1276,7 +1334,8 @@ export default function Restaurants() {
       // estancia. Antes este camino (buscador de Google) abría igualmente el
       // "¿Cuándo quieres visitar este spot?" y, al confirmar, le colaba un
       // assigned_date que lo duplicaba dentro de ese día.
-      if (created?.id && !isStaySpot(created) && !isStaySpot(resolved)) { setAssignFromRow(false); setAssignDateSpot(created); }
+      setPreviewPlace(null);
+      if (created?.id && !isStaySpot(created) && !isStaySpot(resolved) && !assignment?.date) { setAssignFromRow(false); setAssignDateSpot(created); }
       else if (created?.id) setStayDocPrompt(created);
       notifyMembers('spot_added', '', place.name, { spotId: created?.id, spotDate: created?.assigned_date });
     } catch(e) {
@@ -1460,7 +1519,10 @@ export default function Restaurants() {
       const q = searchQuery.toLowerCase();
       const cityQ = normCityName(selectedCity || city);
       return publicSpots.filter(s => {
-        if (spots.some(sp => sp.title?.toLowerCase().trim() === s.title?.toLowerCase().trim())) return false;
+        // José (24 sep 2026): tus propios spots públicos (de otros viajes) no
+        // son "de la comunidad": no salen aquí.
+        if ((s.created_by && normalizeEmail(s.created_by) === normalizeEmail(user?.email)) || (s.created_by_user_id && s.created_by_user_id === user?.id)) return false;
+        if (spots.some(sp => isSameSpot(sp, s))) return false;
         const matchesQuery = s.title?.toLowerCase().includes(q) || s.notes?.toLowerCase().includes(q) || s.tags?.some(tag => tag.toLowerCase().includes(q));
         if (!matchesQuery) return false;
         if (!cityQ) return true;
@@ -1717,7 +1779,10 @@ export default function Restaurants() {
                           // ficha de Google a todo el ancho y el botón en su hueco
                           // de abajo a la derecha.
                           <div key={p.id} className={`relative px-3 pt-2.5 pb-3 ${i < placeResults.length - 1 ? 'border-b border-border' : ''}`}>
-                            <div className="min-w-0">
+                            {/* Tocar la fila abre la ficha completa + día y hora (PlacePreviewSheet). */}
+                            <div className="min-w-0 cursor-pointer" role="button" tabIndex={0}
+                              onClick={e => { if (isGoogleCardControl(e)) return; setPreviewPlace({ ...p, _saved: isDuplicate }); }}
+                              onKeyDown={e => { if (e.key === 'Enter') setPreviewPlace({ ...p, _saved: isDuplicate }); }}>
                               <GooglePlaceCard placeId={p._placeId} variant="compact" fallback={(
                                 <div className="flex items-center gap-3 min-w-0">
                                   <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
@@ -1958,6 +2023,17 @@ export default function Restaurants() {
         initialType={openCreateParam === 'hotel' ? 'hotel' : undefined}
         dayContextLabel={assignDateDayLabel}
       />
+
+      {previewPlace && (
+        <PlacePreviewSheet
+          place={previewPlace}
+          tripCities={tripCities}
+          alreadySaved={!!previewPlace._saved}
+          saving={savingId === previewPlace.id}
+          onClose={() => setPreviewPlace(null)}
+          onSave={(place, assignment) => savePlaceResult(place, assignment)}
+        />
+      )}
 
       {/* Spot detail sheet */}
       {selectedSpot && (
