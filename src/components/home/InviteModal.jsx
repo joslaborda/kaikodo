@@ -68,6 +68,12 @@ function ResultRow({ profile, email, triplesCount, status, onInvite, sending }) 
 // grande" -- misma info que ResultRow (nombre, estado, nº de viajes juntos)
 // pero en cuadrícula de avatares grandes en vez de filas apiladas, igual
 // que la hoja de compartir de Instagram/WhatsApp.
+// José (24 sep 2026): referencia estable. Con `= []` como valor por defecto se
+// crea un array nuevo en cada render; el efecto de búsqueda depende de él y
+// llamaba a setSearchResults([]) (otro array nuevo) -> render -> efecto... en
+// bucle mientras la consulta de perfiles no tenía datos (cargando, o sin
+// conexión si falla): la pantalla se quedaba colgada.
+const NO_PROFILES = [];
 export function GridAvatarItem({ profile, email, triplesCount, status, onInvite, sending }) {
   const { t } = useTranslation();
   const name = profile?.display_name || profile?.username || t('common.member');
@@ -101,7 +107,7 @@ export function GridAvatarItem({ profile, email, triplesCount, status, onInvite,
   );
 }
 
-export default function InviteModal({ open, onClose, trip, tripId, queryClient, profiles = [], currentUserEmail = '', currentUserName = '' }) {
+export default function InviteModal({ open, onClose, trip, tripId, queryClient, profiles = NO_PROFILES, currentUserEmail = '', currentUserName = '' }) {
   const { t } = useTranslation();
   const [cancelling, setCancelling] = useState(null);
   const [query, setQuery] = useState('');
@@ -196,7 +202,7 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
   // filtros = todos los perfiles con solo campos públicos, nunca email). El
   // email de a quién se invita se resuelve aparte en handleInvite() vía el
   // fallback que ya existía (User.filter por profile.user_id) — ver abajo.
-  const { data: allProfiles = [] } = useQuery({
+  const { data: allProfiles = NO_PROFILES } = useQuery({
     queryKey: ['allUserProfiles'],
     queryFn: () => searchUserProfiles({}),
     enabled: open,
@@ -207,7 +213,7 @@ export default function InviteModal({ open, onClose, trip, tripId, queryClient, 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!query.trim() || query.trim().length < 2) {
-      setSearchResults([]); setSearching(false); return;
+      setSearchResults(r => (r.length ? NO_PROFILES : r)); setSearching(false); return;
     }
     setSearching(true);
     debounceRef.current = setTimeout(() => {

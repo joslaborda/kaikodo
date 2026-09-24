@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { notify, resolveUserIds } from '@/lib/notifications';
@@ -6,33 +6,19 @@ import { normalizeEmail } from '@/lib/utils';
 import { computeEditors } from '@/lib/syncTripMembers';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ChevronDown, Trash2, LogOut, Link2, RefreshCw } from 'lucide-react';
+import { Trash2, LogOut, Link2, RefreshCw, X, Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TripDateRangePicker from '@/components/trip/TripDateRangePicker';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import CountryInput from '@/components/trip/CountryInput';
-import CityInput from '@/components/trip/CityInput';
+import { CitySearch, CountryField } from '@/components/trip/stopFields';
 import MembersPanel from '@/components/trip/MembersPanel';
-import { normalizeCountry, getCountryLabel } from '@/lib/countryConfig';
+import { normalizeCountry, getCountryLabel, getCountryIso } from '@/lib/countryConfig';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
 import { AlertTriangle } from 'lucide-react';
-import { cityDateSpan, syncTripFromCities } from '@/lib/tripDates';
+import { cityDateSpan, syncTripFromCities, sortCitiesByDate } from '@/lib/tripDates';
 import { getOrCreateTripInviteLink, regenerateTripInviteLink, buildTripInviteLinkUrl } from '@/lib/inviteLinks';
-
-// Solo se validaba end_date >= start_date de CADA ciudad por separado — nada
-// impedía que el start_date de una ciudad fuera muy anterior al end_date de
-// otra ya guardada, más allá del día de tránsito esperado. Cities.jsx genera
-// entradas de "día" por cada fecha dentro del rango de cada ciudad, así que
-// dos ciudades solapadas por varios días producían días duplicados bajo dos
-// bloques de ciudad distintos y descuadraban el progreso del viaje. Se
-// permite tocar exactamente un día (el de tránsito, end === start de la
-// siguiente) pero no más.
-function datesOverlap(aStart, aEnd, bStart, bEnd) {
-  if (!aStart || !aEnd || !bStart || !bEnd) return false;
-  return aStart < bEnd && bStart < aEnd;
-}
 
 // José (14 sep 2026): sección del link general de invitación (grupo, hasta
 // 20 usos, caduca en 7 días) -- ver base44/functions/createTripInviteLink
@@ -113,21 +99,9 @@ function SettingsDialog({
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [editingCity, setEditingCity] = useState(null); // city id or 'new'
   const [cityToDelete, setCityToDelete] = useState(null);
-  const [cityDraft, setCityDraft] = useState({});
   const [saving, setSaving] = useState(false);
   const [cityLoading, setCityLoading] = useState(null);
-  // Sugerencias extra para CityInput (además de las "top cities" del país
-  // elegido): los nombres de ciudad que este viaje YA usa. A diferencia de
-  // País (CountryInput, que obliga a elegir de una lista), Ciudad era texto
-  // libre — si un viaje repite ciudad (p. ej. Lima ida y vuelta) y la segunda
-  // vez se teclea con una mayúscula o espacio distinto, el resto de la app
-  // que agrupa por nombre de ciudad (asignar día a un spot, etc.) dejaba de
-  // reconocerlas como la misma. No obliga a elegir de la lista — se puede
-  // seguir escribiendo libre para una ciudad o pueblo nuevo — pero ahora hay
-  // opciones para elegir en vez de tener que teclearlo bien a pelo.
-  const existingCityNames = [...new Set((cities || []).map(c => c.name).filter(Boolean))];
 
   // Con paradas fechadas, las fechas del viaje se calculan solas (tripDates.js).
   const stopsSpan = cityDateSpan(cities);
@@ -139,7 +113,6 @@ function SettingsDialog({
       setName(trip.name || '');
       setStartDate(stopsSpan?.start || trip.start_date || '');
       setEndDate(stopsSpan?.end || trip.end_date || '');
-      setEditingCity(null);
     }
   }, [open, trip, stopsSpan?.start, stopsSpan?.end]);
 
@@ -189,85 +162,102 @@ function SettingsDialog({
     setSaving(false);
   };
 
-  const openCityEdit = (city) => {
-    setEditingCity(city.id);
-    setCityDraft({
-      name: city.name || '',
-      country: city.country || '',
-      start_date: city.start_date || '',
-      end_date: city.end_date || '',
-      // José (14 sep 2026): si esta ciudad ya tenía coordenadas (guardadas
-      // al crearla vía CityInput+Google Places), se mantienen al editar
-      // fechas/país sin tocar el nombre -- si no se hiciera esto, abrir y
-      // guardar la edición sin cambiar el nombre las borraría igualmente.
-      lat: city.lat ?? null,
-      place_id: city.place_id ?? null,
-      place_refreshed_at: city.place_refreshed_at ?? null,
-      lng: city.lng ?? null,
+  // ── Paradas (José, 24 sep 2026): mismo componente que el viaje nuevo --
+  // línea numerada, un solo campo de ciudad (el país sale de Google), fechas
+  // en pastilla (opcionales) y cada cambio se guarda al momento, sin paneles
+  // de "Hecho / Cancelar".
+  const [editingCityId, setEditingCityId] = useState(null); // ciudad cuyo nombre se cambia
+  const [dateDrafts, setDateDrafts] = useState({}); // { cityId: {start,end} } mientras se elige la vuelta
+  const countryTimers = useRef({});
+  const sortedCities = sortCitiesByDate(cities || []);
+
+  const notifyCityChange = (cityName, country) => {
+    const targets = (trip?.members || []).filter(e => normalizeEmail(e) !== normalizeEmail(currentUserEmail));
+    if (!targets.length) return;
+    resolveUserIds(targets).then(resolved => {
+      resolved.forEach(({ userId }) => notify({
+        userId, type: 'trip_updated', tripId, tripName: trip?.name,
+        refTitle: cityName, refExtra: { city: cityName, country: country || '' },
+      }));
     });
   };
 
-  const closeCityEdit = () => {
-    setEditingCity(null);
-    setCityDraft({});
-  };
-
-  const saveCityEdit = async (cityId) => {
-    if (!cityDraft.name?.trim()) return;
-    // Mismo motivo que en handleSaveTrip: una parada con fin antes que
-    // inicio no genera ningún día (getTripDays la descarta entera), y sin
-    // esta validación se guardaba así en silencio — la parada se veía en la
-    // lista pero "Toca para planificar" nunca aparecía y ningún spot de esa
-    // ciudad podía asignarse a un día.
-    if (cityDraft.start_date && cityDraft.end_date && cityDraft.end_date < cityDraft.start_date) {
-      toast({ title: t('trip.dialog.endBeforeStart'), variant: 'destructive' });
-      return;
-    }
-    if ((cities || []).some(c => c.id !== cityId && datesOverlap(cityDraft.start_date, cityDraft.end_date, c.start_date, c.end_date))) {
-      toast({ title: t('trip.dialog.datesOverlap'), variant: 'destructive' });
-      return;
-    }
-    setCityLoading(cityId);
+  const updateCity = async (city, patch) => {
+    setCityLoading(city.id);
     try {
-      await base44.entities.City.update(cityId, {
-        name: cityDraft.name.trim(),
-        country: normalizeCountry(cityDraft.country || ''),
-        start_date: cityDraft.start_date || '',
-        end_date: cityDraft.end_date || '',
-        // José (14 sep 2026): coordenadas reales si se eligió una
-        // sugerencia de Google al escribir el nombre -- ver CityInput.jsx.
-        // undefined (Base44 no toca el campo) si se escribió a mano.
-        lat: cityDraft.lat,
-        lng: cityDraft.lng,
-        place_id: cityDraft.place_id || undefined,
-        place_refreshed_at: cityDraft.place_refreshed_at || undefined,
-      });
-            // Avisa a los demas miembros si el pais o las fechas de la parada
-            // cambian de verdad -- esto es un cambio de destino del viaje.
-            const oldCity = (cities || []).find(c => c.id === cityId);
-            const cityChanged = oldCity && (
-                      normalizeCountry(oldCity.country || '') !== normalizeCountry(cityDraft.country || '') ||
-                      (oldCity.start_date || '') !== (cityDraft.start_date || '') ||
-                      (oldCity.end_date || '') !== (cityDraft.end_date || '')
-                    );
-            if (cityChanged) {
-                      const targets = (trip?.members || []).filter(e => normalizeEmail(e) !== normalizeEmail(currentUserEmail));
-                      if (targets.length) {
-                                  resolveUserIds(targets).then(resolved => {
-                                                resolved.forEach(({ userId }) => notify({
-                                                                userId,
-                                                                type: 'trip_updated',
-                                                                tripId,
-                                                                tripName: trip?.name,
-                                                                refTitle: cityDraft.name.trim(),
-                                                                refExtra: { city: cityDraft.name.trim(), country: cityDraft.country || '' },
-                                                }));
-                                  });
-                      }
-            }
+      await base44.entities.City.update(city.id, patch);
+      const changed = ('country' in patch && normalizeCountry(city.country || '') !== normalizeCountry(patch.country || ''))
+        || ('start_date' in patch && (city.start_date || '') !== (patch.start_date || ''))
+        || ('end_date' in patch && (city.end_date || '') !== (patch.end_date || ''))
+        || ('name' in patch && city.name !== patch.name);
+      if (changed) notifyCityChange(patch.name || city.name, patch.country ?? city.country);
       await syncTripFromCities(tripId, queryClient);
       queryClient.invalidateQueries({ queryKey: ['cities', tripId] });
-      closeCityEdit();
+    } catch (e) {
+      toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' });
+    }
+    setCityLoading(null);
+  };
+
+  const changeCityPlace = (city, data, opts = {}) => {
+    if (opts.coordsOnly) {
+      if (data.lat != null) updateCity(city, { lat: data.lat, lng: data.lng, place_id: data.placeId, place_refreshed_at: new Date().toISOString() });
+      return;
+    }
+    setEditingCityId(null);
+    updateCity(city, {
+      name: data.city,
+      ...(data.country ? { country: normalizeCountry(data.country) } : {}),
+      // Coordenadas nuevas llegan después (coordsOnly); mientras, se limpian las viejas.
+      lat: null, lng: null, place_id: data.placeId || null, place_refreshed_at: null,
+    });
+  };
+
+  const changeCityDates = (city, { start, end }) => {
+    // Se guarda con el rango completo o vacío; mientras se elige la vuelta, borrador.
+    if ((start && end) || (!start && !end)) {
+      setDateDrafts(p => { const n = { ...p }; delete n[city.id]; return n; });
+      updateCity(city, { start_date: start || '', end_date: end || '' });
+    } else {
+      setDateDrafts(p => ({ ...p, [city.id]: { start, end } }));
+    }
+  };
+
+  const changeCityCountry = (city, value) => {
+    clearTimeout(countryTimers.current[city.id]);
+    const canon = normalizeCountry(value || '');
+    if (!canon || !getCountryIso(canon) || canon === normalizeCountry(city.country || '')) return;
+    countryTimers.current[city.id] = setTimeout(() => updateCity(city, { country: canon }), 600);
+  };
+
+  const pendingNewRef = useRef(null);
+  const addCityFrom = async (data, opts = {}) => {
+    if (opts.coordsOnly) {
+      // La parada ya se creó: se le ponen las coordenadas en cuanto llegan.
+      const created = await pendingNewRef.current;
+      if (created?.id && data.lat != null) {
+        base44.entities.City.update(created.id, { lat: data.lat, lng: data.lng, place_refreshed_at: new Date().toISOString() })
+          .then(() => queryClient.invalidateQueries({ queryKey: ['cities', tripId] })).catch(() => {});
+      }
+      return;
+    }
+    if (!trip?.members?.length) { toast({ title: t('common.saveError'), description: t('cities.tripNotLoadedRetry'), variant: 'destructive' }); return; }
+    const last = sortedCities[sortedCities.length - 1];
+    setCityLoading('new');
+    const p = base44.entities.City.create({
+      trip_id: tripId,
+      name: data.city,
+      country: normalizeCountry(data.country || (data.placeId ? '' : last?.country || '')),
+      place_id: data.placeId || undefined,
+      order: (cities || []).length,
+      trip_members: trip.members,
+      trip_editors: computeEditors(trip.members, trip),
+    });
+    pendingNewRef.current = p;
+    try {
+      await p;
+      await syncTripFromCities(tripId, queryClient);
+      queryClient.invalidateQueries({ queryKey: ['cities', tripId] });
     } catch (e) {
       toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' });
     }
@@ -286,7 +276,6 @@ function SettingsDialog({
       await syncTripFromCities(tripId, queryClient);
       queryClient.invalidateQueries({ queryKey: ['cities', tripId] });
       queryClient.invalidateQueries({ queryKey: ['itineraryDays', tripId] });
-      closeCityEdit();
       setCityToDelete(null);
     } catch (e) {
       toast({
@@ -294,49 +283,6 @@ function SettingsDialog({
         description: e?.message || t('common.tryAgain'),
         variant: 'destructive',
       });
-    }
-    setCityLoading(null);
-  };
-
-  const addCity = async () => {
-    setEditingCity('new');
-    setCityDraft({ name: '', country: '', start_date: endDate || '', end_date: '' });
-  };
-
-  const saveNewCity = async () => {
-    if (!cityDraft.name?.trim()) return;
-    if (cityDraft.start_date && cityDraft.end_date && cityDraft.end_date < cityDraft.start_date) {
-      toast({ title: t('trip.dialog.endBeforeStart'), variant: 'destructive' });
-      return;
-    }
-    if ((cities || []).some(c => datesOverlap(cityDraft.start_date, cityDraft.end_date, c.start_date, c.end_date))) {
-      toast({ title: t('trip.dialog.datesOverlap'), variant: 'destructive' });
-      return;
-    }
-    setCityLoading('new');
-    try {
-      // Si `trip` no había cargado (conexión lenta/intermitente), antes se
-      // guardaba con trip_members:[] y la ciudad quedaba invisible para
-      // siempre, ni para quien la creó.
-      if (!trip?.members?.length) throw new Error(t('cities.tripNotLoadedRetry'));
-      await base44.entities.City.create({
-        trip_id: tripId,
-        name: cityDraft.name.trim(),
-        country: normalizeCountry(cityDraft.country || ''),
-        start_date: cityDraft.start_date || '',
-        end_date: cityDraft.end_date || '',
-        lat: cityDraft.lat,
-        lng: cityDraft.lng,
-        place_id: cityDraft.place_id || undefined,
-        place_refreshed_at: cityDraft.place_refreshed_at || undefined,
-        trip_members: trip.members,
-        trip_editors: computeEditors(trip.members, trip),
-      });
-      await syncTripFromCities(tripId, queryClient);
-      queryClient.invalidateQueries({ queryKey: ['cities', tripId] });
-      closeCityEdit();
-    } catch (e) {
-      toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' });
     }
     setCityLoading(null);
   };
@@ -413,131 +359,70 @@ function SettingsDialog({
           </div>
         )}
 
-        {/* Paradas */}
-        <div className="bg-secondary/50 px-5 py-2 border-b border-border">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            {t('trip.dialog.stops', { count: cities.length })}
-          </p>
-        </div>
-
-        {cities.map((city, idx) => (
-          <div key={city.id}>
-            {/* City row */}
-            <button
-              onClick={() => editingCity === city.id ? closeCityEdit() : openCityEdit(city)}
-              className="w-full flex items-center gap-3 px-5 py-3.5 border-b border-border hover:bg-secondary/30 transition-colors text-left">
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
-                editingCity === city.id ? 'bg-primary text-white' : 'bg-accent text-primary border border-orange-200'
-              }`}>{idx + 1}</div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground">{city.name}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {[
-                    getCountryLabel(city.country, i18n.language),
-                    city.start_date && city.end_date ? `${format(parseISO(city.start_date), 'dd MMM', { locale: i18n.language === 'en' ? undefined : es })} – ${format(parseISO(city.end_date), 'dd MMM', { locale: i18n.language === 'en' ? undefined : es })}` : null,
-                  ].filter(Boolean).join(' · ')}
-                </p>
-              </div>
-              <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${editingCity === city.id ? 'rotate-180' : ''}`} />
-            </button>
-
-            {/* Inline edit panel */}
-            {editingCity === city.id && (
-              <div className="bg-secondary/40 border-b border-border px-5 py-4 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">{t('common.city')}</p>
-                    <CityInput country={cityDraft.country} value={cityDraft.name || ''}
-                      onChange={v => setCityDraft(p => ({ ...p, name: v, lat: null, lng: null, place_id: null, place_refreshed_at: null }))}
-                      onSelectPlace={({ name, lat, lng, placeId }) => setCityDraft(p => ({ ...p, name, lat, lng, place_id: placeId, place_refreshed_at: new Date().toISOString() }))}
-                      extraSuggestions={existingCityNames} placeholder={t('common.city')} />
+        {/* Paradas — misma línea numerada que el viaje nuevo */}
+        <div className="px-5 py-4 border-b border-border">
+          <p className="text-sm font-bold text-foreground mb-3">{t('trip.dialog.stops', { count: sortedCities.length })}</p>
+          {sortedCities.map((city, idx) => {
+            const draft = dateDrafts[city.id];
+            const prev = [...sortedCities.slice(0, idx)].reverse().find(c => c.end_date);
+            const next = sortedCities.slice(idx + 1).find(c => c.start_date);
+            const noPlace = !city.place_id;
+            return (
+              <div key={city.id} className="flex gap-3">
+                <div className="flex flex-col items-center w-6 flex-shrink-0">
+                  <div className="w-6 h-6 rounded-full border-[1.5px] border-orange-300 bg-orange-50 dark:bg-orange-950/30 text-primary text-[11px] font-bold flex items-center justify-center">
+                    {cityLoading === city.id ? <Loader2 className="w-3 h-3 animate-spin" /> : idx + 1}
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">{t('common.country')}</p>
-                    <CountryInput value={cityDraft.country || ''} onChange={v => setCityDraft(p => ({ ...p, country: v }))} placeholder={t('common.country')} />
-                  </div>
+                  <div className="flex-1 w-[1.5px] bg-orange-200 dark:bg-orange-900/50 my-1" />
                 </div>
-                <TripDateRangePicker
-                  compact
-                  start={cityDraft.start_date || ''}
-                  end={cityDraft.end_date || ''}
-                  startLabel={t('trip.dialog.startDate')}
-                  endLabel={t('trip.dialog.endDate')}
-                  onChange={({ start, end }) => setCityDraft(p => ({ ...p, start_date: start, end_date: end }))}
-                />
-                <div className="flex items-center justify-between">
-                  {cities.length > 1 ? (
-                    <button
-                      onClick={() => setCityToDelete(city)}
-                      disabled={cityLoading === city.id}
-                      className="text-xs text-red-500 flex items-center gap-1.5 hover:text-red-700 transition-colors disabled:opacity-50">
-                      <Trash2 className="w-3.5 h-3.5" />
-                      {cityLoading === city.id ? t('trip.dialog.deleting') : t('trip.dialog.deleteStop')}
-                    </button>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">{t('trip.dialog.minOneStop')}</span>
+                <div className="flex-1 min-w-0 bg-card border border-border rounded-2xl px-3 py-2.5 mb-2.5">
+                  <div className="flex items-start gap-2">
+                    {editingCityId === city.id ? (
+                      <CitySearch initial={city.name} autoFocus placeholder={t('trip.new.searchCity')}
+                        onPick={(data, opts) => changeCityPlace(city, data, opts)}
+                        onCancel={() => setEditingCityId(null)} />
+                    ) : (
+                      <button type="button" onClick={() => setEditingCityId(city.id)} className="flex-1 min-w-0 text-left">
+                        <p className="text-sm font-semibold text-foreground truncate">{city.name}</p>
+                        {!noPlace && city.country && <p className="text-xs text-muted-foreground truncate">{getCountryLabel(city.country, i18n.language)}</p>}
+                      </button>
+                    )}
+                    {sortedCities.length > 1 && (
+                      <button type="button" onClick={() => setCityToDelete(city)} aria-label={t('trip.dialog.deleteStop')}
+                        className="w-8 h-8 -m-1 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-500 hover:bg-secondary flex-shrink-0">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  {/* Ciudad sin sugerencia de Google (o antigua): país editable. */}
+                  {noPlace && editingCityId !== city.id && (
+                    <div className="mt-2">
+                      <CountryField value={city.country || ''} onChange={v => changeCityCountry(city, v)} />
+                    </div>
                   )}
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={closeCityEdit}>
-                      {t('common.cancel')}
-                    </Button>
-                    <Button size="sm" className="h-7 text-xs bg-primary hover:bg-primary/90 text-white"
-                      onClick={() => saveCityEdit(city.id)}
-                      disabled={!cityDraft.name?.trim() || cityLoading === city.id}>
-                      {cityLoading === city.id ? t('trip.dialog.saving') : t('trip.dialog.done')}
-                    </Button>
+                  <div className="mt-2">
+                    <TripDateRangePicker
+                      variant="pill"
+                      start={draft ? draft.start : (city.start_date || '')}
+                      end={draft ? draft.end : (city.end_date || '')}
+                      minDate={prev?.end_date || undefined}
+                      maxDate={next?.start_date || undefined}
+                      onChange={range => changeCityDates(city, range)}
+                    />
                   </div>
                 </div>
               </div>
-            )}
-          </div>
-        ))}
-
-        {/* Nueva parada */}
-        {editingCity === 'new' ? (
-          <div className="bg-secondary/40 border-b border-border px-5 py-4 space-y-3">
-            <p className="text-xs font-medium text-primary">{t('trip.dialog.newStop')}</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">{t('common.city')}</p>
-                <CityInput country={cityDraft.country} value={cityDraft.name || ''}
-                  onChange={v => setCityDraft(p => ({ ...p, name: v, lat: null, lng: null, place_id: null, place_refreshed_at: null }))}
-                  onSelectPlace={({ name, lat, lng, placeId }) => setCityDraft(p => ({ ...p, name, lat, lng, place_id: placeId, place_refreshed_at: new Date().toISOString() }))}
-                  extraSuggestions={existingCityNames} placeholder={t('common.city')} />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">{t('common.country')}</p>
-                <CountryInput value={cityDraft.country || ''} onChange={v => setCityDraft(p => ({ ...p, country: v }))} placeholder={t('common.country')} />
+            );
+          })}
+          <div className="flex gap-3 items-center">
+            <div className="w-6 flex-shrink-0 flex justify-center">
+              <div className="w-6 h-6 rounded-full border-[1.5px] border-dashed border-orange-300 text-primary flex items-center justify-center">
+                {cityLoading === 'new' ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
               </div>
             </div>
-            <TripDateRangePicker
-              compact
-              start={cityDraft.start_date || ''}
-              end={cityDraft.end_date || ''}
-              startLabel={t('trip.dialog.startDate')}
-              endLabel={t('trip.dialog.endDate')}
-              onChange={({ start, end }) => setCityDraft(p => ({ ...p, start_date: start, end_date: end }))}
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={closeCityEdit}>
-                {t('common.cancel')}
-              </Button>
-              <Button size="sm" className="h-7 text-xs bg-primary hover:bg-primary/90 text-white"
-                onClick={saveNewCity}
-                disabled={!cityDraft.name?.trim() || cityLoading === 'new'}>
-                {cityLoading === 'new' ? t('trip.dialog.adding') : t('common.add')}
-              </Button>
-            </div>
+            <CitySearch key={sortedCities.length} placeholder={t('trip.new.addCity')} onPick={addCityFrom} />
           </div>
-        ) : (
-          <button onClick={addCity}
-            className="w-full flex items-center gap-3 px-5 py-3.5 border-b border-border hover:bg-secondary/30 transition-colors text-left">
-            <div className="w-5 h-5 rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center shrink-0">
-              <span className="text-muted-foreground text-xs">+</span>
-            </div>
-            <span className="text-sm text-muted-foreground">{t('trip.dialog.addStop')}</span>
-          </button>
-        )}
+        </div>
 
         {/* Viajeros — antes solo mostraba avatares con un botón "Invitar";
             MembersPanel existía en el proyecto pero no estaba conectado a
