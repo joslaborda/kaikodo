@@ -39,3 +39,21 @@ export function matchTripCity(spot, tripCities, radiusKm = MATCH_RADIUS_KM) {
   }
   return best;
 }
+
+// José (24 sep 2026): ¿un spot guardado del perfil ya está en el viaje? Antes
+// se comparaba solo el título, y desde los términos EEA de Google el título es
+// lo que cada uno tecleó al buscar ("Shibuya cro" vs "Shibuya Crossing"): el
+// mismo sitio se importaba dos veces. Ahora manda el place id de Google
+// (Spot.osm_id / SavedSpot.google_place_id); el título queda como respaldo
+// para spots manuales sin place id.
+const googleIdOf = (o) => {
+  const raw = (o?.osm_id ?? o?.google_place_id ?? '').toString().trim();
+  return raw.length > 10 && !/^\d+$/.test(raw) ? raw : null;
+};
+export function isSameSpot(a, b) {
+  if (!a || !b) return false;
+  const ia = googleIdOf(a), ib = googleIdOf(b);
+  if (ia && ib) return ia === ib;
+  const ta = norm(a.title), tb = norm(b.title);
+  return !!ta && ta === tb;
+}
