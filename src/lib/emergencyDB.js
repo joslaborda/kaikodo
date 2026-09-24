@@ -317,7 +317,7 @@ const EMERGENCY_DB = {
     embassy_DO: { address: 'Show map 139 Inverness Terrace, Bayswater W2-6Jf London United Kingdom', web: 'https://embassies.net/dominican-republic-in-united-kingdom/london' },
     embassy_CU: { address: 'Show map 167 High Holborn, Holborn, London Wc1V 6Pa, United Kingdom', phone: '+44 20 7240 2488', web: 'https://embassies.net/cuba-in-united-kingdom/london' },
     emergency_general: '999',
-    police: '101 (no urgencias) / 999',
+    police: '999', // 101 es el número de policía para NO urgencias; aquí solo van urgencias
     ambulance: '999',
     fire: '999',
     embassy_ES: {
