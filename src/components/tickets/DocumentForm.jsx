@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Check, Eye } from 'lucide-react';
-import { Hotel, Train, Ticket, Shield, CirclePlus, Trash2, Search, X, MapPin, Loader2 } from 'lucide-react';
+import { FileText, Camera, FileUp, Pencil, Calendar, Navigation, StickyNote } from 'lucide-react';
+import { FormSection, FormCard, FormRow, DatePill, TimePill, OptionPill, Chip, PersonAvatar } from '@/components/form/FormPills';
+import { Hotel, Train, Ticket, Shield, CirclePlus, Trash2, X, MapPin, Loader2 } from 'lucide-react';
 import { PlaneIcon, BusFront } from '@/lib/icons';
 import { useTranslation } from 'react-i18next';
 import { format, parseISO } from 'date-fns';
@@ -194,7 +193,6 @@ export default function DocumentForm({
     }
     return 'holders';
   });
-  const [showAudience, setShowAudience] = useState(false);
   const audience = audienceChoice || defaultAudienceFor(category);
   // Cambiar el tipo a Hotel (sin haber tocado "para quién") lo deja en todos; y
   // volver a otro tipo, en yo.
@@ -326,9 +324,6 @@ export default function DocumentForm({
 
   const canSave = !!fields.name.trim() && (soloTrip || usedBy.length > 0);
 
-  const toggleSharedWith = (email) => {
-    setSharedWith(prev => prev.includes(email) ? prev.filter(e => e !== email) : [...prev, email]);
-  };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -376,7 +371,15 @@ export default function DocumentForm({
     const othersUse = usedBy.filter(e => normalizeEmail(e) !== meEmail);
     let visibilityOut = 'personal';
     let sharedOut = [];
-    if (!soloTrip) {
+    // José (24 sep 2026): en un viaje donde aún estás solo (p. ej. acabas de
+    // crearlo e invitar a gente que todavía no ha aceptado) antes TODO se
+    // guardaba como 'personal', sin preguntar: el vuelo o el hotel que
+    // subías quedaban ocultos para siempre a quien se uniera después. Ahora
+    // se respeta "Lo verá" también estando solo (por defecto, todo el grupo
+    // en billetes/hotel/eventos).
+    if (soloTrip) {
+      if (audience === 'group') visibilityOut = 'shared';
+    } else {
       if (audience === 'group') {
         visibilityOut = 'shared';
       } else {
@@ -432,6 +435,9 @@ export default function DocumentForm({
       // de la sesión tal cual, y trip.members puede venir con otras mayúsculas.
       used_by: (() => {
         const list = (soloTrip ? (usedBy.length ? usedBy : (currentUserEmail ? [currentUserEmail] : [])) : usedBy).map(normalizeEmail);
+        // Hotel creado estando solo y visible para el grupo: es de todos,
+        // también de quien se una después ('*').
+        if (soloTrip && category === 'hotel' && audience === 'group') return [...list, '*'];
         // Todos marcados (con más de una persona) → también '*': sigue valiendo para quien se una después.
         const everyone = !soloTrip && members.length > 1 && members.every(m => list.includes(normalizeEmail(m)));
         return everyone ? [...list, '*'] : list;
@@ -440,84 +446,8 @@ export default function DocumentForm({
     });
   };
 
-  return (
-    <div className="flex flex-col gap-5">
-
-      {/* Category tabs */}
-      <div>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('documents.form.type')}</p>
-        <div className="flex border-b border-border">
-          {CATEGORIES.map(cat => (
-            <button key={cat.key} onClick={() => setCategory(cat.key)}
-              className={`flex-1 flex flex-col items-center py-2 pb-2.5 gap-0.5 border-b-2 transition-colors ${category === cat.key ? 'border-primary' : 'border-transparent'}`}>
-              <cat.Icon size={16} className="flex-shrink-0" />
-              <span className={`text-xs font-medium leading-none ${category === cat.key ? 'text-primary' : 'text-muted-foreground'}`}>{t(cat.labelKey)}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Name — en una reserva de hotel el nombre ES el hotel elegido en el buscador
-          de abajo: una vez elegido se oculta (antes salía dos veces: "Nombre" y
-          "Hotel" con el mismo texto). Sin hotel elegido sigue pidiéndose a mano. */}
-      {!(category === 'hotel' && typeof fields.location_lat === 'number') && (
-      <div>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{category === 'hotel' ? t('documents.form.nameHotel') : t('documents.form.name')}</p>
-        <Input value={fields.name} onChange={e => setField('name', e.target.value)}
-          placeholder={category === 'hotel' ? t('documents.form.ph.hotel') : t('documents.form.ph.name')} className="h-10 text-sm" />
-      </div>
-      )}
-
-      {/* Origin / Destination */}
-      {(hasField('origin') || hasField('destination')) && (
-        <div className="grid grid-cols-2 gap-3">
-          {hasField('origin') && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('documents.form.fields.origin')}</p>
-              <Input value={fields.origin} onChange={e => setField('origin', e.target.value)}
-                placeholder={FIELD_PLACEHOLDERS.origin} className="h-10 text-sm" />
-            </div>
-          )}
-          {hasField('destination') && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('documents.form.fields.destination')}</p>
-              <Input value={fields.destination} onChange={e => setField('destination', e.target.value)}
-                placeholder={FIELD_PLACEHOLDERS.destination} className="h-10 text-sm" />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Ubicación (aeropuerto/estación) — solo vuelo/tren. Da lat/lng reales
-          al documento, que antes no tenía ninguna, para que pueda aparecer
-          en el mini-mapa del día junto al hotel y los spots. */}
-      {hasField('location') && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-            {category === 'hotel' ? t('documents.form.fields.hotelPlace') : <>{t('documents.form.fields.location')} <span className="font-normal normal-case tracking-normal text-muted-foreground">{t('documents.form.optional')}</span></>}
-          </p>
-          <p className="text-xs text-muted-foreground/70 mb-1.5">{category === 'hotel' ? t('documents.form.hotelHint') : t('documents.form.locationHint')}</p>
-          {fields.location_lat && fields.location_lng ? (
-            <div className="flex items-center gap-2 bg-secondary/40 border border-border rounded-xl px-3 py-2.5">
-              <MapPin className="w-4 h-4 text-primary shrink-0" />
-              <span className="flex-1 text-sm text-foreground truncate">{fields.location_name}</span>
-              <button type="button" onClick={() => { setFields(prev => ({ ...prev, location_name: '', location_lat: '', location_lng: '', location_place_id: '', place_refreshed_at: '' })); setLocationQuery(''); }}
-                className="text-muted-foreground hover:text-red-500 transition-colors shrink-0">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <div className="relative">
-              <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2.5 focus-within:border-primary transition-colors">
-                <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-                <input value={locationQuery} onChange={e => setLocationQuery(e.target.value)}
-                  placeholder={category === 'hotel' ? t('documents.form.ph.hotel') : t('documents.form.ph.location')} className="flex-1 text-sm outline-none bg-transparent text-foreground min-w-0" />
-                {locationSearching && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
-              </div>
-              {locationResults.length > 0 && (
-                <div className="absolute z-10 left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
-                  {locationResults.map(r => (
-                    <button key={r.id} type="button" disabled={resolvingLocationId === r.id} onClick={async () => {
+  // Elegir un resultado del buscador de lugar (aeropuerto/estación/hotel).
+  const pickLocationResult = async (r) => {
                                             if (r.lat && r.lng) {
                                                                       setFields(prev => ({ ...prev, location_name: r.name, location_lat: r.lat, location_lng: r.lng, ...(category === 'hotel' && !prev.name.trim() ? { name: r.name } : {}) }));
                                                                       setLocationQuery(r.name);
@@ -550,287 +480,273 @@ export default function DocumentForm({
                                           } finally {
                                                                   setResolvingLocationId(null);
                                           }
-                    }}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-secondary/30 transition-colors border-b border-border last:border-0 disabled:opacity-60">
-                                          <span className="flex flex-col items-start flex-1 min-w-0">
-                                                                    <span className="text-sm font-medium text-foreground truncate w-full">{r.name}</span>
-                                            {r.address && <span className="text-xs text-muted-foreground truncate w-full">{r.address}</span>}
-                                          </span>
-                 {resolvingLocationId === r.id && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
-                    </button>
-            ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+                    };
 
-      {/* Airline */}
-      {hasField('airline') && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('documents.form.fields.airline')}</p>
-          <Input value={fields.airline} onChange={e => setField('airline', e.target.value)}
-            placeholder={FIELD_PLACEHOLDERS.airline} className="h-10 text-sm" />
-        </div>
-      )}
+  // ── "¿Quién lo ve?" como chips (José, 24 sep 2026: el selector de tres
+  // opciones desentonaba al lado de "¿Para quién es?"). Mismo modelo que
+  // antes (audience + sharedWith → visibility/shared_with en handleSave):
+  //  - "Todo el grupo" = shared (también quien se una después).
+  //  - Quien lo usa y tú estáis siempre marcados (bloqueados).
+  //  - Marcar/desmarcar a otra persona = elegir a mano.
+  const isHolder = (email) => usedBy.some(e => normalizeEmail(e) === normalizeEmail(email));
+  const isLockedViewer = (email) => normalizeEmail(email) === meEmail || isHolder(email);
+  const seesIt = (email) => audience === 'group' || isLockedViewer(email) || sharedWith.some(e => normalizeEmail(e) === normalizeEmail(email));
+  const tapGroupViewer = () => {
+    if (audience === 'group') { setAudienceChoice('holders'); setSharedWith([]); }
+    else setAudienceChoice('group');
+  };
+  const tapPersonViewer = (email) => {
+    if (isLockedViewer(email)) return;
+    const n = normalizeEmail(email);
+    if (audience === 'group') {
+      setSharedWith((members || []).filter(m => !isLockedViewer(m) && normalizeEmail(m) !== n));
+      setAudienceChoice('choose');
+      return;
+    }
+    const next = sharedWith.some(e => normalizeEmail(e) === n) ? sharedWith.filter(e => normalizeEmail(e) !== n) : [...sharedWith, email];
+    setSharedWith(next);
+    setAudienceChoice(next.length ? 'choose' : 'holders');
+  };
 
-      {/* Date + Time in same row */}
-      {(hasField('date') || hasField('time')) && (
-        <div className={`grid gap-3 ${hasField('date') && hasField('time') ? 'grid-cols-2' : 'grid-cols-1'}`}>
-          {hasField('date') && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{category === 'hotel' ? t('documents.form.fields.checkIn') : t('documents.form.fields.date')}</p>
-              {useTripDays ? (
-                <select
-                  value={selectedDayOption ? tripDayOptionValue(selectedDayOption) : ''}
-                  onChange={e => {
-                    const { date, cityId } = parseTripDayOptionValue(e.target.value);
-                    setFields(prev => ({ ...prev, date, city_id: cityId || '' }));
-                  }}
-                  className="w-full h-10 border border-border rounded-md px-3 text-sm outline-none focus:border-primary bg-input"
-                >
-                  <option value="">{t('documents.form.selectDay')}</option>
-                  {tripDayOptions.map(d => (
-                    <option key={tripDayOptionValue(d)} value={tripDayOptionValue(d)}>{dayLabel(d.date)} · {d.city}</option>
-                  ))}
-                </select>
-              ) : (
-                <Input type="date" value={fields.date} onChange={e => setField('date', e.target.value)} className="h-10 text-sm" min={minDate || undefined} max={maxDate || undefined} />
-              )}
-            </div>
-          )}
-          {hasField('time') && (
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-                {['flight', 'train', 'bus'].includes(category) ? t('documents.form.fields.time') : t('common.time')}
-              </p>
-              <Input type="time" value={fields.time} onChange={e => setField('time', e.target.value)} className="h-10 text-sm" />
-            </div>
-          )}
-        </div>
-      )}
+  const transport = ['flight', 'train', 'bus'].includes(category);
+  const dayOptions = tripDayOptions.map(d => ({ value: tripDayOptionValue(d), label: dayLabel(d.date), sublabel: d.city }));
+  const nameHidden = category === 'hotel' && typeof fields.location_lat === 'number';
 
-      {/* Ciudad de llegada — solo vuelo/tren en viajes multi-ciudad. El campo
-          arrival_city_id existía en el esquema y Cities.jsx ya lo usaba para
-          decidir bajo qué ciudad mostrar un documento en un día de tránsito
-          (origen vs. destino), pero ningún formulario lo escribía nunca —
-          siempre quedaba null, así que ese documento solo aparecía bajo la
-          ciudad de origen elegida arriba, nunca bajo la de llegada. Opcional:
-          si no se elige, se mantiene el comportamiento anterior (solo city_id). */}
-      {(category === 'flight' || category === 'train' || category === 'bus') && (cities || []).length > 1 && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-            {t('documents.form.fields.arrivalCity')} <span className="font-normal normal-case tracking-normal text-muted-foreground">{t('documents.form.optional')}</span>
-          </p>
-          <select
-            value={fields.arrival_city_id}
-            onChange={e => setField('arrival_city_id', e.target.value)}
-            className="w-full h-10 border border-border rounded-md px-3 text-sm outline-none focus:border-primary bg-input"
-          >
-            <option value="">{t('documents.form.selectCity')}</option>
-            {cities.filter(c => c.id !== fields.city_id).map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-      )}
+  return (
+    <div className="flex flex-col gap-5">
 
-      {/* End time — hora de llegada para vuelos y trenes */}
-      {hasField('end_time') && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-            {t('documents.form.fields.endTime')} <span className="font-normal normal-case tracking-normal text-muted-foreground">{t('documents.form.optional')}</span>
-          </p>
-          <Input type="time" value={fields.end_time} onChange={e => setField('end_time', e.target.value)} className="h-10 text-sm" placeholder={FIELD_PLACEHOLDERS.end_time} />
-        </div>
-      )}
-
-      {/* End date */}
-      {hasField('end_date') && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{category === 'hotel' ? t('documents.form.fields.checkOut') : t('documents.form.fields.endDate')}</p>
-          <Input type="date" value={fields.end_date} onChange={e => setField('end_date', e.target.value)} className="h-10 text-sm" min={minDate || undefined} max={maxDate || undefined} />
-        </div>
-      )}
-
-      {/* Notes */}
-      {hasField('notes') && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('documents.form.fields.notes')}</p>
-          <Textarea value={fields.notes} onChange={e => setField('notes', e.target.value)}
-            placeholder={t('documents.form.ph.notes')} className="text-sm resize-none" rows={2} />
-        </div>
-      )}
-
-      {/* Note time — hora opcional para notas */}
-      {hasField('note_time') && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
-            {t('documents.form.fields.noteTime')} <span className="font-normal normal-case tracking-normal text-muted-foreground">{t('documents.form.optional')}</span>
-          </p>
-          <Input type="time" value={fields.note_time} onChange={e => setField('note_time', e.target.value)} className="h-10 text-sm" />
-        </div>
-      )}
-
-      {/* ¿Para quién es? — lo más importante del formulario. No sale en un
-          viaje de una sola persona (no hay nadie más a quien asignárselo). */}
-      {!soloTrip && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">{t('documents.form.usedBy')}</p>
-          <p className="text-xs text-muted-foreground/70 mb-2">{category === 'hotel' ? t('documents.form.usedByHintStay') : t('documents.form.usedByHint')}</p>
-          <div className="flex flex-wrap gap-2">
-            {members.map((email) => {
-              const p = profileFor(email, profiles);
-              const name = displayNameFor(email, profiles);
-              const isMe = normalizeEmail(email) === meEmail;
-              const on = usedBy.some(e => normalizeEmail(e) === normalizeEmail(email));
-              return (
-                <button key={email} type="button" onClick={() => toggleUsedBy(email)}
-                  className={`inline-flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full border text-sm transition-colors ${
-                    on ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 text-primary font-medium' : 'bg-card border-border text-foreground hover:bg-secondary/30'
-                  }`}>
-                  {p?.avatar_url
-                    ? <img src={p.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
-                    : <span className="w-6 h-6 rounded-full bg-orange-100 text-primary flex items-center justify-center text-xs font-semibold shrink-0">{(name?.[0] || '?').toUpperCase()}</span>}
-                  <span className="truncate max-w-[9rem]">{isMe ? t('documents.form.me') : name}</span>
-                  {on && <Check className="w-3.5 h-3.5 shrink-0" />}
-                </button>
-              );
-            })}
-            {members.length > 1 && (
-              <button type="button" onClick={toggleAllUsers}
-                className={`inline-flex items-center px-3 py-1.5 rounded-full border text-sm transition-colors ${
-                  members.every(m => usedBy.some(e => normalizeEmail(e) === normalizeEmail(m)))
-                    ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200 text-primary font-medium'
-                    : 'bg-card border-border text-foreground hover:bg-secondary/30'
-                }`}>
-                {t('documents.form.everyone')}
-              </button>
-            )}
-          </div>
-          {usedBy.length === 0 && <p className="text-xs text-red-500 mt-2">{t('documents.form.usedByRequired')}</p>}
-
-          {/* Quién lo verá — plegado, con valor por defecto según el tipo */}
-          <div className="mt-3">
-            <button type="button" onClick={() => setShowAudience(s => !s)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Eye className="w-3.5 h-3.5 shrink-0" />
-              <span>{t('documents.form.seenBy', { who: t(AUDIENCE_OPTS.find(o => o.key === audience)?.tk).toLowerCase() })}</span>
-              <span className="text-primary font-medium underline underline-offset-2">{showAudience ? t('common.close') : t('documents.form.change')}</span>
-            </button>
-            {showAudience && (
-              <div className="mt-2 flex flex-col gap-2">
-                {AUDIENCE_OPTS.map(opt => (
-                  <button key={opt.key} type="button" onClick={() => setAudienceChoice(opt.key)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-left transition-all ${
-                      audience === opt.key ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200' : 'bg-card border-border hover:bg-secondary/30'
-                    }`}>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium ${audience === opt.key ? 'text-primary' : 'text-foreground'}`}>{t(opt.tk)}</p>
-                      <p className={`text-xs mt-0.5 ${audience === opt.key ? 'text-primary/70' : 'text-muted-foreground'}`}>{t(opt.dk)}</p>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${audience === opt.key ? 'bg-primary border-primary' : 'border-border'}`}>
-                      {audience === opt.key && <Check className="w-3 h-3 text-white" />}
-                    </div>
-                  </button>
-                ))}
-                {audience === 'choose' && (
-                  <div className="flex flex-col gap-2">
-                    {members.map((email) => {
-                      const name = displayNameFor(email, profiles);
-                      const isYou = normalizeEmail(email) === meEmail;
-                      const isHolder = usedBy.some(e => normalizeEmail(e) === normalizeEmail(email));
-                      const selected = sharedWith.includes(email) || isYou || isHolder;
-                      return (
-                        <button key={email} type="button"
-                          onClick={() => !isYou && !isHolder && toggleSharedWith(email)}
-                          disabled={isYou || isHolder}
-                          className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
-                            selected ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200' : 'bg-card border-border hover:bg-secondary/20'
-                          } ${(isYou || isHolder) ? 'cursor-default' : ''}`}>
-                          <div className="flex-1 min-w-0 text-left">
-                            <p className={`text-sm font-medium truncate ${selected ? 'text-primary' : 'text-foreground'}`}>{isYou ? t('documents.form.me') : name}</p>
-                            {(isYou || isHolder) && <p className="text-xs text-muted-foreground">{isYou ? t('documents.form.alwaysIncluded') : t('documents.form.usesItSoSees')}</p>}
-                          </div>
-                          <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${selected ? 'bg-primary' : 'bg-secondary border border-border'}`}>
-                            {selected && <Check className="w-3 h-3 text-white" />}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* File upload + preview */}
+      {/* 1. Archivo — lo primero: es lo que haces casi siempre */}
       <div>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('documents.form.file')}</p>
         {fields.file_url ? (
-          <div className="border border-border rounded-xl overflow-hidden">
+          <div className="border border-border rounded-2xl overflow-hidden">
             {/* José (22 sep 2026) -- auditoría de seguridad: fields.file_url
-                arranca con initialData.file_url tal cual para un documento
-                legado (sin file_uri, ver el useEffect de arriba) -- texto
-                libre editable por cualquier miembro del viaje, nunca pasaba
-                por isSafeFileUrl()/resolveDocViewUrl() antes de llegar aquí.
-                Mismo bug, mismo sitio que el ya cerrado en Cities.jsx (ver
-                ese commit) -- aquí es donde de verdad nace el valor para
-                los 3 onView(...) y el <img src> de abajo, así que se valida
-                una sola vez, en el único punto de origen. */}
-            <div className="flex items-center gap-3 px-4 py-3 bg-secondary/40 border-b border-border">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-              </svg>
-              <button onClick={() => onView && isSafeHttpUrl(fields.file_url) && onView(fields.file_url)}
+                se valida con isSafeHttpUrl() antes de abrirlo o pintarlo
+                (documentos legados con URL en texto libre). */}
+            <div className="flex items-center gap-3 px-4 py-3 bg-secondary/40">
+              <FileText className="w-[18px] h-[18px] text-primary shrink-0" />
+              <button type="button" onClick={() => onView && isSafeHttpUrl(fields.file_url) && onView(fields.file_url)}
                 className="text-sm text-foreground flex-1 truncate text-left hover:text-primary transition-colors">
                 {t('documents.form.fileAttached')}
               </button>
-              <button onClick={() => { setField('file_url', ''); setField('file_uri', ''); }}
+              <button type="button" onClick={() => { setField('file_url', ''); setField('file_uri', ''); }}
                 className="text-xs text-muted-foreground hover:text-red-500 transition-colors ml-2">
                 {t('documents.form.removeFile')}
               </button>
             </div>
-            {/* Inline preview for images — clickable to open viewer */}
             {isSafeHttpUrl(fields.file_url) && fields.file_url.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i) && (
-              <button onClick={() => onView && onView(fields.file_url)}
-                className="w-full block cursor-pointer">
-                <img src={fields.file_url} alt="preview"
-                  className="w-full max-h-48 object-contain bg-secondary/20" />
+              <button type="button" onClick={() => onView && onView(fields.file_url)} className="w-full block cursor-pointer border-t border-border">
+                <img src={fields.file_url} alt="preview" className="w-full max-h-48 object-contain bg-secondary/20" />
               </button>
             )}
-            {/* PDF preview — clickable hint */}
             {isSafeHttpUrl(fields.file_url) && fields.file_url.match(/\.pdf(\?|$)/i) && (
-              <button onClick={() => onView && onView(fields.file_url)}
-                className="w-full px-4 py-3 bg-orange-50 border-t border-orange-100 text-left hover:bg-orange-100 transition-colors">
+              <button type="button" onClick={() => onView && onView(fields.file_url)}
+                className="w-full px-4 py-3 bg-orange-50 dark:bg-orange-950/20 border-t border-orange-100 dark:border-orange-900/40 text-left hover:bg-orange-100 transition-colors">
                 <p className="text-xs text-primary">{t('documents.form.pdfHint')}</p>
               </button>
             )}
           </div>
         ) : (
-          <label className={`flex flex-col items-center justify-center border-2 border-dashed border-border rounded-xl p-5 cursor-pointer hover:border-primary/40 hover:bg-secondary/20 transition-all ${fileUploading ? 'opacity-50' : ''}`}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground mb-2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            <p className="text-sm font-medium text-muted-foreground">{fileUploading ? t('documents.form.uploading') : t('documents.form.tapToAttach')}</p>
-            <p className="text-xs text-muted-foreground/60 mt-0.5">{t('documents.form.fileTypes')}</p>
-            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif" onChange={handleFileUpload} className="hidden" disabled={fileUploading} />
-          </label>
+          <div className={`flex gap-2 p-3 rounded-2xl border-[1.5px] border-dashed border-orange-300 dark:border-orange-900/60 bg-orange-50/50 dark:bg-orange-950/10 ${fileUploading ? 'opacity-60 pointer-events-none' : ''}`}>
+            {fileUploading ? (
+              <div className="flex-1 flex items-center justify-center gap-2 py-4 text-sm text-primary font-medium">
+                <Loader2 className="w-4 h-4 animate-spin" />{t('documents.form.uploading')}
+              </div>
+            ) : (
+              <>
+                <label className="flex-1 flex flex-col items-center gap-1 py-3 rounded-xl bg-card border border-orange-200 dark:border-orange-900/50 text-primary text-xs font-semibold cursor-pointer text-center">
+                  <Camera className="w-5 h-5" />{t('documents.form.takePhoto')}
+                  <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} className="hidden" />
+                </label>
+                <label className="flex-1 flex flex-col items-center gap-1 py-3 rounded-xl bg-card border border-orange-200 dark:border-orange-900/50 text-primary text-xs font-semibold cursor-pointer text-center">
+                  <FileUp className="w-5 h-5" />{t('documents.form.uploadFile')}
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.heic" onChange={handleFileUpload} className="hidden" />
+                </label>
+              </>
+            )}
+          </div>
         )}
       </div>
 
+      {/* 2. Tipo — pastillas con icono, como los filtros de Spots */}
+      <FormSection title={t('documents.form.type')}>
+        <div className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1 scrollbar-none">
+          {CATEGORIES.map(cat => {
+            const on = category === cat.key;
+            return (
+              <button key={cat.key} type="button" onClick={() => setCategory(cat.key)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-colors ${
+                  on ? 'bg-primary text-white border-primary' : 'bg-card text-foreground border-border hover:bg-secondary/40'}`}>
+                <cat.Icon size={14} className="flex-shrink-0" />{t(cat.labelKey)}
+              </button>
+            );
+          })}
+        </div>
+      </FormSection>
+
+      {/* 3. Detalles — una sola tarjeta, sin etiquetas en mayúsculas */}
+      <FormSection title={t('documents.form.details')}>
+        <FormCard>
+          {!nameHidden && (
+            <FormRow icon={Pencil}>
+              <input value={fields.name} onChange={e => setField('name', e.target.value)}
+                placeholder={category === 'hotel' ? t('documents.form.ph.hotel') : t('documents.form.ph.name')}
+                autoCapitalize="sentences" autoCorrect="on" spellCheck
+                className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none" />
+            </FormRow>
+          )}
+
+          {hasField('location') && (
+            <FormRow icon={MapPin} align="start">
+              {fields.location_lat && fields.location_lng ? (
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 text-sm text-foreground truncate">{fields.location_name}</span>
+                  <button type="button" aria-label={t('forms.clear')}
+                    onClick={() => { setFields(prev => ({ ...prev, location_name: '', location_lat: '', location_lng: '', location_place_id: '', place_refreshed_at: '' })); setLocationQuery(''); }}
+                    className="w-7 h-7 -m-1 rounded-full flex items-center justify-center text-muted-foreground hover:text-red-500 shrink-0">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <div className="flex items-center gap-2">
+                    <input value={locationQuery} onChange={e => setLocationQuery(e.target.value)}
+                      placeholder={category === 'hotel' ? t('documents.form.ph.hotelSearch') : t('documents.form.ph.locationOptional')}
+                      autoComplete="off" autoCorrect="off"
+                      className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none" />
+                    {locationSearching && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
+                  </div>
+                  {locationResults.length > 0 && (
+                    <div className="mt-2 bg-card border border-border rounded-xl shadow-lg overflow-hidden max-h-56 overflow-y-auto">
+                      {locationResults.map(r => (
+                        <button key={r.id} type="button" disabled={resolvingLocationId === r.id} onClick={() => pickLocationResult(r)}
+                          className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-secondary/30 transition-colors border-b border-border last:border-0 disabled:opacity-60">
+                          <span className="flex flex-col items-start flex-1 min-w-0">
+                            <span className="text-sm font-medium text-foreground truncate w-full">{r.name}</span>
+                            {r.address && <span className="text-xs text-muted-foreground truncate w-full">{r.address}</span>}
+                          </span>
+                          {resolvingLocationId === r.id && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </FormRow>
+          )}
+
+          {(hasField('date') || hasField('time')) && (
+            <FormRow icon={Calendar} align="start">
+              <div className="flex flex-wrap items-center gap-2">
+                {hasField('date') && (useTripDays ? (
+                  <OptionPill
+                    value={selectedDayOption ? tripDayOptionValue(selectedDayOption) : ''}
+                    onChange={v => {
+                      if (!v) { setFields(prev => ({ ...prev, date: '', city_id: '' })); return; }
+                      const { date, cityId } = parseTripDayOptionValue(v);
+                      setFields(prev => ({ ...prev, date, city_id: cityId || '' }));
+                    }}
+                    options={dayOptions}
+                    placeholder={category === 'hotel' ? t('documents.form.fields.checkIn') : t('documents.form.selectDay')}
+                    allowEmpty emptyLabel={t('documents.form.noDay')}
+                  />
+                ) : (
+                  <DatePill value={fields.date} onChange={v => setField('date', v)}
+                    minDate={isPersonalCategory ? undefined : minDate} maxDate={isPersonalCategory ? undefined : maxDate}
+                    placeholder={category === 'hotel' ? t('documents.form.fields.checkIn') : t('documents.form.fields.date')} clearable />
+                ))}
+                {hasField('end_date') && (
+                  <>
+                    <span className="text-xs text-muted-foreground">→</span>
+                    <DatePill value={fields.end_date} onChange={v => setField('end_date', v)}
+                      minDate={fields.date || (isPersonalCategory ? undefined : minDate)} maxDate={isPersonalCategory ? undefined : maxDate}
+                      placeholder={category === 'hotel' ? t('documents.form.fields.checkOut') : t('documents.form.fields.endDate')} clearable />
+                  </>
+                )}
+                {hasField('time') && (
+                  <TimePill value={fields.time} onChange={v => setField('time', v)}
+                    placeholder={transport ? t('documents.form.fields.time') : t('common.time')} />
+                )}
+              </div>
+            </FormRow>
+          )}
+
+          {/* Ciudad de llegada — solo transporte en viajes multi-ciudad (ver
+              Cities.jsx: decide bajo qué ciudad sale en un día de tránsito). */}
+          {transport && (cities || []).length > 1 && (
+            <FormRow icon={Navigation}>
+              <OptionPill
+                value={fields.arrival_city_id}
+                onChange={v => setField('arrival_city_id', v)}
+                options={cities.filter(c => c.id !== fields.city_id).map(c => ({ value: c.id, label: c.name }))}
+                placeholder={t('documents.form.fields.arrivalCityOptional')}
+                allowEmpty emptyLabel={t('documents.form.noArrivalCity')}
+              />
+            </FormRow>
+          )}
+
+          {hasField('notes') && (
+            <FormRow icon={StickyNote} align="start">
+              <textarea value={fields.notes} onChange={e => setField('notes', e.target.value)} rows={2}
+                placeholder={t('documents.form.ph.notesShort')}
+                autoCapitalize="sentences" autoCorrect="on" spellCheck
+                className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none" />
+            </FormRow>
+          )}
+        </FormCard>
+      </FormSection>
+
+      {/* 4. ¿Para quién es? — no sale estando solo en el viaje */}
+      {!soloTrip && (
+        <FormSection title={t('documents.form.usedBy')} hint={category === 'hotel' ? t('documents.form.usedByHintStay') : t('documents.form.usedByHint')}>
+          <div className="flex flex-wrap gap-2">
+            {members.map((email) => {
+              const isMe = normalizeEmail(email) === meEmail;
+              return (
+                <Chip key={email} on={isHolder(email)} onClick={() => toggleUsedBy(email)}
+                  avatar={<PersonAvatar email={email} profile={profileFor(email, profiles)} />}>
+                  {isMe ? t('documents.form.me') : displayNameFor(email, profiles)}
+                </Chip>
+              );
+            })}
+            {members.length > 1 && (
+              <Chip on={members.every(m => isHolder(m))} onClick={toggleAllUsers}>{t('documents.form.everyone')}</Chip>
+            )}
+          </div>
+          {usedBy.length === 0 && <p className="text-xs text-red-500 mt-2">{t('documents.form.usedByRequired')}</p>}
+        </FormSection>
+      )}
+
+      {/* 5. ¿Quién lo ve? — mismos chips */}
+      <FormSection title={t('documents.form.whoSees')}>
+        <div className="flex flex-wrap gap-2">
+          {soloTrip ? (
+            <Chip on locked avatar={<PersonAvatar email={currentUserEmail} profile={profileFor(currentUserEmail, profiles)} />}>
+              {t('documents.form.me')}
+            </Chip>
+          ) : members.map(email => (
+            <Chip key={email} on={seesIt(email)} locked={isLockedViewer(email)} onClick={() => tapPersonViewer(email)}
+              avatar={<PersonAvatar email={email} profile={profileFor(email, profiles)} />}>
+              {normalizeEmail(email) === meEmail ? t('documents.form.me') : displayNameFor(email, profiles)}
+            </Chip>
+          ))}
+          <Chip on={audience === 'group'} onClick={tapGroupViewer}>{t('documents.form.vis.group')}</Chip>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          {audience === 'group'
+            ? t('documents.form.vis.groupDescSolo')
+            : soloTrip ? t('documents.form.vis.onlyMeDesc') : t('documents.form.whoSeesHint')}
+        </p>
+      </FormSection>
+
       {/* Actions */}
       {onDelete && (
-        <button onClick={onDelete} className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 rounded-full border border-red-200 transition-colors">
+        <button type="button" onClick={onDelete} className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 rounded-full border border-red-200 transition-colors">
           <Trash2 className="w-4 h-4" />{t('documents.form.deleteDoc')}
         </button>
       )}
-      <div className="flex gap-3 pt-2">
-        <Button variant="outline" onClick={onCancel} className="flex-1">{t('common.cancel')}</Button>
-        <Button onClick={handleSave} disabled={!canSave || saving} className="flex-1 bg-primary hover:bg-primary/90 text-white">
+      <div className="flex gap-3 pt-1">
+        <Button variant="outline" onClick={onCancel} className="flex-1 rounded-full">{t('common.cancel')}</Button>
+        <Button onClick={handleSave} disabled={!canSave || saving || fileUploading} className="flex-1 rounded-full bg-primary hover:bg-primary/90 text-white">
           {saving ? t('documents.form.saving') : t('common.save')}
         </Button>
       </div>
