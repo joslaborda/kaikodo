@@ -306,6 +306,21 @@
     "importNow": "Import →"
   },
   "trip": {
+    "dates": {
+      "title": "Trip dates",
+      "departure": "Departure",
+      "return": "Return",
+      "from": "From",
+      "to": "To",
+      "choose": "Choose",
+      "byNights": "By nights",
+      "clearReturn": "Clear return date",
+      "pickDeparture": "Tap your departure day",
+      "pickReturn": "Now tap your return day",
+      "noReturn": "No return date (calculated by nights)",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days"
+    },
     "newTrip": "New trip",
     "tripName": "Trip name",
     "destination": "Destination",
@@ -1263,6 +1278,7 @@
       "spotFallback": "Spot",
       "today": "Today",
       "tomorrow": "Tomorrow",
+      "defaultTitle": "{{city}} · Day {{n}}",
       "tapToPlan": "Tap to plan",
       "writeNotePlaceholder": "Write a note...",
       "note": "Note",
@@ -1568,6 +1584,10 @@
       "police": "Police",
       "ambulance": "Ambulance",
       "fire": "Fire brigade",
+      "ambulanceFire": "Ambulance & fire",
+      "policeAmbulance": "Police & ambulance",
+      "policeFire": "Police & fire",
+      "allServices": "Police, ambulance & fire",
       "general": "Emergency",
       "noInfo": "We don't have emergency information for this country yet",
       "header": "Emergencies · {{flag}} {{country}}",
@@ -1688,6 +1708,9 @@
       "micDenied": "Microphone permission denied.",
       "noSpeech": "No voice detected. Try again.",
       "recordError": "Recording error. Try again.",
+      "micDeniedNative": "Kaikōdo can't access the microphone. Turn it on in your phone's Settings (Kaikōdo → Microphone and Speech Recognition).",
+      "voiceUnavailable": "Speech recognition isn't available for this language on your phone.",
+      "voiceNetwork": "Speech recognition needs a connection. Check your connection and try again.",
       "micStart": "Couldn't start the microphone."
     },
     "voz": {

@@ -306,6 +306,21 @@
     "importNow": "Importar →"
   },
   "trip": {
+    "dates": {
+      "title": "Fechas del viaje",
+      "departure": "Salida",
+      "return": "Vuelta",
+      "from": "Desde",
+      "to": "Hasta",
+      "choose": "Elegir",
+      "byNights": "Por noches",
+      "clearReturn": "Quitar fecha de vuelta",
+      "pickDeparture": "Toca el día de salida",
+      "pickReturn": "Ahora toca el día de vuelta",
+      "noReturn": "Sin fecha de vuelta (se calcula por noches)",
+      "days_one": "{{count}} día",
+      "days_other": "{{count}} días"
+    },
     "newTrip": "Nuevo viaje",
     "tripName": "Nombre del viaje",
     "destination": "Destino",
@@ -1263,6 +1278,7 @@
       "spotFallback": "Spot",
       "today": "Hoy",
       "tomorrow": "Mañana",
+      "defaultTitle": "{{city}} · Día {{n}}",
       "tapToPlan": "Toca para planificar",
       "writeNotePlaceholder": "Escribe una nota...",
       "note": "Nota",
@@ -1568,6 +1584,10 @@
       "police": "Policía",
       "ambulance": "Ambulancia",
       "fire": "Bomberos",
+      "ambulanceFire": "Ambulancia y bomberos",
+      "policeAmbulance": "Policía y ambulancia",
+      "policeFire": "Policía y bomberos",
+      "allServices": "Policía, ambulancia y bomberos",
       "general": "Emergencias",
       "noInfo": "Aún no tenemos información de emergencias para este país",
       "header": "Emergencias · {{flag}} {{country}}",
@@ -1688,6 +1708,9 @@
       "micDenied": "Permiso de micrófono denegado.",
       "noSpeech": "No se detectó voz. Inténtalo de nuevo.",
       "recordError": "Error al grabar. Inténtalo de nuevo.",
+      "micDeniedNative": "Kaikōdo no tiene acceso al micrófono. Actívalo en los Ajustes del móvil (Kaikōdo → Micrófono y Reconocimiento de voz).",
+      "voiceUnavailable": "El reconocimiento de voz no está disponible para este idioma en tu móvil.",
+      "voiceNetwork": "El reconocimiento de voz necesita conexión. Revisa tu conexión e inténtalo de nuevo.",
       "micStart": "No se pudo iniciar el micrófono."
     },
     "voz": {
