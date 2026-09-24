@@ -1,6 +1,8 @@
 import { BusFront } from '@/lib/icons';
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, Camera, Upload, X, Utensils, Hotel, Ticket, ShoppingBag, CirclePlus, Wine } from 'lucide-react';
+import { Loader2, Camera, Upload, X, Utensils, Hotel, Ticket, ShoppingBag, CirclePlus, Wine, Pencil, Calendar as CalendarIcon, MapPin, Check } from 'lucide-react';
+import { FormSection, FormCard, FormRow, DatePill, OptionPill, Chip, PersonAvatar } from '@/components/form/FormPills';
+import { splitEvenly, formatShare } from '@/lib/expenseSplit';
 import { base44 } from '@/api/base44Client';
 import { convertAmount } from '@/lib/fxRates';
 import { checkUpload, convertHeicIfNeeded } from '@/lib/uploadLimits';
@@ -27,7 +29,7 @@ const CATEGORIES = [
 ];
 
 const COMMON_CURRENCIES = [
-  'EUR','GBP','JPY','CNY','CHF','MXN','ARS','BRL','THB','KRW','VND','MAD',
+  'EUR','USD','GBP','JPY','CNY','CHF','MXN','ARS','BRL','THB','KRW','VND','MAD',
   'TRY','SGD','IDR','CAD','AUD','INR','MYR','PHP','ZAR','CLP','PEN','AED','SAR',
   'NOK','SEK','DKK','PLN','CZK','HUF','NZD','KES','RUB','EGP','CRC','COP',
 ];
@@ -51,7 +53,7 @@ export default function ExpenseForm({
   maxDate = '',
   onValidityChange,
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   // userMap está indexado por email normalizado (minúsculas) — nunca se
   // muestra el email en crudo, aunque no se encuentre el perfil.
   const getName = email => userMap[normalizeEmail(email)] || t('common.member');
@@ -66,7 +68,9 @@ export default function ExpenseForm({
     currency: defaultCurrency,
     category: 'food',
     date: format(new Date(), 'yyyy-MM-dd'),
-    paid_by: members[0] || '',
+    // José (24 sep 2026): por defecto paga quien apunta el gasto (antes era
+    // members[0] = el creador del viaje, aunque apuntara otra persona).
+    paid_by: members.find(m => normalizeEmail(m) === normalizeEmail(currentUserEmail)) || members[0] || '',
     split_type: 'equal',
     split_with: [...members],
     amounts_by_user: {},
@@ -111,16 +115,6 @@ export default function ExpenseForm({
         ? p.split_with.filter(e => e !== email)
         : [...p.split_with, email],
     }));
-  };
-
-  const selectAll = () => set('split_with', [...members]);
-  const selectNone = () => set('split_with', []);
-
-  const equalShare = () => {
-    if (!form.amount || form.split_with.length === 0) return null;
-    const isZeroDecimal = isZeroDecimalCurrency(currency);
-    const share = parseFloat(form.amount) / form.split_with.length;
-    return isZeroDecimal ? Math.round(share).toLocaleString('es') : share.toFixed(2);
   };
 
   const handleReceiptUpload = async file => {
@@ -246,294 +240,226 @@ export default function ExpenseForm({
     onSave({ ...form, split_with: splitWith, currency, amount_base: amountBase, fx_rate_to_base: fxRate, fx_source: fxSource, fx_timestamp: fxTimestamp, receipt_photos: receipts });
   };
 
+  // ── Reparto (José, 24 sep 2026) ────────────────────────────────────────
+  //  - A partes iguales: entre las personas marcadas (por defecto, todas).
+  //  - Personalizado: cuánto le toca a cada uno (tiene que cuadrar).
+  //  - Solo para mí: gasto propio, lo pagaste tú y es para ti; no afecta a
+  //    los balances. Al elegirlo, quien paga pasa a ser quien lo apunta (antes
+  //    se quedaba el pagador que hubiera marcado, y "para mí" era en realidad
+  //    "para quien pagó"). Si Ana pagó algo solo para ti: "A partes iguales"
+  //    marcándote solo a ti.
+  const zeroDec = isZeroDecimalCurrency(currency);
+  const lang = i18n.language === 'en' ? 'en' : 'es';
+  const me = members.find(m => normalizeEmail(m) === normalizeEmail(currentUserEmail)) || members[0] || '';
+  const setSplitType = (key) => {
+    if (key === 'equal') setForm(p => ({ ...p, split_type: 'equal', split_with: p.split_type === 'equal' && p.split_with.length ? p.split_with : [...members] }));
+    if (key === 'solo') setForm(p => ({ ...p, split_type: 'solo', paid_by: me, split_with: [me] }));
+    if (key === 'custom') {
+      const shares = splitEvenly(parseFloat(form.amount) || 0, members.length, zeroDec);
+      const init = members.reduce((acc, e, i) => ({ ...acc, [e]: shares[i] != null ? String(shares[i]) : '' }), {});
+      setForm(p => ({ ...p, split_type: 'custom', amounts_by_user: init, split_with: [...members] }));
+    }
+  };
+  const equalMembers = members.filter(m => form.split_with.includes(m));
+  const equalShares = splitEvenly(parseFloat(form.amount) || 0, equalMembers.length, zeroDec);
+  const shareFor = (email) => { const i = equalMembers.indexOf(email); return i >= 0 ? equalShares[i] : null; };
+  const soloOfOther = form.split_type === 'solo' && normalizeEmail(form.paid_by) !== normalizeEmail(me);
+  const cityOptions = cities.map(c => ({ value: c.id, label: c.name }));
+  const person = (email) => {
+    const prof = profileMap?.[email] || profileMap?.[normalizeEmail(email)] || null;
+    return {
+      name: isCurrentUser(email) ? t('common.you') : getName(email),
+      avatar: <PersonAvatar email={email} profile={prof} />,
+    };
+  };
+
   return (
     <div className="space-y-5">
 
-      {/* Importe + conversión — cantidad domina, moneda secundaria */}
+      {/* Importe — grande y centrado; la moneda en pastilla */}
       <div className="bg-secondary rounded-2xl py-6 px-4 text-center">
-        {/* Cantidad — grande y centrada */}
         <input
           type="text"
           inputMode="decimal"
           placeholder="0"
           value={form.amount}
-          onChange={e => {
-            // normalizeAmountInput detecta si la coma o el punto es el
-            // separador decimal real en vez de asumir siempre que la coma lo
-            // es — "1.234,56" ya no se guarda como 1.234 (ver utils.js).
-            const val = normalizeAmountInput(e.target.value);
-            set('amount', val);
-          }}
+          onChange={e => set('amount', normalizeAmountInput(e.target.value))}
           autoFocus
           className="text-5xl font-bold text-center bg-transparent outline-none text-foreground placeholder:text-border w-full mb-1"
           style={{ letterSpacing: '-1px' }}
         />
         <div className="w-16 h-0.5 bg-primary rounded-full mx-auto mb-4" />
-
-        {/* Moneda — píldora pequeña como selector secundario */}
         <div className="flex items-center justify-center gap-3">
-          <div className="relative inline-flex items-center">
-            <select
-              value={currency}
-              onChange={e => set('currency', e.target.value)}
-              className="appearance-none bg-card border border-border rounded-full pl-3 pr-7 py-1.5 text-xs font-semibold text-muted-foreground outline-none focus:border-primary cursor-pointer"
-            >
-              {orderedCurrencies.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <svg className="absolute right-2 pointer-events-none" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-          </div>
-
-          {/* FX inline */}
+          <OptionPill value={currency} onChange={v => v && set('currency', v)}
+            options={orderedCurrencies.map(c => ({ value: c, label: c }))} placeholder={currency} />
           {!isSameCurrency && form.amount && parseFloat(form.amount) > 0 && (
             <span className="text-xs text-muted-foreground">
-              {converting
-                ? '...'
-                : fxInfo
-                  ? `≈ ${fxInfo.amountConverted.toLocaleString('es')} ${baseCurrency}`
-                  : ''}
+              {converting ? '...' : fxInfo ? `≈ ${fxInfo.amountConverted.toLocaleString('es')} ${baseCurrency}` : ''}
             </span>
           )}
         </div>
       </div>
 
-      {/* Descripción + recibos */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
-          {/* Fix: sin min-w-0 un input dentro de una fila flex no encoge por
-              debajo de su ancho de contenido — en pantallas estrechas esto
-              empujaba/superponía los botones de subir foto y cámara sobre el
-              propio input en vez de dejarles su hueco (min-w-0 es la forma
-              estándar en flexbox de permitir que un flex-1 sí encoja). */}
-          <input
-            placeholder={t('expenses.form.descPlaceholder')}
-            value={form.description}
-            onChange={e => set('description', e.target.value)}
-            className="flex-1 min-w-0 text-sm text-foreground placeholder-muted-foreground bg-transparent outline-none"
-          />
-          <div className="flex gap-1.5 flex-shrink-0">
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingReceipt}
-              className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-orange-50 transition-colors disabled:opacity-40">
-              <Upload className="w-3.5 h-3.5 text-muted-foreground" />
-            </button>
-            <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={uploadingReceipt}
-              className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center hover:bg-orange-50 transition-colors disabled:opacity-40">
-              <Camera className="w-3.5 h-3.5 text-muted-foreground" />
-            </button>
+      {/* Detalles: descripción + recibo, fecha y ciudad */}
+      <FormCard>
+        <FormRow icon={Pencil}>
+          <div className="flex items-center gap-2">
+            <input
+              placeholder={t('expenses.form.descPlaceholder')}
+              value={form.description}
+              onChange={e => set('description', e.target.value)}
+              autoCapitalize="sentences" autoCorrect="on" spellCheck
+              className="flex-1 min-w-0 text-sm text-foreground placeholder:text-muted-foreground bg-transparent outline-none"
+            />
+            <div className="flex gap-1.5 flex-shrink-0">
+              <button type="button" onClick={() => cameraInputRef.current?.click()} disabled={uploadingReceipt} aria-label={t('expenses.form.receiptCamera')}
+                className="w-8 h-8 rounded-full bg-orange-50 dark:bg-orange-950/30 flex items-center justify-center text-primary disabled:opacity-40">
+                {uploadingReceipt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
+              </button>
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingReceipt} aria-label={t('expenses.form.receiptUpload')}
+                className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground disabled:opacity-40">
+                <Upload className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
-        </div>
-        {receipts.length > 0 && (
-          <div className="flex gap-2 px-4 py-3 flex-wrap">
-            {receipts.map((url, i) => (
-              <div key={i} className="relative">
-                <img src={url} alt="Recibo" className="w-14 h-14 rounded-lg object-cover border border-border" />
-                <button onClick={() => setReceipts(p => p.filter((_, j) => j !== i))}
-                  className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ))}
-            {uploadingReceipt && (
-              <div className="w-14 h-14 rounded-lg bg-secondary flex items-center justify-center">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-              </div>
+          {receipts.length > 0 && (
+            <div className="flex gap-2 pt-2 flex-wrap">
+              {receipts.map((url, i) => (
+                <div key={i} className="relative">
+                  <img src={url} alt="" className="w-14 h-14 rounded-lg object-cover border border-border" />
+                  <button type="button" onClick={() => setReceipts(p => p.filter((_, j) => j !== i))}
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </FormRow>
+        <FormRow icon={CalendarIcon}>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Guía, no bloqueo: un gasto antes/después del viaje es válido. */}
+            <DatePill value={form.date} onChange={v => v && set('date', v)} />
+            {cities.length > 0 && (
+              <OptionPill value={form.city_id || ''}
+                onChange={cityId => setForm(p => ({ ...p, city_id: cityId, city_name: cities.find(c => c.id === cityId)?.name || '' }))}
+                options={cityOptions} placeholder={t('expenses.form.noCityOption')} icon={MapPin}
+                allowEmpty emptyLabel={t('expenses.form.noCityOption')} />
             )}
           </div>
-        )}
-      </div>
+        </FormRow>
+      </FormCard>
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleReceiptUpload(e.target.files[0])} />
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => e.target.files?.[0] && handleReceiptUpload(e.target.files[0])} />
 
-      {/* Fecha + Ciudad */}
-      <div className={cities.length > 0 ? 'grid grid-cols-2 gap-3' : ''}>
-        <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('common.date')}</p>
-          {/* Sin min/max, la fecha del gasto no tenía ninguna relación con las
-              fechas del viaje — a diferencia de DocumentForm.jsx (vuelos,
-              hoteles...), que sí acota el selector nativo al rango del viaje.
-              Igual que allí, es solo una guía en el <input type="date">, no un
-              bloqueo duro: un gasto justo antes/después del viaje sigue siendo
-              válido (p. ej. algo comprado con antelación). */}
-          <input type="date" value={form.date} onChange={e => set('date', e.target.value)}
-            min={minDate || undefined} max={maxDate || undefined}
-            className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-card text-foreground appearance-none [-webkit-appearance:none]" />
-        </div>
-        {cities.length > 0 && (
-          <div>
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{t('expenses.form.city')}</p>
-            <select
-              value={form.city_id || ''}
-              onChange={e => {
-                const cityId = e.target.value;
-                const cityName = cities.find(c => c.id === cityId)?.name || '';
-                setForm(p => ({ ...p, city_id: cityId, city_name: cityName }));
-              }}
-              className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-card text-foreground"
-            >
-              <option value="">{t('expenses.form.noCityOption')}</option>
-              {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-        )}
-      </div>
-
-      {/* Categoría */}
-      <div>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('common.type')}</p>
+      <FormSection title={t('common.type')}>
         <div className="flex flex-wrap gap-2">
           {CATEGORIES.map(c => (
             <button key={c.value} type="button" onClick={() => set('category', c.value)}
-              className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border transition-colors ${
-                form.category === c.value ? 'bg-primary text-white border-primary' : 'bg-card text-muted-foreground border-border hover:border-primary/40'
+              className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors ${
+                form.category === c.value ? 'bg-primary text-white border-primary' : 'bg-card text-foreground border-border hover:bg-secondary/40'
               }`}>
-              <c.Icon size={13} />{t(c.labelKey)}
+              <c.Icon size={14} />{t(c.labelKey)}
             </button>
           ))}
         </div>
-      </div>
+      </FormSection>
 
-      {/* Quién paga */}
-      <div>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('expenses.form.paidBy')}</p>
-        <div className="flex gap-2 flex-wrap">
-          {members.map(email => (
-            <button key={email} type="button" onClick={() => set('paid_by', email)}
-              className={`flex-1 min-w-0 flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors ${
-                form.paid_by === email ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200' : 'bg-card border-border hover:border-primary/40'
-              }`}>
-              {(() => {
-                const prof = profileMap?.[email] || null;
-                return prof?.avatar_url
-                  ? <img src={prof.avatar_url} alt="" style={{width:24,height:24,borderRadius:'50%',objectFit:'cover',flexShrink:0}} />
-                  : <div style={{width:24,height:24,borderRadius:'50%',background:form.paid_by===email?'var(--kodo-bg-orange-mid)':'var(--kodo-progress-track)',color:form.paid_by===email?'hsl(var(--primary))':'var(--kodo-text-muted)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:500,flexShrink:0}}>
-                      {getName(email).slice(0,2).toUpperCase()}
-                    </div>;
-              })()}
-              <span className={`text-xs truncate font-medium ${form.paid_by === email ? 'text-primary' : 'text-muted-foreground'}`}>
-                {isCurrentUser(email) ? t('common.you') : getName(email)}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* ¿Quién pagó? — no hace falta en un gasto propio (lo pagaste tú) */}
+      {form.split_type !== 'solo' && (
+        <FormSection title={t('expenses.form.whoPaid')}>
+          <div className="flex flex-wrap gap-2">
+            {members.map(email => {
+              const { name, avatar } = person(email);
+              return (
+                <Chip key={email} on={form.paid_by === email} onClick={() => set('paid_by', email)} avatar={avatar}>{name}</Chip>
+              );
+            })}
+          </div>
+        </FormSection>
+      )}
 
-      {/* División */}
-      <div>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{t('expenses.form.splitBetween')}</p>
-        {/* Mode selector */}
-        <div className="flex rounded-xl border border-border overflow-hidden mb-3 text-sm">
-          {[
-            { key: 'equal', label: t('expenses.splitType.equal') },
-            { key: 'custom', label: t('expenses.splitType.custom') },
-            { key: 'solo', label: t('expenses.splitType.solo') },
-          ].map(m => (
-            <button key={m.key} type="button"
-              onClick={() => {
-                set('split_type', m.key);
-                if (m.key === 'equal') set('split_with', [...members]);
-                if (m.key === 'solo') { set('split_with', [form.paid_by || members[0]]); }
-                if (m.key === 'custom') {
-                  const eq = form.amount ? (parseFloat(form.amount) / members.length).toFixed(2) : '';
-                  const init = members.reduce((a, e) => ({ ...a, [e]: eq }), {});
-                  set('amounts_by_user', init); set('split_with', [...members]);
-                }
-              }}
-              className={`flex-1 py-2 font-medium transition-colors text-xs ${
-                form.split_type === m.key ? 'bg-primary text-white' : 'bg-card text-muted-foreground hover:bg-secondary/50'
-              }`}>
-              {m.label}
-            </button>
+      <FormSection title={t('expenses.form.howSplit')}>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {[['equal', t('expenses.splitType.equal')], ['custom', t('expenses.splitType.custom')], ['solo', t('expenses.splitType.solo')]].map(([key, label]) => (
+            <button key={key} type="button" onClick={() => setSplitType(key)}
+              className={`px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+                form.split_type === key ? 'bg-primary text-white border-primary' : 'bg-card text-foreground border-border hover:bg-secondary/40'
+              }`}>{label}</button>
           ))}
         </div>
 
         {form.split_type === 'equal' && (
-          <div className="flex gap-2 flex-wrap">
-            {members.map(email => {
-              const selected = form.split_with.includes(email);
-              const share = selected && form.split_with.length > 0 && form.amount
-                ? (parseFloat(form.amount) / form.split_with.length) : null;
-              const isZeroDecimal = isZeroDecimalCurrency(currency);
-              const shareStr = share ? (isZeroDecimal ? Math.round(share).toLocaleString('es') : share.toFixed(2)) : null;
-              const sp = profileMap?.[email];
-              return (
-                <button key={email} type="button" onClick={() => toggleMember(email)}
-                  className={`flex-1 min-w-0 flex flex-col items-center gap-1 px-3 py-2.5 rounded-xl border transition-colors ${
-                    selected ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200' : 'bg-card border-border hover:border-primary/40'
-                  }`}>
-                  {sp?.avatar_url
-                    ? <img src={sp.avatar_url} alt="" style={{width:28,height:28,borderRadius:'50%',objectFit:'cover'}} />
-                    : <div style={{width:28,height:28,borderRadius:'50%',background:selected?'var(--kodo-bg-orange-mid)':'var(--kodo-progress-track)',color:selected?'hsl(var(--primary))':'var(--kodo-text-muted)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:500}}>
-                        {getName(email).slice(0,2).toUpperCase()}</div>}
-                  <span className={`text-xs font-medium truncate max-w-full ${selected ? 'text-primary' : 'text-muted-foreground'}`}>
-                    {isCurrentUser(email) ? t('common.you') : getName(email)}
-                  </span>
-                  {shareStr && <span className="text-xs text-primary font-medium">{shareStr} {currency}</span>}
-                </button>
-              );
-            })}
-          </div>
+          <>
+            <div className="bg-card border border-border rounded-2xl divide-y divide-border/70">
+              {members.map(email => {
+                const on = form.split_with.includes(email);
+                const share = shareFor(email);
+                const { name, avatar } = person(email);
+                return (
+                  <button key={email} type="button" onClick={() => toggleMember(email)} aria-pressed={on}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-left">
+                    {avatar}
+                    <span className={`flex-1 min-w-0 truncate text-sm ${on ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>{name}</span>
+                    {on && share != null && <span className="text-sm font-semibold text-primary">{formatShare(share, zeroDec, lang)} {currency}</span>}
+                    <span className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${on ? 'bg-primary' : 'border border-border bg-card'}`}>
+                      {on && <Check className="w-3 h-3 text-white" />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {form.split_with.length === 0 && <p className="text-xs text-red-500 mt-2">{t('expenses.form.pickSomeone')}</p>}
+          </>
         )}
 
         {form.split_type === 'custom' && (
-          <div className="space-y-2">
-            {members.map(email => {
-              const sp = profileMap?.[email];
-              return (
-                <div key={email} className="flex items-center gap-3 px-3 py-2 rounded-xl border border-border bg-card">
-                  {sp?.avatar_url
-                    ? <img src={sp.avatar_url} alt="" style={{width:28,height:28,borderRadius:'50%',objectFit:'cover',flexShrink:0}} />
-                    : <div style={{width:28,height:28,borderRadius:'50%',background:'var(--kodo-progress-track)',color:'var(--kodo-text-muted)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:500,flexShrink:0}}>
-                        {getName(email).slice(0,2).toUpperCase()}</div>}
-                  <span className="text-xs font-medium text-foreground flex-1 truncate">
-                    {isCurrentUser(email) ? t('common.you') : getName(email)}
-                  </span>
-                  <input
-                    type="number" min="0" step="any" placeholder="0"
-                    value={form.amounts_by_user?.[email] || ''}
-                    onChange={e => {
-                      // min="0" no se aplica solo (este input no vive dentro
-                      // de un <form>), así que sin este guard se podía escribir
-                      // un importe negativo aquí: la suma seguía "cuadrando"
-                      // con el total del gasto pero invertía quién debe a
-                      // quién (ver customHasNegative en canSave/handleSave).
-                      const raw = e.target.value.replace(/^-+/, '');
-                      set('amounts_by_user', { ...form.amounts_by_user, [email]: raw });
-                    }}
-                    className="w-20 text-right text-sm border border-border rounded-lg px-2 py-1 outline-none focus:border-primary bg-secondary"
-                  />
-                  <span className="text-xs text-muted-foreground">{currency}</span>
-                </div>
-              );
-            })}
+          <>
+            <div className="bg-card border border-border rounded-2xl divide-y divide-border/70">
+              {members.map(email => {
+                const { name, avatar } = person(email);
+                return (
+                  <div key={email} className="flex items-center gap-3 px-3 py-2">
+                    {avatar}
+                    <span className="flex-1 min-w-0 truncate text-sm text-foreground">{name}</span>
+                    <input
+                      type="text" inputMode="decimal" placeholder="0"
+                      value={form.amounts_by_user?.[email] || ''}
+                      onChange={e => {
+                        // Sin negativos: la suma podría "cuadrar" invirtiendo quién debe a quién.
+                        const raw = normalizeAmountInput(e.target.value.replace(/^-+/, ''));
+                        set('amounts_by_user', { ...form.amounts_by_user, [email]: raw });
+                      }}
+                      className="w-24 text-right text-sm font-semibold border border-border rounded-full px-3 py-1.5 outline-none focus:border-primary bg-secondary"
+                    />
+                    <span className="text-xs text-muted-foreground w-9">{currency}</span>
+                  </div>
+                );
+              })}
+            </div>
             {(() => {
               const diff = parseFloat(form.amount || 0) - customTotal;
               if (Math.abs(diff) <= 0.01) {
-                return customTotal > 0
-                  ? <p className="text-xs text-green-600 mt-1">{t('expenses.form.totalMatches')}</p>
-                  : null;
+                return customTotal > 0 ? <p className="text-xs text-green-600 mt-2">{t('expenses.form.totalMatches')}</p> : null;
               }
               return (
-                <p className="text-xs text-amber-600 mt-1">
+                <p className="text-xs text-amber-600 mt-2">
                   {diff > 0
-                    ? t('expenses.form.missingToAssign', { amount: Math.abs(diff).toFixed(2), currency })
-                    : t('expenses.form.overAssigned', { amount: Math.abs(diff).toFixed(2), currency })}
+                    ? t('expenses.form.missingToAssign', { amount: formatShare(Math.abs(diff), zeroDec, lang), currency })
+                    : t('expenses.form.overAssigned', { amount: formatShare(Math.abs(diff), zeroDec, lang), currency })}
                 </p>
               );
             })()}
-          </div>
+          </>
         )}
 
         {form.split_type === 'solo' && (
           <p className="text-xs text-muted-foreground bg-secondary rounded-xl px-3 py-2">
-            {t('expenses.form.soloHint')}
+            {soloOfOther ? t('expenses.form.soloHintOther', { name: getName(form.paid_by) }) : t('expenses.form.soloHint')}
           </p>
         )}
+      </FormSection>
 
-        {form.split_type === 'equal' && form.split_with.length === 0 && (
-          <p className="text-xs text-red-500 mt-2">{t('expenses.form.pickSomeone')}</p>
-        )}
-      </div>
-
-      {/* Botones */}
     {/* Hidden submit trigger for ExpenseSheet */}
     <button id="expense-form-submit" type="button" onClick={handleSave} style={{display:'none'}} />
     </div>
