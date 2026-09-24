@@ -319,7 +319,10 @@
       "pickReturn": "Now tap your return day",
       "noReturn": "No return date (calculated by nights)",
       "days_one": "{{count}} day",
-      "days_other": "{{count}} days"
+      "days_other": "{{count}} days",
+      "pending": "Dates to be confirmed",
+      "leaveUndated": "Leave without dates",
+      "pickReturnShort": "return?"
     },
     "newTrip": "New trip",
     "tripName": "Trip name",
@@ -361,7 +364,7 @@
     "dayOf": "Day {{day}} of {{total}}",
     "daysLeft": "{{count}} day",
     "daysLeft_other": "{{count}} days",
-    "noDates": "No dates",
+    "noDates": "Dates TBC",
     "open": "Open",
     "deleteConfirmPrompt": "Type the trip name exactly to confirm:",
     "deleteConfirmPlaceholder": "Type the trip name...",
@@ -439,7 +442,15 @@
       "nightsMissing_one": "{{count}} night missing to complete the trip",
       "nightsMissing_other": "{{count}} nights missing to complete the trip",
       "cityPlaceholder": "City...",
-      "cityN": "City {{n}}..."
+      "cityN": "City {{n}}...",
+      "stops": "Stops",
+      "spanSummary": "{{range}} · {{days}}",
+      "searchCity": "Search the city…",
+      "firstCity": "Where are you going?",
+      "addCity": "Add a city…",
+      "removeStop": "Remove stop",
+      "countryNeeded": "Tell us this city's country",
+      "stopRequired": "Add at least one city"
     },
     "activeCity": {
       "nowIn": "I'm now in:",
@@ -568,8 +579,13 @@
       "payerRequired": "Payer required",
       "payerRequiredDesc": "Indicate who paid the expense.",
       "pickSomeone": "Select at least one person",
-      "soloHint": "This expense is just for you. It doesn't affect the group's balances.",
-      "negativeSplitDesc": "No split amount can be negative."
+      "soloHint": "You paid and it's just for you: it doesn't affect the group balances.",
+      "negativeSplitDesc": "No split amount can be negative.",
+      "howSplit": "How is it split?",
+      "whoPaid": "Who paid?",
+      "receiptCamera": "Receipt photo",
+      "receiptUpload": "Upload receipt",
+      "soloHintOther": "{{name}}'s own expense: it doesn't affect the group balances."
     },
     "fx": {
       "updatedAt": "Rates updated at {{time}}",
@@ -753,7 +769,13 @@
       "unassigned": "Unassigned",
       "confirm": "Confirm",
       "notNow": "Not now",
-      "when": "When do you want to visit this spot?"
+      "when": "When do you want to visit this spot?",
+      "whichDay": "Which day?",
+      "time": "Time",
+      "optional": "(optional)",
+      "pickTime": "Pick a time",
+      "summary": "It will show in your route on {{day}}",
+      "summaryTime": "It will show in your route on {{day}} at {{time}}"
     },
     "toast": {
       "savedIn": "Saved in {{city}}",
@@ -1013,14 +1035,18 @@
         "noteTime": "Note time",
         "hotelPlace": "Hotel",
         "checkIn": "Check-in",
-        "checkOut": "Check-out"
+        "checkOut": "Check-out",
+        "arrivalCityOptional": "Arrival city (optional)"
       },
       "locationHint": "So it shows up on the day's mini-map",
       "ph": {
         "name": "e.g. Madrid-Tokyo flight",
         "location": "Search e.g. \"Atocha\" or \"Heathrow\"",
         "notes": "Additional notes...",
-        "hotel": "Hotel name"
+        "hotel": "Hotel name",
+        "hotelSearch": "Search the hotel",
+        "locationOptional": "Airport or station (optional)",
+        "notesShort": "Notes (booking ref, seat…)"
       },
       "vis": {
         "onlyMe": "Only me",
@@ -1030,7 +1056,8 @@
         "choose": "Choose",
         "chooseDesc": "Select who sees it",
         "holders": "Only who uses it",
-        "holdersDesc": "Only the people it is for can see it"
+        "holdersDesc": "Only the people it is for can see it",
+        "groupDescSolo": "Visible to everyone, including anyone who joins later"
       },
       "usedBy": "Who will use it?",
       "usedByHint": "Who gets the ticket on Home and the reminder. Can be more than one person.",
@@ -1046,7 +1073,14 @@
       "change": "Change",
       "hotelHint": "Search it and it will also be your accommodation in the city",
       "usedByHintStay": "Who is staying here. Can be more than one person.",
-      "nameHotel": "Hotel or booking name"
+      "nameHotel": "Hotel or booking name",
+      "takePhoto": "Take photo",
+      "uploadFile": "Upload PDF or image",
+      "details": "Details",
+      "noDay": "No day",
+      "noArrivalCity": "No arrival city",
+      "whoSees": "Who can see it?",
+      "whoSeesHint": "You and whoever uses it can always see it."
     },
     "card": {
       "view": "View",
@@ -1965,5 +1999,24 @@
       "accept": "Accept and continue",
       "logout": "Log out"
     }
+  },
+  "newTripInvites": {
+    "title": "Travelers",
+    "optional": "(optional)",
+    "add": "Add to trip",
+    "remove": "Remove",
+    "willInvite": "Will be invited by email",
+    "sentOnCreate": "Invitations are sent when the trip is created.",
+    "invalidEmail": "That email doesn't look right",
+    "sentToast_one": "Invitation sent to {{count}} person",
+    "sentToast_other": "Invitations sent to {{count}} people",
+    "failedToast_one": "{{count}} invitation couldn't be sent",
+    "failedToast_other": "{{count}} invitations couldn't be sent",
+    "failedDesc": "You can invite them again from Trip settings."
+  },
+  "forms": {
+    "pickDate": "Pick a date",
+    "pickTime": "Time",
+    "clear": "Clear"
   }
 }
