@@ -43,12 +43,22 @@ export function googlePlaceIdOf(spot) {
 // detalle. Devuelve true si el toque salió de uno de esos controles; las
 // filas lo comprueban al principio de su onClick y, si es así, no hacen nada.
 export function isGoogleCardControl(e) {
+  // José (24 sep 2026): antes recorría TODO el camino del toque hacia arriba y
+  // daba true en cuanto encontraba cualquier <button>/<a>... incluida la
+  // propia fila pulsable (que es un <button>). En las filas SIN ficha de
+  // Google (spots manuales, o sin conexión) el toque nunca llegaba a una
+  // ficha, así que siempre daba true y la fila no abría nada: no se podía ni
+  // editar ni borrar el spot. Ahora solo cuenta un control que esté DENTRO de
+  // la ficha de Google, y se para al llegar a la fila (currentTarget).
   const path = e?.nativeEvent?.composedPath?.() || e?.composedPath?.() || [];
+  const row = e?.currentTarget;
+  let sawControl = false;
   for (const n of path) {
+    if (row && n === row) return false;
     const tag = n?.tagName;
     if (!tag) continue;
-    if (tag.startsWith('GMP-PLACE-DETAILS')) return false; // llegó a la ficha sin pasar por un control
-    if (tag === 'A' || tag === 'BUTTON' || n.getAttribute?.('role') === 'button') return true;
+    if (tag.startsWith('GMP-')) return sawControl; // llegó a la ficha: ¿venía de un control suyo?
+    if (tag === 'A' || tag === 'BUTTON' || n.getAttribute?.('role') === 'button') sawControl = true;
   }
   return false;
 }
