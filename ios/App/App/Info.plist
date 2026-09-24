@@ -27,6 +27,13 @@
 		<string>Kaikōdo usa la cámara para que puedas fotografiar recibos y adjuntarlos a tus gastos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 		<string>Kaikōdo accede a tus fotos para que puedas adjuntar imágenes de recibos, documentos y fotos del viaje.</string>
+	<!-- José (24 sep 2026): Traductor por voz. Sin estas dos claves WebKit
+	     deniega el reconocimiento de voz del WKWebView directamente
+	     ("not-allowed") y la app nunca llega a pedir permiso de micrófono. -->
+	<key>NSMicrophoneUsageDescription</key>
+		<string>Kaikōdo usa el micrófono para traducir lo que dices en el traductor por voz.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+		<string>Kaikōdo convierte tu voz en texto para poder traducirla en el traductor por voz.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>Kaikōdo guarda fotos en tu galería cuando descargas una imagen desde la app.</string>
 	<key>CFBundleDisplayName</key>

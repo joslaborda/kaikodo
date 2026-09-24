@@ -1,5 +1,7 @@
 import UIKit
 import Capacitor
+import Speech
+import AVFoundation
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -46,4 +48,170 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 
+}
+
+// MARK: - Traductor por voz nativo
+//
+// José (24 sep 2026): el reconocimiento de voz del WKWebView
+// (webkitSpeechRecognition) no es fiable dentro de una app y daba "Permiso de
+// micrófono denegado" sin llegar a pedirlo. El traductor por voz es una
+// funcionalidad vital, así que se hace nativo: SFSpeechRecognizer para
+// escuchar y AVSpeechSynthesizer para leer la traducción.
+//
+// Va en este archivo (y no en uno nuevo) a propósito: así no hay que tocar el
+// project.pbxproj de Xcode para que se compile. Mismo API que el plugin de
+// Android (android/.../KaikodoSpeechPlugin.java):
+//  - requestAccess()        -> { granted, available }
+//  - start({ lang })        -> emite 'result' { text } con todo lo dicho
+//  - stop()                 -> { text } final
+//  - speak({ text, lang, rate }) / stopSpeaking()
+//  - evento 'error' { code }: 'not-allowed' | 'unavailable' | 'no-speech' | 'network' | 'error'
+
+
+class MainViewController: CAPBridgeViewController {
+    override open func capacitorDidLoad() {
+        bridge?.registerPluginInstance(KaikodoSpeechPlugin())
+    }
+}
+
+@objc(KaikodoSpeechPlugin)
+public class KaikodoSpeechPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "KaikodoSpeechPlugin"
+    public let jsName = "KaikodoSpeech"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "requestAccess", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "speak", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopSpeaking", returnType: CAPPluginReturnPromise),
+    ]
+
+    private let audioEngine = AVAudioEngine()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var task: SFSpeechRecognitionTask?
+    private var recognizer: SFSpeechRecognizer?
+    private var lastText = ""
+    private var active = false
+    private let synth = AVSpeechSynthesizer()
+
+    // ── Permisos ──────────────────────────────────────────────────────────────
+    @objc func requestAccess(_ call: CAPPluginCall) {
+        SFSpeechRecognizer.requestAuthorization { status in
+            guard status == .authorized else {
+                call.resolve(["granted": false, "available": true])
+                return
+            }
+            AVAudioSession.sharedInstance().requestRecordPermission { micOk in
+                call.resolve(["granted": micOk, "available": true])
+            }
+        }
+    }
+
+    // ── Reconocimiento ────────────────────────────────────────────────────────
+    @objc func start(_ call: CAPPluginCall) {
+        let lang = call.getString("lang") ?? "es-ES"
+        DispatchQueue.main.async {
+            guard SFSpeechRecognizer.authorizationStatus() == .authorized,
+                  AVAudioSession.sharedInstance().recordPermission == .granted else {
+                call.reject("not-allowed", "not-allowed")
+                return
+            }
+            guard let rec = SFSpeechRecognizer(locale: Locale(identifier: lang)), rec.isAvailable else {
+                call.reject("unavailable", "unavailable")
+                return
+            }
+            self.teardown()
+            self.synth.stopSpeaking(at: .immediate)
+            self.recognizer = rec
+            self.lastText = ""
+            do {
+                let session = AVAudioSession.sharedInstance()
+                try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
+                try session.setActive(true, options: .notifyOthersOnDeactivation)
+
+                let req = SFSpeechAudioBufferRecognitionRequest()
+                req.shouldReportPartialResults = true
+                self.request = req
+
+                let input = self.audioEngine.inputNode
+                let format = input.outputFormat(forBus: 0)
+                input.removeTap(onBus: 0)
+                input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+                    self.request?.append(buffer)
+                }
+                self.audioEngine.prepare()
+                try self.audioEngine.start()
+                self.active = true
+
+                self.task = rec.recognitionTask(with: req) { result, error in
+                    if let result = result {
+                        self.lastText = result.bestTranscription.formattedString
+                        self.notifyListeners("result", data: ["text": self.lastText])
+                    }
+                    if error != nil && self.active {
+                        // Error real (no un "parar" del usuario): se corta y se avisa.
+                        let nsErr = error! as NSError
+                        let code = nsErr.code == 1110 ? "no-speech" : (nsErr.domain == NSURLErrorDomain ? "network" : "error")
+                        self.active = false
+                        self.teardown()
+                        if self.lastText.isEmpty {
+                            self.notifyListeners("error", data: ["code": code])
+                        }
+                    }
+                }
+                call.resolve()
+            } catch {
+                self.teardown()
+                call.reject("error", "error")
+            }
+        }
+    }
+
+    @objc func stop(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.active = false
+            self.request?.endAudio()
+            // Pequeño margen para que llegue el último trozo reconocido.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                let text = self.lastText
+                self.teardown()
+                call.resolve(["text": text])
+            }
+        }
+    }
+
+    private func teardown() {
+        if audioEngine.isRunning { audioEngine.stop() }
+        audioEngine.inputNode.removeTap(onBus: 0)
+        request?.endAudio()
+        task?.cancel()
+        task = nil
+        request = nil
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    // ── Lectura en voz alta ───────────────────────────────────────────────────
+    @objc func speak(_ call: CAPPluginCall) {
+        let text = call.getString("text") ?? ""
+        let lang = call.getString("lang") ?? "es-ES"
+        let rate = call.getFloat("rate") ?? 0.9
+        DispatchQueue.main.async {
+            guard !text.isEmpty else { call.resolve(); return }
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try? AVAudioSession.sharedInstance().setActive(true)
+            self.synth.stopSpeaking(at: .immediate)
+            let utt = AVSpeechUtterance(string: text)
+            utt.voice = AVSpeechSynthesisVoice(language: lang)
+            utt.rate = AVSpeechUtteranceDefaultSpeechRate * max(0.5, min(rate, 1.5))
+            self.synth.speak(utt)
+            call.resolve()
+        }
+    }
+
+    @objc func stopSpeaking(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.synth.stopSpeaking(at: .immediate)
+            call.resolve()
+        }
+    }
 }
