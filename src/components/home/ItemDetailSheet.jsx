@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { X, Clock, CirclePlus, Trash2, Upload, Pencil } from 'lucide-react';
 import { DOC_ICONS, SPOT_ICONS, SPOT_COLORS } from './constants';
 import { useTranslation } from 'react-i18next';
+import { TimePill } from '@/components/form/FormPills';
 import { resolveDocViewUrl } from '@/lib/privateFiles';
 import { useDocFileUpload } from '@/hooks/useDocFileUpload';
 
@@ -89,11 +90,10 @@ export default function ItemDetailSheet({ item, onClose, onSaveTime, onOpenPdf, 
 
         <div className="px-5 py-4 space-y-4">
           <div>
-            <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">{t('itemDetail.time')}</p>
+            <p className="text-sm font-bold text-foreground mb-2">{t('itemDetail.time')}</p>
             {editingTime ? (
               <div className="flex items-center gap-2">
-                <input type="time" value={time} onChange={e => setTime(e.target.value)}
-                  className="h-9 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary" />
+                <TimePill value={time} onChange={setTime} placeholder={t('spots.assign.pickTime')} />
                 <button onClick={handleSave} disabled={saving}
                   className="px-4 py-1.5 bg-primary text-white text-sm rounded-full font-medium disabled:opacity-50">
                   {saving ? '...' : t('common.save')}
