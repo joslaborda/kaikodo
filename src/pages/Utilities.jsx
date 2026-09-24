@@ -2,7 +2,7 @@ import { useState, useEffect, useRef} from 'react';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
-import { Plus, Minus, Trash2, ExternalLink, Loader2, AlertTriangle, Landmark, MapPin, Phone, Mail, Clock, User, Shirt, Droplets, Smartphone, Pill, MoreHorizontal, Building2, Check, ArrowRight } from 'lucide-react';
+import { Plus, Minus, Trash2, ExternalLink, Loader2, AlertTriangle, Landmark, MapPin, Phone, Mail, Clock, User, Shirt, Droplets, Smartphone, Pill, MoreHorizontal, Building2, Check, ArrowRight, Star } from 'lucide-react';
 import WeatherCard from '@/components/WeatherCard';
 import { getCountryMeta, getCountryLabel, getCountryIso, normalizeCountry } from '@/lib/countryConfig';
 import { ShieldCheck, ShieldX, ShieldAlert, Zap, Syringe, Coins, Info, ChevronDown, ChevronUp, Shield, Cross, Flame } from 'lucide-react';
@@ -78,7 +78,7 @@ function AddPackingSheet({ open, onClose, defaultCategory = 'personal', onSave, 
     <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/50" onClick={onClose}>
       <div className="bg-card w-full max-w-lg rounded-t-3xl p-5 pb-8 space-y-4" onClick={e => e.stopPropagation()}>
         <div className="w-9 h-1 bg-border rounded-full mx-auto" />
-        <p className="text-sm font-medium text-foreground">{t('utilities.packing.newItem')}</p>
+        <p className="text-base font-bold text-foreground">{t('utilities.packing.newItem')}</p>
         {/* José (24 sep 2026): sin autoFocus -- el teclado tapaba cantidad y
             categoría nada más abrir. Se abre al tocar el campo. */}
         <input autoCapitalize="sentences" autoCorrect="on" spellCheck aria-label={t('utilities.packing.itemNameAria')} placeholder={t('utilities.packing.itemNamePlaceholder')} value={name}
@@ -86,28 +86,27 @@ function AddPackingSheet({ open, onClose, defaultCategory = 'personal', onSave, 
           onKeyDown={e => e.key === 'Enter' && handleSave()}
           className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none" />
         <div className="flex items-center justify-between px-1">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">{t('utilities.packing.quantity')}</p>
+          <p className="text-sm font-bold text-foreground">{t('utilities.packing.quantity')}</p>
           <QuantityStepper value={quantity} onChange={setQuantity} />
         </div>
         <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-2">{t('utilities.packing.category')}</p>
-          <div className="grid grid-cols-2 gap-2">
+          <p className="text-sm font-bold text-foreground mb-2">{t('utilities.packing.whereGoes')}</p>
+          <div className="flex flex-wrap gap-2">
             {PACKING_CATEGORIES.map(cat => (
-              <button key={cat.value} onClick={() => setCategory(cat.value)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${category === cat.value ? 'border-primary bg-orange-50' : 'border-border'}`}>
-                <cat.Icon size={14} color={category === cat.value ? 'hsl(var(--primary))' : '#888'} />
-                <span className={`text-xs font-medium ${category === cat.value ? 'text-primary' : 'text-muted-foreground'}`}>{t(cat.tk)}</span>
+              <button key={cat.value} type="button" onClick={() => setCategory(cat.value)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${category === cat.value ? 'bg-primary text-white border-primary' : 'bg-card text-foreground border-border hover:bg-secondary/40'}`}>
+                <cat.Icon size={14} />{t(cat.tk)}
               </button>
             ))}
           </div>
         </div>
-        <button onClick={() => setEssential(v => !v)}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-colors ${essential ? 'border-primary bg-orange-50' : 'border-border'}`}>
-          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${essential ? 'border-primary bg-primary' : 'border-border'}`}>
-            {essential && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-          </div>
-          <span className={`text-sm ${essential ? 'text-primary font-medium' : 'text-muted-foreground'}`}>{t('utilities.packing.markEssential')}</span>
-        </button>
+        <div>
+          <p className="text-sm font-bold text-foreground mb-2">{t('utilities.packing.importance')}</p>
+          <button type="button" onClick={() => setEssential(v => !v)} aria-pressed={essential}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${essential ? 'bg-primary text-white border-primary' : 'bg-card text-foreground border-border hover:bg-secondary/40'}`}>
+            <Star className="w-3.5 h-3.5" />{t('utilities.packing.essentialLabel')}
+          </button>
+        </div>
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-3 rounded-full border border-border text-sm text-muted-foreground">{t('common.cancel')}</button>
           <button onClick={handleSave} disabled={!name.trim() || saving}
@@ -163,31 +162,30 @@ function EditPackingItemSheet({ item, onClose, onSave, onDelete, saving, deletin
           onKeyDown={e => e.key === 'Enter' && handleSave()}
           className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none" />
         <div className="flex items-center justify-between px-1">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">{t('utilities.packing.quantity')}</p>
+          <p className="text-sm font-bold text-foreground">{t('utilities.packing.quantity')}</p>
           <QuantityStepper value={quantity} onChange={setQuantity} />
         </div>
         {!isSouvenir && (
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-2">{t('utilities.packing.category')}</p>
-            <div className="grid grid-cols-2 gap-2">
-              {PACKING_CATEGORIES.map(cat => (
-                <button key={cat.value} onClick={() => setCategory(cat.value)}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${category === cat.value ? 'border-primary bg-orange-50' : 'border-border'}`}>
-                  <cat.Icon size={14} color={category === cat.value ? 'hsl(var(--primary))' : '#888'} />
-                  <span className={`text-xs font-medium ${category === cat.value ? 'text-primary' : 'text-muted-foreground'}`}>{t(cat.tk)}</span>
-                </button>
-              ))}
-            </div>
+            <p className="text-sm font-bold text-foreground mb-2">{t('utilities.packing.whereGoes')}</p>
+            <div className="flex flex-wrap gap-2">
+            {PACKING_CATEGORIES.map(cat => (
+              <button key={cat.value} type="button" onClick={() => setCategory(cat.value)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${category === cat.value ? 'bg-primary text-white border-primary' : 'bg-card text-foreground border-border hover:bg-secondary/40'}`}>
+                <cat.Icon size={14} />{t(cat.tk)}
+              </button>
+            ))}
+          </div>
           </div>
         )}
         {!isSouvenir && (
-          <button onClick={() => setEssential(v => !v)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-colors ${essential ? 'border-primary bg-orange-50' : 'border-border'}`}>
-            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${essential ? 'border-primary bg-primary' : 'border-border'}`}>
-              {essential && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>}
-            </div>
-            <span className={`text-sm ${essential ? 'text-primary font-medium' : 'text-muted-foreground'}`}>{t('utilities.packing.markEssential')}</span>
+          <div>
+          <p className="text-sm font-bold text-foreground mb-2">{t('utilities.packing.importance')}</p>
+          <button type="button" onClick={() => setEssential(v => !v)} aria-pressed={essential}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${essential ? 'bg-primary text-white border-primary' : 'bg-card text-foreground border-border hover:bg-secondary/40'}`}>
+            <Star className="w-3.5 h-3.5" />{t('utilities.packing.essentialLabel')}
           </button>
+        </div>
         )}
 
         {confirmingDelete ? (
@@ -514,7 +512,7 @@ function KodoCheck({ checked, onChange, essential = false }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Packing tab
 // ─────────────────────────────────────────────────────────────────────────────
-function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, externalOpen, onExternalClose }) {
+function PackingTab({ tripId, country, userId, tripMembers, externalOpen, onExternalClose }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -522,7 +520,6 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
   const [adding, setAdding] = useState(null);
   const [newName, setNewName] = useState('');
   const [newEssential, setNewEssential] = useState(false);
-  const [activeInnerTab, setActiveInnerTab] = useState('maleta');
   const [sheetOpen, setSheetOpen] = useState(false);
   const effectiveSheetOpen = sheetOpen || externalOpen;
   const closeSheet = () => { setSheetOpen(false); onExternalClose?.(); };
@@ -581,7 +578,6 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
   });
 
   const packingItems  = items.filter(i => i.category !== 'souvenir');
-  const souvenirItems = items.filter(i => i.category === 'souvenir');
 
   const totalItems  = packingItems.length;
   const packedCount = packingItems.filter(i => i.packed).length;
@@ -614,11 +610,7 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
     // antes de que terminara la primera mutación creaba el ítem duplicado.
     if (createMutation.isPending) return;
     if (!newName.trim()) { setAdding(null); return; }
-    if (adding === 'souvenir') {
-      await createMutation.mutateAsync({ name: newName.trim(), category: 'souvenir', packed: false, essential: false });
-    } else {
-      await createMutation.mutateAsync({ name: newName.trim(), category: adding, packed: false, essential: newEssential });
-    }
+    await createMutation.mutateAsync({ name: newName.trim(), category: adding, packed: false, essential: newEssential });
     setNewName('');
     setNewEssential(false);
     setAdding(null);
@@ -634,38 +626,12 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
   // así que el clic no hacía nada.
   const toggleCollapsed = (key, current) => setCollapsed(p => ({ ...p, [key]: !current }));
 
-  // Inner tab bar (Maleta / Souvenirs) — Ō style
-  const innerTabs = [
-    { key: 'maleta', label: t('utilities.packing.tabMaleta') },
-    ...(tripInProgress ? [{ key: 'souvenirs', label: t('utilities.packing.tabSouvenirs') }] : []),
-  ];
-
   return (
     <div className="space-y-3">
-      {/* Inner tabs */}
-      {tripInProgress && (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
-          <div className="flex">
-            {innerTabs.map(tab => (
-              <button key={tab.key} onClick={() => setActiveInnerTab(tab.key)}
-                className="flex-1 flex flex-col items-center py-3 gap-1.5">
-                <div style={{
-                  height: 3, borderRadius: 2, width: 18,
-                  background: activeInnerTab === tab.key ? 'hsl(var(--primary))' : 'transparent',
-                  marginBottom: 2,
-                }} />
-                <span style={{
-                  fontSize: 13, fontWeight: 500,
-                  color: activeInnerTab === tab.key ? 'var(--kodo-text-active)' : 'var(--kodo-nav-inactive)',
-                }}>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* ── MALETA ── */}
-      {activeInnerTab === 'maleta' && (
+      {/* José (24 sep 2026): Souvenirs eliminado (solo aparecía durante el viaje,
+          en una pestaña escondida). Los souvenirs que ya existieran se ignoran. */}
+      {(
         <>
           {totalItems === 0 ? (
             <div className="bg-card rounded-2xl border border-border text-center py-14 px-6">
@@ -788,66 +754,6 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
         </>
       )}
 
-      {/* ── SOUVENIRS ── */}
-      {activeInnerTab === 'souvenirs' && (
-        <div className="space-y-3">
-          <div className="bg-card rounded-2xl border border-border overflow-hidden">
-            {souvenirItems.length === 0 && adding !== 'souvenir' && (
-              <div className="text-center py-12 px-6">
-                                <p className="text-sm font-medium text-foreground mb-1">{t('utilities.packing.souvEmptyTitle')}</p>
-                <p className="text-xs text-muted-foreground mb-5">{t('utilities.packing.souvEmptyHint')}</p>
-                <button onClick={() => openAdding('souvenir')}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white text-sm rounded-full font-medium hover:bg-primary/90 transition-colors">
-                  <Plus className="w-4 h-4" />{t('utilities.packing.add')}
-                </button>
-              </div>
-            )}
-
-            {souvenirItems.map((item, i) => (
-              <div key={item.id} role="button" tabIndex={0}
-                onClick={() => setEditingItem(item)}
-                onKeyDown={e => { if (e.key === 'Enter') setEditingItem(item); }}
-                className={`flex items-center gap-3 px-4 py-3 group transition-colors cursor-pointer ${i > 0 ? 'border-t border-border' : ''} ${item.packed ? 'opacity-55' : 'hover:bg-secondary/20'}`}>
-                <KodoCheck
-                  checked={item.packed}
-                  onChange={v => toggleMutation.mutate({ id: item.id, packed: v })}
-                />
-                <p className={`flex-1 text-sm truncate ${item.packed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                  {item.name}
-                  {item.quantity > 1 && <span className="text-muted-foreground font-normal"> ×{item.quantity}</span>}
-                </p>
-                <button onClick={e => { e.stopPropagation(); deleteMutation.mutate(item.id); }} disabled={deleteMutation.isPending}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0 disabled:opacity-30">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-
-            {adding === 'souvenir' ? (
-              <div className={`flex items-center gap-2 px-4 py-2.5 ${souvenirItems.length > 0 ? 'border-t border-border' : ''}`}>
-                <input
-                  ref={addInputRef}
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') commitAdd(); if (e.key === 'Escape') setAdding(null); }}
-                  placeholder={t('utilities.packing.souvPlaceholder')}
-                  autoCapitalize="sentences" autoCorrect="on" spellCheck
-                  className="flex-1 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
-                />
-                <button onClick={commitAdd} disabled={createMutation.isPending}
-                  className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0 disabled:opacity-50 disabled:pointer-events-none">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                </button>
-              </div>
-            ) : souvenirItems.length > 0 ? (
-              <button onClick={() => openAdding('souvenir')}
-                className="w-full flex items-center gap-2 px-4 py-2.5 border-t border-border text-xs text-primary font-medium hover:bg-orange-50/50 transition-colors">
-                <Plus className="w-3.5 h-3.5" />{t('utilities.packing.add')}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      )}
       <AddPackingSheet
         open={effectiveSheetOpen}
         onClose={closeSheet}
@@ -1360,14 +1266,6 @@ export default function Utilities() {
   const homeCountry = myProfile?.nationality || myProfile?.home_country || myProfile?.country || null;
   const secondNationality = myProfile?.second_nationality || null;
 
-  // `new Date('2026-07-20')` se parsea como medianoche UTC, no local, y sin hora
-  // de fin cualquier momento después de medianoche del último día ya contaba
-  // como "viaje terminado" — la pestaña Souvenirs desaparecía antes de tiempo,
-  // incluso durante el propio día de vuelta. Igual que en Expenses.jsx, se ancla
-  // a medianoche/fin de día locales explícitamente.
-  const tripInProgress = trip?.start_date && trip?.end_date
-    ? new Date() >= new Date(trip.start_date + 'T00:00:00') && new Date() <= new Date(trip.end_date + 'T23:59:59')
-    : false;
 
   const tabs = [
     { key: 'tiempo',      label: t('utilities.weather') },
@@ -1432,7 +1330,7 @@ export default function Utilities() {
           />
         )}
         {activeTab === 'maleta' && (
-          <PackingTab tripId={tripId} country={country} tripInProgress={tripInProgress} userId={user?.id} tripMembers={trip?.members} externalOpen={packingSheetOpen} onExternalClose={() => setPackingSheetOpen(false)} />
+          <PackingTab tripId={tripId} country={country} userId={user?.id} tripMembers={trip?.members} externalOpen={packingSheetOpen} onExternalClose={() => setPackingSheetOpen(false)} />
         )}
         {activeTab === 'requisitos' && (
           <RequirementsTab reqs={countryReqs} country={country} homeCountry={homeCountry} meta={meta} skipVaccines={skipVaccines} profileLoading={profileLoading} />

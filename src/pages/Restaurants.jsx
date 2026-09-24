@@ -429,6 +429,12 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
   }, [open, initialType]);
   const [notes, setNotes] = useState('');
   const [address, setAddress] = useState('');
+  // José (24 sep 2026): place id de Google del sitio elegido en el buscador
+  // de dirección. Antes se perdía: el spot se guardaba sin él y en Spots salía
+  // la fila antigua (icono + nombre) en vez de la ficha de Google, aunque se
+  // hubiera elegido un sitio de Google. Se borra si luego se mueve el pin, se
+  // usa el GPS o se reescribe la dirección (ya no es ese sitio).
+  const [placeId, setPlaceId] = useState(null);
   const [isPublic, setIsPublic] = useState(true);
   const [pinLat, setPinLat] = useState(null);
   const [pinLng, setPinLng] = useState(null);
@@ -477,6 +483,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
     if (open && initialLat && initialLng) {
       setPinLat(initialLat);
       setPinLng(initialLng);
+      setPlaceId(null);
       setShowMap(true);
       reverseGeocode(initialLat, initialLng).then(addr => { if (addr) { suppressNextSearchRef.current = true; setAddress(addr); } });
     }
@@ -497,7 +504,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
     navigator.geolocation.getCurrentPosition(
       async pos => {
         const la = pos.coords.latitude, ln = pos.coords.longitude;
-        setPinLat(la); setPinLng(ln);
+        setPinLat(la); setPinLng(ln); setPlaceId(null);
         const addr = await reverseGeocode(la, ln);
         if (addr) { suppressNextSearchRef.current = true; setAddress(addr); }
         setShowMap(true);
@@ -518,9 +525,9 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
     // Un hotel es solo tuyo/de tu viaje — no tiene sentido publicarlo en Kaikōdo
     // Community, así que se guarda siempre trip_members, sin depender del
     // toggle (que ni siquiera se muestra para type === 'hotel').
-    onSave({ title, type, notes, address, lat: pinLat, lng: pinLng, visibility: type === 'hotel' ? 'trip_members' : (isPublic ? 'public' : 'trip_members') });
+    onSave({ title, type, notes, address, lat: pinLat, lng: pinLng, placeId, visibility: type === 'hotel' ? 'trip_members' : (isPublic ? 'public' : 'trip_members') });
     // reset
-    setTitle(''); setType('food'); setNotes(''); setAddress('');
+    setTitle(''); setType('food'); setNotes(''); setAddress(''); setPlaceId(null);
     setPinLat(null); setPinLng(null); setShowMap(false); setIsPublic(true);
   };
 
@@ -563,7 +570,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
             {/* Map placeholder / real map */}
             <div className={`rounded-xl overflow-hidden border border-border mb-2 ${isStayMode ? 'order-2' : ''}`} style={{ height: '180px', background: 'var(--kodo-bg-subtle)', position: 'relative' }}>
               {showMap
-                ? <SpotPinMap lat={defaultLat} lng={defaultLng} onMove={(la, ln, addr) => { setPinLat(la); setPinLng(ln); if (addr) { suppressNextSearchRef.current = true; setAddress(addr); } }} />
+                ? <SpotPinMap lat={defaultLat} lng={defaultLng} onMove={(la, ln, addr) => { setPinLat(la); setPinLng(ln); setPlaceId(null); if (addr) { suppressNextSearchRef.current = true; setAddress(addr); } }} />
                 : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
                     <MapPin className="w-8 h-8 text-muted-foreground/40" />
@@ -578,7 +585,7 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
               <ArrowRight className="w-4 h-4" />
             </button>
             <div className={`relative ${isStayMode ? 'order-1 mb-2' : ''}`}>
-              <Input value={address} onChange={e => { suppressNextSearchRef.current = false; setAddress(e.target.value); }}
+              <Input value={address} onChange={e => { suppressNextSearchRef.current = false; setAddress(e.target.value); setPlaceId(null); }}
                 placeholder={isStayMode ? t('spots.create.stayAddressPlaceholder') : t('spots.create.addressPlaceholder')} className="h-9 text-sm pr-8" />
               {addressSearching && (
                 <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin absolute right-2.5 top-1/2 -translate-y-1/2" />
@@ -588,17 +595,23 @@ function CreateSpotSheet({ open, onClose, onSave, saving, spots, city, country, 
                   {addressResults.map(r => (
 <button key={r.id} type="button" onClick={async () => {
     suppressNextSearchRef.current = true;
-    let rLat = r.lat, rLng = r.lng, rName = r.name, rAddress = r.address;
+    let rLat = r.lat, rLng = r.lng;
     if (rLat == null && r._placeId) {
           const apiKey = await getGoogleMapsApiKey();
           const details = apiKey ? await fetchPlaceDetailsGoogle(r._placeId, apiKey) : null;
-          if (details) { rLat = details.lat; rLng = details.lng; rAddress = details.address || rAddress; rName = details.name || rName; }
+          if (details) { rLat = details.lat; rLng = details.lng; }
     }
-    setAddress(rName + (rAddress ? ', ' + rAddress : ''));
+    // Términos EEA de Google (igual que el buscador de la pestaña Buscar): ni
+    // el nombre ni la dirección de Google se guardan. Se queda lo que el
+    // usuario escribió; nombre, foto y valoración los pinta la ficha de
+    // Google en vivo a partir del place id.
+    const ownText = address.trim() || r.name;
+    setAddress(ownText);
     setPinLat(rLat); setPinLng(rLng);
+    setPlaceId(r._placeId || null);
     setShowMap(true);
     setAddressResults([]);
-    setTitle(prev => prev.trim() ? prev : rName);
+    setTitle(prev => prev.trim() ? prev : ownText);
 }}
                       className="w-full flex flex-col items-start px-3 py-2.5 text-left hover:bg-secondary/30 transition-colors border-b border-border last:border-0">
                       <span className="text-sm font-medium text-foreground truncate w-full">{r.name}</span>
@@ -810,14 +823,14 @@ function AssignDateModal({ spot, tripCities = [], onAssign, onSkip, onUndo }) {
           {onUndo ? (
           <button
             onClick={onUndo}
-            className="flex-1 py-3 border border-border rounded-2xl text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
+            className="flex-1 py-3 border border-border rounded-full text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
           >
             {t('spots.undo')}
           </button>
           ) : (
           <button
             onClick={onSkip}
-            className="flex-1 py-3 border border-border rounded-2xl text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors"
+            className="flex-1 py-3 border border-border rounded-full text-sm font-medium text-muted-foreground hover:bg-secondary transition-colors"
           >
             {t('common.cancel')}
           </button>
@@ -839,10 +852,13 @@ function AssignDateModal({ spot, tripCities = [], onAssign, onSkip, onUndo }) {
                 onSkip();
               }
             }}
-            disabled={submitting}
-            className={`flex-1 py-3 bg-primary text-white rounded-full text-sm font-semibold transition-colors ${submitting ? 'opacity-60 pointer-events-none' : ''}`}
+            // José (24 sep 2026): siempre "Cancelar" + "Confirmar" (antes el
+            // principal decía "Ahora no" hasta elegir día, aunque ya hubiera
+            // hora). Sin día no hay nada que confirmar: botón desactivado.
+            disabled={submitting || !(selectedDate && isAllowed(selectedDate))}
+            className="flex-1 py-3 bg-primary text-white rounded-full text-sm font-semibold transition-colors disabled:opacity-40"
           >
-            {submitting ? t('common.loading') : (selectedDate && isAllowed(selectedDate) ? t('spots.assign.confirm') : t('spots.assign.notNow'))}
+            {submitting ? t('common.loading') : t('spots.assign.confirm')}
           </button>
         </div>
       </div>
@@ -1275,7 +1291,10 @@ export default function Restaurants() {
       const created = await createMutation.mutateAsync(baseData({
         title: form.title, type: form.type, notes: form.notes,
         address: form.address, lat: form.lat, lng: form.lng,
-        visibility: form.visibility, source: 'manual',
+        visibility: form.visibility, source: form.placeId ? 'google_places' : 'manual',
+        // Sitio elegido del buscador de Google: se guarda su place id (lo único
+        // que Google deja guardar) para que el spot salga con su ficha.
+        ...(form.placeId ? { osm_id: form.placeId, title_is_own: true, place_refreshed_at: new Date().toISOString() } : {}),
         // José (19 sep 2026, en vivo): un alojamiento no es un plan de un
         // día -- es donde te hospedas mientras dura la parada entera en esa
         // ciudad. hotelForCity() (Home) ya lo busca solo por city_id, sin

@@ -11,6 +11,7 @@ import { syncTripMembers } from '@/lib/syncTripMembers';
 import { leaveTrip } from '@/lib/tripMembers';
 import { getCountryMeta, getCountryLabel, normalizeCountry, getOriginCountryOptions } from '@/lib/countryConfig';
 import { useTranslation } from 'react-i18next';
+import { OptionPill } from '@/components/form/FormPills';
 import { setLanguage, getLanguage } from '@/i18n/index.js';
 import FeedbackModal from '@/components/settings/FeedbackModal';
 import { toast } from '@/components/ui/use-toast';
@@ -479,12 +480,11 @@ export default function Settings() {
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-border">
             <p className="text-xs text-muted-foreground mb-1.5">{t('settings.homeCountry')} <span className="text-muted-foreground/60">{t('settings.homeCountrySub')}</span></p>
-            <select value={normalizeCountry(homeCountry)} onChange={e => {
-              const c = COUNTRIES.find(x => x.name === e.target.value) || COUNTRIES[0];
+            {/* José (24 sep 2026): pastilla con lista y buscador en vez del desplegable nativo. */}
+            <OptionPill value={normalizeCountry(homeCountry)} onChange={v => {
+              const c = COUNTRIES.find(x => x.name === v) || COUNTRIES[0];
               setHomeCountry(c.name); setHomeCurrency(c.currency);
-            }} className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary appearance-none">
-              {COUNTRIES.map(c => <option key={c.name} value={c.name}>{c.label}</option>)}
-            </select>
+            }} options={COUNTRIES.map(c => ({ value: c.name, label: c.label }))} placeholder={t('settings.searchCountry')} />
           </div>
           <div className="px-4 py-3 border-b border-border">
             <p className="text-xs text-muted-foreground mb-1.5">{t('settings.secondNat')} <span className="text-muted-foreground/60">{t('settings.secondNatSub')}</span></p>
@@ -530,10 +530,8 @@ export default function Settings() {
           </div>
           <div className="px-4 py-3">
             <p className="text-xs text-muted-foreground mb-1.5">{t('settings.baseCurrency')} <span className="text-muted-foreground/60">{t('settings.baseCurrencySub')}</span></p>
-            <select value={homeCurrency} onChange={e => setHomeCurrency(e.target.value)}
-              className="w-full h-10 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary appearance-none">
-              {CURRENCIES.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-            </select>
+            <OptionPill value={homeCurrency} onChange={v => v && setHomeCurrency(v)}
+              options={CURRENCIES.map(c => ({ value: c.name, label: c.name }))} placeholder={homeCurrency} />
           </div>
         </div>
 

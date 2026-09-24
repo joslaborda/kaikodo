@@ -38,6 +38,7 @@ import { requestTicketPush, cancelTicketPush } from '@/lib/ticketPush';
 import { orderDayItems, findTimeClash as sharedFindTimeClash } from '@/lib/dayTimeline';
 import { isDocForUser, isDocInMyRoute, otherHoldersLabel } from '@/lib/docHolders';
 import { useTranslation } from 'react-i18next';
+import { TimePill } from '@/components/form/FormPills';
 
 import { useTripDocs, invalidateTripDocs } from '@/hooks/useTripDocs';
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -109,20 +110,12 @@ function SpotEditModal({spot, open, onClose, onSave, onRemove }) {
         </DialogHeader>
         <div className="px-4 py-4 space-y-4">
           <div>
-            <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide font-medium">{t('cities.day.time')}</p>
-            <div className="flex items-center gap-2">
-              <input
-                type="time"
-                value={time}
-                onChange={e => setTime(e.target.value)}
-                className="h-9 border border-border rounded-xl px-3 text-sm text-foreground bg-secondary outline-none focus:border-primary w-[120px]"
-              />
-              {time && <button onClick={() => setTime('')} className="text-xs text-muted-foreground hover:text-foreground">{t('cities.day.remove')}</button>}
-              {!time && <span className="text-xs text-muted-foreground">{t('cities.day.optional')}</span>}
-            </div>
+            <p className="text-sm font-bold text-foreground mb-2">{t('cities.day.time')} <span className="font-normal text-xs text-muted-foreground">{t('spots.assign.optional')}</span></p>
+            {/* José (24 sep 2026): pastilla de hora (rueda nativa al tocar), como en el resto de formularios. */}
+            <TimePill value={time} onChange={setTime} placeholder={t('spots.assign.pickTime')} />
           </div>
           <div>
-            <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide font-medium">{t('cities.day.personalNote')}</p>
+            <p className="text-sm font-bold text-foreground mb-2">{t('cities.day.personalNote')}</p>
             <Textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
@@ -828,9 +821,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
               <Textarea value={newNoteText} onChange={e => setNewNoteText(e.target.value)}
                 placeholder={t('cities.day.writeNotePlaceholder')} className="text-sm bg-secondary border-border resize-none w-full mb-3" rows={8} autoFocus />
               <div className="flex items-center gap-3 flex-wrap">
-                <input type="time" value={newNoteTime} onChange={e => setNewNoteTime(e.target.value)}
-                  className="h-8 border border-border rounded-lg px-2 text-xs bg-card text-foreground outline-none focus:border-primary w-[100px]" />
-                <span className="text-xs text-muted-foreground">{t('cities.day.hourOptional')}</span>
+                <TimePill value={newNoteTime} onChange={setNewNoteTime} placeholder={t('cities.day.hourOptional')} />
                 <div className="ml-auto flex gap-2">
                   <button onClick={() => setAddingNote(false)} className="text-xs text-muted-foreground px-4 py-2 rounded-full border border-border hover:bg-secondary/50 transition-colors">{t('common.cancel')}</button>
                   <button onClick={handleAddNote} disabled={!newNoteText.trim() || savingNotes}
@@ -856,9 +847,7 @@ function DayContent({day, dayDate, docs, otherDocs = [], hotelSpot, spots, tripI
               <Textarea value={notesList[editingNote].text} onChange={e => updateNote(editingNote, 'text', e.target.value)}
                 className="text-sm bg-secondary border-border resize-none w-full mb-3" rows={8} />
               <div className="flex items-center gap-3 flex-wrap mb-1">
-                <input type="time" value={notesList[editingNote].time || ''} onChange={e => updateNote(editingNote, 'time', e.target.value)}
-                  className="h-8 border border-border rounded-lg px-2 text-xs bg-card text-foreground outline-none focus:border-primary w-[100px]" />
-                <span className="text-xs text-muted-foreground">{t('cities.day.hourOptional')}</span>
+                <TimePill value={notesList[editingNote].time || ''} onChange={v => updateNote(editingNote, 'time', v)} placeholder={t('cities.day.hourOptional')} />
                 <button onClick={() => setConfirmDeleteNote(true)} className="ml-2 text-xs text-red-500 flex items-center gap-1">
                   <Trash2 className="w-3 h-3" />{t('cities.day.delete')}
                 </button>

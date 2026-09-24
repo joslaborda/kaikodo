@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { Link } from 'react-router-dom';
 import OTabBar from '@/components/trip/OTabBar';
 import { useTranslation } from 'react-i18next';
+import { OptionPill } from '@/components/form/FormPills';
 import { isNativeSpeechAvailable, requestSpeechAccess, startNativeListening, nativeSpeak, nativeStopSpeaking } from '@/lib/nativeSpeech';
 
 // ── Languages ─────────────────────────────────────────────────────────────────
@@ -69,28 +70,22 @@ function speakText(text, bcpLang) {
 // ── Lang selector row ─────────────────────────────────────────────────────────
 function LangRow({ fromLang, toLang, onFromChange, onToChange, onSwap }) {
   const { t, i18n } = useTranslation();
+  // José (24 sep 2026): pastilla con lista y buscador en vez del desplegable nativo.
+  const langOptions = LANGUAGES.map(l => ({ value: l.code, label: `${l.flag} ${getLanguageLabel(l.code, i18n.language)}` }));
   return (
-    <div className="flex items-center gap-2 py-1">
-      <select
-        value={fromLang}
-        onChange={e => onFromChange(e.target.value)}
-        className="flex-1 h-10 border border-border rounded-xl px-3 text-sm bg-card outline-none focus:border-primary appearance-none"
-      >
-        {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {getLanguageLabel(l.code, i18n.language)}</option>)}
-      </select>
+    <div className="flex items-start gap-2 py-1">
+      <div className="flex-1 min-w-0">
+        <OptionPill block value={fromLang} onChange={v => v && onFromChange(v)} options={langOptions} placeholder={fromLang} floating />
+      </div>
       <button aria-label={t('translator.swapAria')}
         onClick={onSwap}
         className="p-2 rounded-xl border border-border bg-card hover:bg-secondary hover:border-primary/30 transition-colors flex-shrink-0"
       >
         <ArrowRightLeft className="w-4 h-4 text-muted-foreground" />
       </button>
-      <select
-        value={toLang}
-        onChange={e => onToChange(e.target.value)}
-        className="flex-1 h-10 border border-border rounded-xl px-3 text-sm bg-card outline-none focus:border-primary appearance-none"
-      >
-        {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {getLanguageLabel(l.code, i18n.language)}</option>)}
-      </select>
+      <div className="flex-1 min-w-0">
+        <OptionPill block value={toLang} onChange={v => v && onToChange(v)} options={langOptions} placeholder={toLang} floating="right" />
+      </div>
     </div>
   );
 }

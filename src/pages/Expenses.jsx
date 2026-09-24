@@ -1,5 +1,6 @@
 import { BusFront } from '@/lib/icons';
 import { useTranslation } from 'react-i18next';
+import { OptionPill } from '@/components/form/FormPills';
 import { createPageUrl } from '@/utils';
 import { toast } from '@/components/ui/use-toast';
 import { useState, useEffect, useMemo } from 'react';
@@ -959,16 +960,9 @@ function ConversionTab({ cities, baseCurrency, activeCity, homeCurrency = 'EUR' 
       {/* Amount + from currency */}
       <div className="bg-card rounded-2xl border border-border p-4">
         <p className="text-xs text-muted-foreground mb-2">{t('expenses.convertFrom')}</p>
-        <div className="flex items-center gap-2">
-          <select
-            value={fromCurrency}
-            onChange={e => { setFromCurrency(e.target.value); setRates({}); }}
-            className="h-12 border border-border rounded-xl px-3 text-sm font-medium text-foreground outline-none focus:border-primary bg-secondary appearance-none"
-          >
-            {allCurrencies.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+        <div className="flex items-start gap-2">
+          <OptionPill value={fromCurrency} onChange={v => { if (v) { setFromCurrency(v); setRates({}); } }}
+            options={allCurrencies.map(c => ({ value: c, label: c }))} placeholder={fromCurrency} floating />
           <div className="flex-1 flex items-center h-12 border border-border rounded-xl px-3 focus-within:border-primary transition-colors">
             <input
               type="number"
