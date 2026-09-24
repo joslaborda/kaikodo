@@ -19,9 +19,10 @@ import MySpotRow from '@/components/spots/MySpotRow';
 import SpotDetailSheet from '@/components/spots/SpotDetailSheet';
 import SpotsMapView from '@/components/spots/SpotsMapView';
 import { useTranslation } from 'react-i18next';
+import DayTimeAssign from '@/components/spots/DayTimeAssign';
 import { getLanguage } from '@/i18n/index.js';
 import { useToast } from '@/components/ui/use-toast';
-import { getTripDays, tripDayOptionValue, parseTripDayOptionValue, sameCityName } from '@/lib/tripDays';
+import { getTripDays, sameCityName } from '@/lib/tripDays';
 import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey, loadGoogleMaps, KODO_GOOGLE_MAP_STYLE, kodoMarkerIcon } from '@/lib/googleMaps';
 // El selector de pin (SpotPinMap, más abajo) usaba Leaflet siempre, sin
 // intentar Google Maps primero — a diferencia de DaySpotsMap/SpotsMapView/
@@ -29,7 +30,7 @@ import { canUseGoogleToday, markGoogleUsed, getGoogleMapsApiKey, loadGoogleMaps,
 // fallback si falla o no hay tope disponible". Corregido (5 sept 2026) para
 // seguir el mismo patrón que esos tres — Leaflet/CARTO se mantiene SOLO como
 // red de seguridad, ya no como mapa por defecto.
-import { matchTripCity } from '@/lib/tripCityMatch';
+import { matchTripCity, isSameSpot } from '@/lib/tripCityMatch';
 import GooglePlaceCard from '@/components/spots/GooglePlaceCard';
 import { KODO_TILE_URL, KODO_TILE_SUBDOMAINS, KODO_TILE_ATTRIBUTION, injectKodoMapStyles } from '@/components/spots/mapTiles';
 
@@ -792,43 +793,13 @@ function AssignDateModal({ spot, tripCities = [], onAssign, onSkip, onUndo }) {
             </div>
           </div>
 
-          {/* Date picker — trip days only */}
-          <p className="text-sm font-semibold text-foreground mb-2">{t('spots.assign.whenVisit')}</p>
-          {tripDates.size > 0 ? (
-            <select
-              // value combina fecha+ciudad (tripDayOptionValue) — con solo
-              // la fecha, un día de tránsito entre dos ciudades (misma
-              // fecha, dos City) no se puede distinguir cuál se eligió.
-              value={selectedDate ? tripDayOptionValue({ date: selectedDate, cityId: selectedCityId }) : ''}
-              onChange={e => {
-                const { date, cityId } = parseTripDayOptionValue(e.target.value);
-                setSelectedDate(date);
-                setSelectedCityId(cityId);
-              }}
-              className="w-full h-11 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary"
-            >
-              <option value="">{t('spots.assign.unassigned')}</option>
-              {dayOptions.map(d => (
-                <option key={tripDayOptionValue(d)} value={tripDayOptionValue(d)}>{d.date} · {d.city}</option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="date"
-              value={selectedDate}
-              min={minDate}
-              max={maxDate}
-              onChange={e => setSelectedDate(e.target.value)}
-              className="w-full h-11 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary"
-            />
-          )}
-          {/* Hora opcional en el mismo paso que el día */}
-                    <p className="text-sm font-semibold text-foreground mt-4 mb-2">{t('spots.assignTime')}</p>
-          <input
-            type="time"
-            value={selectedTime}
-            onChange={e => setSelectedTime(e.target.value)}
-            className="w-full h-11 border border-border rounded-xl px-3 text-sm outline-none focus:border-primary bg-secondary"
+          {/* Día y hora — mismo componente en los tres sitios donde se asigna (DayTimeAssign). */}
+          <DayTimeAssign
+            tripDayOptions={tripDates.size > 0 ? dayOptions : []}
+            date={selectedDate} cityId={selectedCityId} time={selectedTime}
+            onDayChange={({ date, cityId }) => { setSelectedDate(date); setSelectedCityId(cityId); }}
+            onTimeChange={setSelectedTime}
+            minDate={minDate} maxDate={maxDate}
           />
         </div>
 
@@ -1384,7 +1355,7 @@ export default function Restaurants() {
   const [importingGroup, setImportingGroup] = useState(null);
   const importGroup = async (group) => {
     const targetCity = group.city;
-    const pending = group.spots.filter(s => !spots.some(sp => sp.title?.toLowerCase().trim() === s.title?.toLowerCase().trim()));
+    const pending = group.spots.filter(s => !spots.some(sp => isSameSpot(sp, s)));
     if (!pending.length) return;
     setImportingGroup(targetCity?.id || 'other');
     try {
@@ -1790,7 +1761,7 @@ export default function Restaurants() {
                 </div>
                 {importGroups.map((group, gi) => {
                   const groupKey = group.city?.id || 'other';
-                  const pendingInGroup = group.spots.filter(s => !spots.some(sp => sp.title?.toLowerCase().trim() === s.title?.toLowerCase().trim()));
+                  const pendingInGroup = group.spots.filter(s => !spots.some(sp => isSameSpot(sp, s)));
                   const isImportingGroup = importingGroup === groupKey;
                   return (
                     <div key={groupKey} className={gi > 0 ? 'border-t border-orange-200 dark:border-primary/20' : ''}>
@@ -1809,7 +1780,7 @@ export default function Restaurants() {
                         )}
                       </div>
                       {group.spots.map(savedSpot => {
-                        const alreadyInTrip = spots.some(s => s.title?.toLowerCase().trim() === savedSpot.title?.toLowerCase().trim());
+                        const alreadyInTrip = spots.some(s => isSameSpot(s, savedSpot));
                         const isSaving = savingId === 'import_' + savedSpot.id;
                         const SpotIcon = { food: Utensils, sight: Landmark, activity: Ticket, shopping: ShoppingBag }[savedSpot.type] || CirclePlus;
                         return (

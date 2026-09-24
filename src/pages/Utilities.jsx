@@ -79,7 +79,9 @@ function AddPackingSheet({ open, onClose, defaultCategory = 'personal', onSave, 
       <div className="bg-card w-full max-w-lg rounded-t-3xl p-5 pb-8 space-y-4" onClick={e => e.stopPropagation()}>
         <div className="w-9 h-1 bg-border rounded-full mx-auto" />
         <p className="text-sm font-medium text-foreground">{t('utilities.packing.newItem')}</p>
-        <input autoFocus aria-label={t('utilities.packing.itemNameAria')} placeholder={t('utilities.packing.itemNamePlaceholder')} value={name}
+        {/* José (24 sep 2026): sin autoFocus -- el teclado tapaba cantidad y
+            categoría nada más abrir. Se abre al tocar el campo. */}
+        <input autoCapitalize="sentences" autoCorrect="on" spellCheck aria-label={t('utilities.packing.itemNameAria')} placeholder={t('utilities.packing.itemNamePlaceholder')} value={name}
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSave()}
           className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none" />
@@ -156,7 +158,7 @@ function EditPackingItemSheet({ item, onClose, onSave, onDelete, saving, deletin
       <div className="bg-card w-full max-w-lg rounded-t-3xl p-5 pb-8 space-y-4" onClick={e => e.stopPropagation()}>
         <div className="w-9 h-1 bg-border rounded-full mx-auto" />
         <p className="text-sm font-medium text-foreground">{t('utilities.packing.editItem')}</p>
-        <input autoFocus aria-label={t('utilities.packing.itemNameAria')} value={name}
+        <input autoCapitalize="sentences" autoCorrect="on" spellCheck aria-label={t('utilities.packing.itemNameAria')} value={name}
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSave()}
           className="w-full px-4 py-3 rounded-2xl border border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground outline-none" />
@@ -763,6 +765,7 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
                               onChange={e => setNewName(e.target.value)}
                               onKeyDown={e => { if (e.key === 'Enter') commitAdd(); if (e.key === 'Escape') setAdding(null); }}
                               placeholder={t('utilities.packing.itemNamePlaceholder')}
+                              autoCapitalize="sentences" autoCorrect="on" spellCheck
                               className="flex-1 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
                             />
                             <button onClick={() => setNewEssential(v => !v)}
@@ -828,6 +831,7 @@ function PackingTab({ tripId, country, tripInProgress, userId, tripMembers, exte
                   onChange={e => setNewName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') commitAdd(); if (e.key === 'Escape') setAdding(null); }}
                   placeholder={t('utilities.packing.souvPlaceholder')}
+                  autoCapitalize="sentences" autoCorrect="on" spellCheck
                   className="flex-1 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
                 />
                 <button onClick={commitAdd} disabled={createMutation.isPending}

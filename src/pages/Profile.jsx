@@ -14,7 +14,7 @@ import { createPageUrl } from '@/utils';
 import { getCountryMeta, normalizeCountry, getCountryLabel } from '@/lib/countryConfig';
 import { getTripStatus } from '@/components/trip/TripCard';
 import { searchNewPlaces, fetchPlaceDetails } from '@/components/spots/placesAutocomplete';
-import { matchTripCity } from '@/lib/tripCityMatch';
+import { matchTripCity, isSameSpot } from '@/lib/tripCityMatch';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/use-toast';
 import { normalizeEmail, isSafeHttpUrl } from '@/lib/utils';
@@ -478,7 +478,7 @@ export default function Profile() {
     if (!nextTrip || (!nextTripCityNames.size && !nextTripCityCoords.length)) return [];
     return savedSpotsRaw.filter(s =>
       isNearNextTrip(s) &&
-      !nextTripSpots.some(sp => sp.title?.toLowerCase().trim() === s.title?.toLowerCase().trim())
+      !nextTripSpots.some(sp => isSameSpot(sp, s))
     );
   }, [savedSpotsRaw, nextTrip, nextTripCityNames, nextTripCityCoords, nextTripSpots]);
 

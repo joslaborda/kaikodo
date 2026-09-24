@@ -15,6 +15,7 @@ import CreateProfileModal from '@/components/social/CreateProfileModal';
 import { createPageUrl } from '@/utils';
 import { normalizeCountry } from '@/lib/countryConfig';
 import { matchTripCity } from '@/lib/tripCityMatch';
+import { sendTripInvite } from '@/lib/invites';
 import { normalizeEmail } from '@/lib/utils';
 import { computeEditors } from '@/lib/syncTripMembers';
 import { useTranslation } from 'react-i18next';
@@ -134,7 +135,7 @@ export default function TripsList() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async ({ formData, stops, stopCountries = [], stopCoords = [], allocations }) => {
+    mutationFn: async ({ formData, stops, stopCountries = [], stopCoords = [], allocations, invitees = [] }) => {
       // UserProfile.email siempre se guarda en minúsculas (migración en
       // App.jsx), pero user.email viene tal cual del proveedor de auth — si
       // aquí se guarda sin normalizar, el propio creador del viaje queda con
@@ -145,16 +146,22 @@ export default function TripsList() {
 
       // Auto-detect best base currency from creator's home_currency
       let baseCurrency = formData.currency || 'EUR';
+      let myProfile = null;
       try {
         const profiles = await base44.entities.UserProfile.filter({ user_id: user.id });
-        const myProfile = profiles[0];
+        myProfile = profiles[0];
         if (myProfile?.home_currency && !formData.currencyTouched) {
           baseCurrency = myProfile.home_currency;
         }
       } catch {}
 
+      // José (24 sep 2026): las fechas del viaje salen de las paradas y
+      // pueden no existir aún ("fechas por confirmar"): no se mandan vacías.
+      const { start_date: tripStart, end_date: tripEnd, ...restForm } = formData;
       const trip = await base44.entities.Trip.create({
-        ...formData,
+        ...restForm,
+        ...(tripStart ? { start_date: tripStart } : {}),
+        ...(tripEnd ? { end_date: tripEnd } : {}),
         currency: baseCurrency,
         base_currency: baseCurrency,
         members: email ? [email] : [],
@@ -167,7 +174,7 @@ export default function TripsList() {
       });
       const createdCities = [];
       for (let i = 0; i < stops.length; i++) {
-        const dates = allocations[i] || { start_date: formData.start_date, end_date: formData.end_date };
+        const dates = allocations[i] || {};
         const createdCity = await base44.entities.City.create({
           trip_id: trip.id, name: stops[i],
           country: normalizeCountry(stopCountries[i] || formData.country || ''),
@@ -183,24 +190,51 @@ export default function TripsList() {
           place_id: stopCoords[i]?.placeId,
           place_refreshed_at: stopCoords[i]?.lat != null ? new Date().toISOString() : undefined,
           order: i,
-          start_date: dates.start_date, end_date: dates.end_date,
+          ...(dates.start_date ? { start_date: dates.start_date } : {}),
+          ...(dates.end_date ? { end_date: dates.end_date } : {}),
           trip_members: trip.members || [],
           trip_editors: computeEditors(trip.members || [], trip),
         });
         if (createdCity) createdCities.push(createdCity);
       }
-      return { trip, cities: createdCities };
+
+      // Invitaciones preparadas en el formulario (NewTripInvitees): mismo
+      // camino que Ajustes del viaje (sendTripInvite). Una que falle no
+      // tumba la creación del viaje: se cuenta y se avisa.
+      let invitesSent = 0, invitesFailed = 0;
+      const inviterName = myProfile?.display_name || myProfile?.username || email;
+      for (const inv of invitees) {
+        try {
+          await sendTripInvite({
+            tripId: trip.id,
+            email: inv.targetUserId ? undefined : inv.email,
+            targetUserId: inv.targetUserId,
+            role: inv.role || 'editor',
+            tripName: trip.name,
+            inviterEmail: email,
+            inviterName,
+          });
+          invitesSent++;
+        } catch (e) {
+          console.warn('[TripsList] invitación fallida al crear viaje:', e);
+          invitesFailed++;
+        }
+      }
+      return { trip, cities: createdCities, invitesSent, invitesFailed };
     },
-    onSuccess: async ({ trip, cities }) => {
+    onSuccess: async ({ trip, cities, invitesSent = 0, invitesFailed = 0 }) => {
       queryClient.invalidateQueries({ queryKey: ['trips', user?.email] });
       queryClient.invalidateQueries({ queryKey: ['allCities'] });
       setDialogOpen(false);
+      if (invitesSent > 0) toast({ title: t('newTripInvites.sentToast', { count: invitesSent }) });
+      if (invitesFailed > 0) toast({ title: t('newTripInvites.failedToast', { count: invitesFailed }), description: t('newTripInvites.failedDesc'), variant: 'destructive' });
       // Buscar en la wishlist personal del usuario si tiene spots guardados para este destino
       try {
-        const countries = [
+        // Todos los países del viaje (multi-país incluido), no solo el primero.
+        const countries = [...new Set([
           normalizeCountry(trip.country || ''),
-          normalizeCountry(trip.destination || ''),
-        ].filter(Boolean);
+          ...cities.map(c => normalizeCountry(c.country || '')),
+        ].filter(Boolean))];
         if (!countries.length || !user?.id) return;
         const mySaved = await base44.entities.SavedSpot.filter({ user_id: user.id });
         // José (24 sep 2026): mismo criterio que Perfil y Spots
@@ -285,9 +319,13 @@ export default function TripsList() {
     });
 
     const active   = withStatus.filter(x => x.status?.type === 'active');
-    const upcoming = withStatus.filter(x => x.status?.type === 'upcoming')
-      .sort((a,b) => a.status.days - b.status.days);
-    const past     = withStatus.filter(x => x.status?.type === 'past' || !x.status)
+    // José (24 sep 2026): un viaje con "fechas por confirmar" (sin fechas
+    // todavía) es un viaje FUTURO: va al final de Próximos, no a Pasados.
+    const upcoming = [
+      ...withStatus.filter(x => x.status?.type === 'upcoming').sort((a,b) => a.status.days - b.status.days),
+      ...withStatus.filter(x => !x.status && !x.t.start_date),
+    ];
+    const past     = withStatus.filter(x => x.status?.type === 'past' || (!x.status && x.t.start_date))
       // José (16 sep 2026): "Londres sale encima de Dublín pero Londres fue
       // antes" -- Pasados nunca se ordenaba, se quedaba con el orden en
       // que llegaban de la API (ni por fecha ni por nada). Se ordena por
