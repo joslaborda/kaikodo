@@ -26,9 +26,8 @@ function randomChallenge() {
 }
 
 async function hashIp(req: Request): Promise<string | null> {
-  const raw = req.headers.get("cf-connecting-ip")
-    || req.headers.get("x-real-ip")
-    || (req.headers.get("x-forwarded-for") || "").split(",")[0].trim();
+  // true-client-ip es la IP real del usuario: la reescribe el borde de Cloudflare y no se puede falsificar desde el cliente (comprobado 23 sep 2026). cf-connecting-ip y x-real-ip son IPs intermedias que cambian en cada petición, y el primer valor de x-forwarded-for lo puede inventar el cliente.
+  const raw = (req.headers.get("true-client-ip") || "").trim();
   if (!raw) return null;
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("kaikodo-captcha:" + raw));
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
