@@ -28,6 +28,49 @@ import { base44 } from '@/api/base44Client';
 // el que se cede el hilo principal (setTimeout(0)), así la UI no se congela
 // pero tampoco se paga ese overhead en cada hash individual.
 
+// José (25 sep 2026): SHA-256 rápido de UN bloque (mensajes de hasta 55
+// bytes, que es siempre nuestro caso: 40 hex + ':' + nonce). La versión de
+// abajo recalculaba las constantes (64 primos) en CADA hash y trabajaba con
+// cadenas: ~40.000 hashes/s en un ordenador y muchísimos menos en un Android
+// modesto, así que el reto (65.000 intentos de media) a veces no llegaba a
+// resolverse en los 25 s y fallaba ("No se pudo verificar") -- y cada
+// reintento pedía otro reto hasta chocar con el límite por IP. Esta versión
+// usa constantes precalculadas y arrays tipados, sin crear cadenas: ~50 veces
+// más rápida (verificada contra el SHA-256 estándar). El formato del reto no
+// cambia, así que verifyCaptcha en el backend no se toca.
+const K = new Int32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
+const H0 = new Int32Array([0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]);
+const W = new Int32Array(64);
+const OUT = new Int32Array(8);
+// SHA-256 de un mensaje ASCII de <=55 bytes (un solo bloque). Devuelve los 8 words en OUT.
+function sha256OneBlock(bytes, len) {
+  W.fill(0, 0, 16);
+  for (let i = 0; i < len; i++) W[i >> 2] |= bytes[i] << (24 - (i & 3) * 8);
+  W[len >> 2] |= 0x80 << (24 - (len & 3) * 8);
+  W[15] = len * 8;
+  for (let i = 16; i < 64; i++) {
+    const w15 = W[i-15], w2 = W[i-2];
+    const s0 = ((w15 >>> 7) | (w15 << 25)) ^ ((w15 >>> 18) | (w15 << 14)) ^ (w15 >>> 3);
+    const s1 = ((w2 >>> 17) | (w2 << 15)) ^ ((w2 >>> 19) | (w2 << 13)) ^ (w2 >>> 10);
+    W[i] = (W[i-16] + s0 + W[i-7] + s1) | 0;
+  }
+  let a=H0[0],b=H0[1],c=H0[2],d=H0[3],e=H0[4],f=H0[5],g=H0[6],h=H0[7];
+  for (let i = 0; i < 64; i++) {
+    const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+    const t1 = (h + S1 + ((e & f) ^ (~e & g)) + K[i] + W[i]) | 0;
+    const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+    const t2 = (S0 + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+    h=g; g=f; f=e; e=(d+t1)|0; d=c; c=b; b=a; a=(t1+t2)|0;
+  }
+  OUT[0]=(H0[0]+a)|0;OUT[1]=(H0[1]+b)|0;OUT[2]=(H0[2]+c)|0;OUT[3]=(H0[3]+d)|0;OUT[4]=(H0[4]+e)|0;OUT[5]=(H0[5]+f)|0;OUT[6]=(H0[6]+g)|0;OUT[7]=(H0[7]+h)|0;
+  return OUT;
+}
+
+function leadingZeroBitsOk(words, bits) {
+  if (bits <= 32) return bits === 0 || (words[0] >>> (32 - bits)) === 0;
+  return words[0] === 0 && (words[1] >>> (64 - bits)) === 0;
+}
+
 // -- SHA-256 síncrono, dependencia cero. Verificado contra los vectores de
 // prueba estándar (SHA256("") / SHA256("abc") / SHA256("hello world")) antes
 // de integrarlo -- ver notas de la sesión de implementación.
@@ -108,7 +151,7 @@ function hasLeadingZeroBits(hex, bits) {
   return (nibble >> (4 - remBits)) === 0;
 }
 
-const CHUNK_SIZE = 3000;  // nonces probados entre cada cesión del hilo principal
+const CHUNK_SIZE = 20000; // nonces probados entre cada cesión del hilo principal (con el SHA-256 rápido son unos ms)
 const MAX_MS = 25000;     // salvaguarda: falla en vez de colgarse en un dispositivo muy lento
 
 // Resuelve un reto completo: pide uno nuevo al backend y busca el nonce.
@@ -131,12 +174,25 @@ export async function solveCaptchaChallenge({ onProgress } = {}) {
   const deadline = started + Math.min(MAX_MS, expiresInSeconds * 1000 - 3000);
   let nonce = 0;
 
+  // Camino rápido (un bloque): el reto + ':' se escribe una vez en el búfer y
+  // en cada intento solo se reescriben los dígitos del nonce.
+  const prefix = challenge + ':';
+  const fast = /^[\x00-\x7f]*$/.test(prefix) && prefix.length + 12 <= 55; // 41 + hasta 12 dígitos de nonce (nunca se llega)
+  const buf = new Uint8Array(64);
+  if (fast) for (let i = 0; i < prefix.length; i++) buf[i] = prefix.charCodeAt(i);
+
   while (Date.now() < deadline) {
     for (let i = 0; i < CHUNK_SIZE; i++) {
-      const hex = sha256Hex(challenge + ':' + nonce);
-      if (hex && hasLeadingZeroBits(hex, difficulty)) {
-        return `${challenge}.${nonce}`;
+      let ok;
+      if (fast) {
+        const ds = String(nonce);
+        for (let j = 0; j < ds.length; j++) buf[prefix.length + j] = ds.charCodeAt(j);
+        ok = leadingZeroBitsOk(sha256OneBlock(buf, prefix.length + ds.length), difficulty);
+      } else {
+        const hex = sha256Hex(prefix + nonce);
+        ok = !!hex && hasLeadingZeroBits(hex, difficulty);
       }
+      if (ok) return `${challenge}.${nonce}`;
       nonce++;
     }
     if (onProgress) {
