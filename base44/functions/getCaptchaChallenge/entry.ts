@@ -70,7 +70,12 @@ Deno.serve(async (req) => {
     // poder registrarse (denegación de servicio). Ahora, además, cada IP solo
     // puede tener unos pocos retos pendientes a la vez. La IP no se guarda en
     // claro: solo un hash, que caduca con el reto (TTL de 2 minutos).
-    const MAX_PENDING_PER_IP = 5;
+    // José (25 sep 2026): 5 se quedaba corto -- cada "Reintentar" pide un reto
+    // nuevo y los anteriores siguen pendientes 2 minutos, así que tras unos
+    // pocos fallos el móvil quedaba bloqueado aunque fuera una persona. Con
+    // datos móviles, además, mucha gente comparte IP (CGNAT). Con el SHA-256
+    // rápido del cliente los fallos deberían ser raros; 10 deja margen.
+    const MAX_PENDING_PER_IP = 10;
     const ipHash = await hashIp(req);
     if (ipHash) {
       const nowMs = Date.now();
