@@ -23,6 +23,22 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  * menor impacto si falla.
  */
 
+
+// José (25 sep 2026) -- escáner de seguridad (CWE-770): el tamaño y el tipo
+// solo se comprobaban en el navegador (src/lib/uploadLimits.js), así que
+// llamando a esta función a mano se podía subir un archivo de cientos de MB,
+// en bucle, gastando almacenamiento y créditos. Ahora se comprueba aquí,
+// ANTES de tocar la integración. Mismos topes que uploadLimits.js.
+const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
+// Documentos de viaje: PDF o imagen (lo que acepta el formulario de
+// documentos). Sin tipo declarado se mira la extensión.
+const ALLOWED_EXT = /\.(pdf|jpe?g|png|webp|gif|heic|heif)$/i;
+const isAllowed = (f: File) => {
+  const t = (f.type || "").toLowerCase();
+  if (t) return t === "application/pdf" || t.startsWith("image/");
+  return ALLOWED_EXT.test(f.name || "");
+};
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -31,10 +47,27 @@ Deno.serve(async (req) => {
       return Response.json({ error: "No autenticado" }, { status: 401 });
     }
 
+    // Antes de leer el cuerpo: si ya anuncia más del tope (con 1 MB de margen
+    // para las cabeceras del multipart), se corta sin cargarlo en memoria.
+    const declared = Number(req.headers.get("content-length") || 0);
+    if (declared > MAX_BYTES + 1024 * 1024) {
+      return Response.json({ error: "Archivo demasiado grande", max_mb: MAX_BYTES / 1024 / 1024 }, { status: 413 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file");
     if (!file || typeof file === "string") {
       return Response.json({ error: "Falta el archivo" }, { status: 400 });
+    }
+
+    if (file.size > MAX_BYTES) {
+      return Response.json({ error: "Archivo demasiado grande", max_mb: MAX_BYTES / 1024 / 1024 }, { status: 413 });
+    }
+    if (file.size === 0) {
+      return Response.json({ error: "Archivo vacío" }, { status: 400 });
+    }
+    if (!isAllowed(file as File)) {
+      return Response.json({ error: "Solo se admiten PDF o imágenes" }, { status: 415 });
     }
 
     const result = await base44.integrations.Core.UploadPrivateFile({ file });
