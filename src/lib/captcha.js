@@ -158,17 +158,26 @@ const MAX_MS = 25000;     // salvaguarda: falla en vez de colgarse en un disposi
 // onProgress(pct) es opcional, para mostrar una barra/porcentaje aproximado.
 // Devuelve el token ("reto.nonce") listo para verifyCaptcha, o null si no
 // se pudo (backend no disponible, o se agotó el tiempo).
+// José (25 sep 2026): motivo del último fallo, para mostrarlo en pequeño
+// junto a "No se pudo verificar" y poder diagnosticar en el móvil sin
+// herramientas de depuración ('net:403', 'no-challenge', 'timeout'...).
+let lastCaptchaError = '';
+export function getLastCaptchaError() { return lastCaptchaError; }
+
 export async function solveCaptchaChallenge({ onProgress } = {}) {
+  lastCaptchaError = '';
   let challenge, difficulty, expiresInSeconds;
   try {
     const res = await base44.functions.invoke('getCaptchaChallenge', {});
     challenge = res?.data?.challenge || res?.challenge;
     difficulty = res?.data?.difficulty ?? res?.difficulty ?? 16;
     expiresInSeconds = res?.data?.expiresInSeconds ?? res?.expiresInSeconds ?? 120;
-  } catch {
+  } catch (e) {
+    const status = e?.response?.status || e?.status;
+    lastCaptchaError = 'net:' + (status || (e?.message || 'error').slice(0, 40));
     return null;
   }
-  if (!challenge) return null;
+  if (!challenge) { lastCaptchaError = 'no-challenge'; return null; }
 
   const started = Date.now();
   const deadline = started + Math.min(MAX_MS, expiresInSeconds * 1000 - 3000);
@@ -203,5 +212,6 @@ export async function solveCaptchaChallenge({ onProgress } = {}) {
     // no se congele mientras se resuelve el reto.
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
+  lastCaptchaError = 'timeout:' + nonce;
   return null;
 }

@@ -74,6 +74,15 @@ function isTrustedAppBaseUrl(value) {
 					return false;
 		}
 }
+// José (25 sep 2026) -- BUG CRÍTICO: el arreglo del 17 sep quitó el valor
+// por defecto de VITE_BASE44_APP_BASE_URL. En la web da igual (las llamadas
+// a /api van al mismo dominio), pero en la app nativa la página se sirve
+// desde https://localhost / capacitor://localhost: sin esta URL el SDK llama
+// a "/api/..." del propio móvil y NINGUNA llamada al servidor funciona. Los
+// móviles que ya tenían el valor guardado de antes seguían yendo; una
+// instalación nueva no podía ni registrarse (el captcha es la primera
+// llamada). Ahora, si no llega por la URL ni está guardado, se usa el de la
+// compilación (Codemagic), que también tiene que ser un dominio de confianza.
 const getSafeAppBaseUrl = () => {
 		const candidate = getAppParamValue("app_base_url");
 		if (isTrustedAppBaseUrl(candidate)) return candidate;
@@ -82,6 +91,12 @@ const getSafeAppBaseUrl = () => {
 					// vez de dejarlo ahí para la próxima carga.
 					try { storage.removeItem('base44_app_base_url'); } catch {}
 		}
+		const buildTime = import.meta.env.VITE_BASE44_APP_BASE_URL;
+		if (isTrustedAppBaseUrl(buildTime)) return buildTime;
+		// Última red de seguridad solo en la app nativa: el dominio propio, que
+		// sirve la misma API (/api) que la web (comprobado 25 sep 2026). En la
+		// web se deja vacío: las llamadas van al mismo dominio en el que se está.
+		if (!isNode && window.Capacitor?.isNativePlatform?.()) return 'https://kaikodo.app';
 		return '';
 }
 
