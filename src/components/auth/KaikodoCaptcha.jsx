@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader2, ShieldCheck } from 'lucide-react';
-import { solveCaptchaChallenge } from '@/lib/captcha';
+import { solveCaptchaChallenge, getLastCaptchaError } from '@/lib/captcha';
 
 /**
  * KaikodoCaptcha — verificación anti-bot propia, sin ningún script ni
@@ -69,7 +69,7 @@ export default function KaikodoCaptcha({ active, onToken, resetKey }) {
       )}
       {status === 'error' && (
         <>
-          <span>{t('auth.captcha.failed')}</span>
+          <span>{t('auth.captcha.failed')}{getLastCaptchaError() && <span className="opacity-60"> ({getLastCaptchaError()})</span>}</span>
           <button type="button" onClick={run} className="text-primary font-medium underline">
             {t('auth.captcha.retry')}
           </button>
