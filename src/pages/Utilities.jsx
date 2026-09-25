@@ -2,7 +2,7 @@ import { useState, useEffect, useRef} from 'react';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/AuthContext';
-import { Plus, Minus, Trash2, ExternalLink, Loader2, AlertTriangle, Landmark, MapPin, Phone, Mail, Clock, User, Shirt, Droplets, Smartphone, Pill, MoreHorizontal, Building2, Check, ArrowRight, Star } from 'lucide-react';
+import { Plus, Minus, Trash2, ExternalLink, Loader2, AlertTriangle, Landmark, MapPin, Phone, Mail, Clock, User, Shirt, Droplets, Smartphone, Pill, MoreHorizontal, Building2, Check, ArrowRight, Star, Pencil } from 'lucide-react';
 import WeatherCard from '@/components/WeatherCard';
 import { getCountryMeta, getCountryLabel, getCountryIso, normalizeCountry } from '@/lib/countryConfig';
 import { ShieldCheck, ShieldX, ShieldAlert, Zap, Syringe, Coins, Info, ChevronDown, ChevronUp, Shield, Cross, Flame } from 'lucide-react';
@@ -24,6 +24,16 @@ const PACKING_CATEGORIES = [
   { value:'medicinas',  tk:'utilities.packing.cat.medicinas',  Icon: Pill },
   { value:'otros',      tk:'utilities.packing.cat.otros',      Icon: MoreHorizontal },
 ];
+
+// Color del icono de cada categoría en la lista de la maleta.
+const PACKING_TILES = {
+  personal:   'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400',
+  ropa:       'bg-purple-50 text-purple-600 dark:bg-purple-950/30 dark:text-purple-400',
+  neceser:    'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-400',
+  tecnologia: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400',
+  medicinas:  'bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400',
+  otros:      'bg-secondary text-muted-foreground',
+};
 
 // Stepper de cantidad — comparte estilo con el resto de botones redondos
 // pequeños (essential toggle, etc). min 1: no tiene sentido un artículo con
@@ -468,46 +478,6 @@ function RequirementsTab({ reqs, country, homeCountry, meta, skipVaccines = [], 
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Packing tab
-// ─────────────────────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared checkbox — cuadrado, borde naranja pendiente, relleno naranja + check al marcar
-// ─────────────────────────────────────────────────────────────────────────────
-// El botón visual se mantiene en 20x20 (mismo diseño), pero el área
-// realmente clicable ahora es 32x32 — antes coincidían y en móvil era fácil
-// fallar el toque por unos pocos píxeles ("el tick es muy sensible").
-// stopPropagation porque la fila entera del artículo ahora también es
-// clicable (abre "editar") — sin esto, tocar el tick abriría además el
-// editor por encima.
-function KodoCheck({ checked, onChange, essential = false }) {
-  return (
-    <button
-      onClick={e => { e.stopPropagation(); onChange(!checked); }}
-      aria-pressed={checked}
-      style={{ width: 32, height: 32, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-    >
-      <div
-        style={{
-          width: 20, height: 20, borderRadius: 5,
-          border: checked ? 'none' : `1.5px solid ${essential ? 'hsl(var(--primary))' : '#d4cfc8'}`,
-          background: checked ? 'hsl(var(--primary))' : essential ? 'hsl(var(--accent))' : 'hsl(var(--card))',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          transition: 'all 0.15s',
-        }}
-      >
-        {checked && (
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-        )}
-        {!checked && essential && (
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--primary))' }} />
-        )}
-      </div>
-    </button>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Packing tab
@@ -555,12 +525,6 @@ function PackingTab({ tripId, country, userId, tripMembers, externalOpen, onExte
     onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: id => base44.entities.PackingItem.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['packingItems', tripId] }),
-  
-    onError: (e) => toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' }),
-  });
 
   // Nuevo: editar un artículo ya creado (nombre, cantidad, categoría,
   // esencial) — antes solo se podía marcar/desmarcar o borrar, no cambiar
@@ -646,85 +610,88 @@ function PackingTab({ tripId, country, userId, tripMembers, externalOpen, onExte
             </div>
           ) : (
             <>
-              {/* Progress */}
-              <div className="bg-card rounded-2xl border border-border p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium text-foreground">{t('utilities.packing.totalProgress')}</p>
-                  <p className={`text-sm font-medium ${progress === 100 ? 'text-green-700' : 'text-primary'}`}>{progress}%</p>
-                </div>
-                <div className="h-1.5 bg-secondary rounded-full overflow-hidden mb-1.5">
-                  <div className={`h-full rounded-full transition-all duration-500 ${progress === 100 ? 'bg-green-600' : 'bg-primary'}`}
-                    style={{ width: `${progress}%` }} />
-                </div>
-                <p className="text-xs text-muted-foreground">{t('utilities.packing.itemsReady', { packed: packedCount, total: totalItems })}</p>
-              </div>
+              {/* José (24 sep 2026): maleta rediseñada.
+                  - Progreso en círculo, con los imprescindibles pendientes y el
+                    botón de añadir a mano.
+                  - Solo salen las categorías con algo; las vacías pasan a
+                    pastillas de "Añadir a…" al final (antes cada una era una
+                    tarjeta con "Sin artículos").
+                  - Tocar la fila marca/desmarca (es lo que más se hace); el
+                    lápiz abre la edición. Lo hecho baja al final y se atenúa. */}
+              {(() => {
+                const pendingEssentials = packingItems.filter(i => i.essential && !i.packed).length;
+                const R = 21, C = 2 * Math.PI * R;
+                return (
+                  <div className="bg-card rounded-2xl border border-border p-3.5 flex items-center gap-3.5">
+                    <svg width="56" height="56" viewBox="0 0 52 52" className="flex-shrink-0" role="img"
+                      aria-label={t('utilities.packing.itemsReady', { packed: packedCount, total: totalItems })}>
+                      <circle cx="26" cy="26" r={R} fill="none" stroke="hsl(var(--secondary))" strokeWidth="6" />
+                      <circle cx="26" cy="26" r={R} fill="none" stroke={progress === 100 ? '#16a34a' : 'hsl(var(--primary))'} strokeWidth="6"
+                        strokeLinecap="round" strokeDasharray={`${(progress / 100) * C} ${C}`} transform="rotate(-90 26 26)"
+                        style={{ transition: 'stroke-dasharray .5s' }} />
+                      <text x="26" y="30" textAnchor="middle" fontSize="12" fontWeight="700" fill="currentColor" className="text-foreground">{progress}%</text>
+                    </svg>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-foreground">{t('utilities.packing.readyShort', { packed: packedCount, total: totalItems })}</p>
+                      {pendingEssentials > 0 ? (
+                        <p className="text-xs text-primary mt-0.5 flex items-center gap-1">
+                          <Star className="w-3 h-3 fill-current" />{t('utilities.packing.essentialPending', { count: pendingEssentials })}
+                        </p>
+                      ) : progress === 100 ? (
+                        <p className="text-xs text-green-700 mt-0.5">{t('utilities.packing.allPacked')}</p>
+                      ) : null}
+                    </div>
+                    <button onClick={() => { setSheetCategory('personal'); setSheetOpen(true); }} aria-label={t('utilities.packing.addItem')}
+                      className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0 hover:bg-primary/90 transition-colors">
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </div>
+                );
+              })()}
 
-              {/* Categories */}
-              {PACKING_CATEGORIES.map(cat => {
-                const catItems = grouped[cat.value] || [];
+              {PACKING_CATEGORIES.filter(cat => (grouped[cat.value] || []).length > 0 || adding === cat.value).map(cat => {
+                const catItems = [...(grouped[cat.value] || [])].sort((x, y) => Number(x.packed) - Number(y.packed) || Number(y.essential) - Number(x.essential));
                 const catPacked = catItems.filter(i => i.packed).length;
                 const allDone = catItems.length > 0 && catPacked === catItems.length;
                 const isCollapsed = collapsed[cat.value] ?? allDone;
-                const essentialCount = catItems.filter(i => i.essential && !i.packed).length;
                 const isAddingHere = adding === cat.value;
+                const tile = PACKING_TILES[cat.value] || PACKING_TILES.otros;
 
                 return (
                   <div key={cat.value} className="bg-card rounded-2xl border border-border overflow-hidden">
-                    {/* Category header */}
-                    <button onClick={() => toggleCollapsed(cat.value, isCollapsed)}
-                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary/20 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <cat.Icon size={15} color="#888" />
-                        <span className="text-sm font-medium text-foreground">{t(cat.tk)}</span>
-                        {essentialCount > 0 && (
-                          <span className="text-xs font-medium text-primary bg-orange-50 dark:bg-orange-950/30 px-1.5 py-0.5 rounded-full">
-                            {t('utilities.packing.essentialCount', { count: essentialCount })}
-                          </span>
-                        )}
-                        {allDone && catItems.length > 0 && (
-                          <Check className="w-3.5 h-3.5 text-green-600" strokeWidth={2.5} />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">{catPacked}/{catItems.length}</span>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                          className={`text-muted-foreground transition-transform ${isCollapsed ? '' : 'rotate-180'}`}>
-                          <polyline points="18 15 12 9 6 15"/>
-                        </svg>
-                      </div>
+                    <button onClick={() => toggleCollapsed(cat.value, isCollapsed)} aria-expanded={!isCollapsed}
+                      className="w-full flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-secondary/20 transition-colors">
+                      <span className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${tile}`}><cat.Icon size={15} /></span>
+                      <span className="text-sm font-bold text-foreground">{t(cat.tk)}</span>
+                      {allDone && <Check className="w-3.5 h-3.5 text-green-600" strokeWidth={2.5} />}
+                      <span className="ml-auto text-xs font-semibold text-muted-foreground">{catPacked}/{catItems.length}</span>
+                      <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
                     </button>
 
                     {!isCollapsed && (
                       <>
-                        {catItems.length === 0 && !isAddingHere && (
-                          <p className="text-xs text-muted-foreground text-center py-4 border-t border-border">{t('utilities.packing.noItems')}</p>
-                        )}
                         {catItems.map(item => (
-                          <div key={item.id} role="button" tabIndex={0}
-                            onClick={() => setEditingItem(item)}
-                            onKeyDown={e => { if (e.key === 'Enter') setEditingItem(item); }}
-                            className={`flex items-center gap-3 px-4 py-2.5 border-t border-border group transition-colors cursor-pointer ${item.packed ? 'opacity-55' : 'hover:bg-secondary/20'}`}>
-                            <KodoCheck
-                              checked={item.packed}
-                              onChange={v => toggleMutation.mutate({ id: item.id, packed: v })}
-                              essential={item.essential}
-                            />
-                            <p className={`flex-1 text-sm truncate ${item.packed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
-                              {item.name}
-                              {item.quantity > 1 && <span className="text-muted-foreground font-normal"> ×{item.quantity}</span>}
-                            </p>
-                            {!item.essential && (
-                              <button onClick={e => { e.stopPropagation(); deleteMutation.mutate(item.id); }} disabled={deleteMutation.isPending}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0 disabled:opacity-30">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                          <div key={item.id} className="flex items-center border-t border-border">
+                            <button onClick={() => toggleMutation.mutate({ id: item.id, packed: !item.packed })}
+                              aria-pressed={item.packed}
+                              className={`flex-1 min-w-0 flex items-center gap-3 pl-3.5 pr-2 py-2.5 text-left transition-colors hover:bg-secondary/20 ${item.packed ? 'opacity-55' : ''}`}>
+                              <span className={`w-[22px] h-[22px] rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                                item.packed ? 'bg-primary text-white' : 'border-[1.5px] border-border bg-card'}`}>
+                                {item.packed && <Check className="w-3.5 h-3.5" strokeWidth={3} />}
+                              </span>
+                              <span className={`flex-1 min-w-0 truncate text-sm ${item.packed ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{item.name}</span>
+                              {item.quantity > 1 && <span className="text-[11px] text-muted-foreground bg-secondary rounded-full px-2 py-0.5 flex-shrink-0">×{item.quantity}</span>}
+                              {item.essential && !item.packed && <Star className="w-3.5 h-3.5 text-primary fill-current flex-shrink-0" aria-label={t('utilities.packing.essentialLabel')} />}
+                            </button>
+                            <button onClick={() => setEditingItem(item)} aria-label={t('common.edit')}
+                              className="w-10 h-10 mr-1 rounded-full flex items-center justify-center text-muted-foreground/70 hover:text-foreground hover:bg-secondary/40 flex-shrink-0">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         ))}
 
-                        {/* Inline add */}
                         {isAddingHere ? (
-                          <div className="flex items-center gap-2 px-4 py-2.5 border-t border-border">
+                          <div className="flex items-center gap-2 px-3.5 py-2.5 border-t border-border">
                             <input
                               ref={addInputRef}
                               value={newName}
@@ -732,23 +699,43 @@ function PackingTab({ tripId, country, userId, tripMembers, externalOpen, onExte
                               onKeyDown={e => { if (e.key === 'Enter') commitAdd(); if (e.key === 'Escape') setAdding(null); }}
                               placeholder={t('utilities.packing.itemNamePlaceholder')}
                               autoCapitalize="sentences" autoCorrect="on" spellCheck
-                              className="flex-1 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
+                              className="flex-1 min-w-0 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
                             />
-                            <button onClick={() => setNewEssential(v => !v)}
-                              className={`text-xs px-2 py-1 rounded-lg border transition-colors ${newEssential ? 'bg-orange-50 border-primary text-primary' : 'border-border text-muted-foreground'}`}>
-                              {t('utilities.packing.essential')}
+                            <button onClick={() => setNewEssential(v => !v)} aria-pressed={newEssential} aria-label={t('utilities.packing.essentialLabel')}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${newEssential ? 'bg-orange-50 dark:bg-orange-950/30 text-primary' : 'text-muted-foreground hover:bg-secondary/40'}`}>
+                              <Star className={`w-4 h-4 ${newEssential ? 'fill-current' : ''}`} />
                             </button>
-                            <button onClick={commitAdd} disabled={createMutation.isPending}
-                              className="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0 disabled:opacity-50 disabled:pointer-events-none">
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <button onClick={commitAdd} disabled={createMutation.isPending} aria-label={t('common.save')}
+                              className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0 disabled:opacity-50">
+                              <Check className="w-4 h-4" strokeWidth={2.5} />
                             </button>
                           </div>
-                        ) : null}
+                        ) : (
+                          <button onClick={() => openAdding(cat.value)}
+                            className="w-full text-left px-3.5 py-2.5 border-t border-border text-xs font-semibold text-primary hover:bg-secondary/20 transition-colors">
+                            + {t('utilities.packing.addShort')}
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
                 );
               })}
+
+              {/* Categorías vacías: pastillas para añadir directamente ahí */}
+              {PACKING_CATEGORIES.some(cat => !(grouped[cat.value] || []).length && adding !== cat.value) && (
+                <div className="pt-1">
+                  <p className="text-xs text-muted-foreground mb-2 px-1">{t('utilities.packing.addTo')}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {PACKING_CATEGORIES.filter(cat => !(grouped[cat.value] || []).length && adding !== cat.value).map(cat => (
+                      <button key={cat.value} onClick={() => { setSheetCategory(cat.value); setSheetOpen(true); }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dashed border-border bg-card text-xs font-semibold text-foreground/80 hover:bg-secondary/40 transition-colors">
+                        <cat.Icon size={13} />{t(cat.tk)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </>

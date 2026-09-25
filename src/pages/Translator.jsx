@@ -1,5 +1,5 @@
 import { createPageUrl } from '@/utils';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowRightLeft, Copy, Check, Volume2, Loader2, AlertCircle, WifiOff } from 'lucide-react';
 import { getCountryMeta, getLanguageLabel, getCountryLabel } from '@/lib/countryConfig';
 import { useTripContext } from '@/hooks/useTripContext';
@@ -41,7 +41,6 @@ const LANGUAGES = [
 const TABS = [
   { key: 'voz',      tk: 'translator.tabs.voz' },
   { key: 'texto',    tk: 'translator.tabs.texto' },
-  { key: 'historial', tk: 'translator.tabs.historial' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -151,7 +150,7 @@ function ResultCard({ original, translated, fromLang, toLang, onClear, onSave })
 }
 
 // ── Voice tab ─────────────────────────────────────────────────────────────────
-function VozTab({ fromLang, toLang, onSaveToHistory }) {
+function VozTab({ fromLang, toLang }) {
   const { t } = useTranslation();
   const [recording, setRecording] = useState(false);
   const [interim, setInterim]     = useState('');
@@ -379,7 +378,6 @@ function VozTab({ fromLang, toLang, onSaveToHistory }) {
           fromLang={fromLang}
           toLang={toLang}
           onClear={() => setResult({ original: '', translated: '' })}
-          onSave={() => onSaveToHistory({ original: result.original, translated: result.translated, fromLang, toLang })}
         />
       )}
     </div>
@@ -387,7 +385,7 @@ function VozTab({ fromLang, toLang, onSaveToHistory }) {
 }
 
 // ── Texto tab ─────────────────────────────────────────────────────────────────
-function TextoTab({ fromLang, toLang, onSaveToHistory }) {
+function TextoTab({ fromLang, toLang }) {
   const { t, i18n } = useTranslation();
   const [input, setInput]       = useState('');
   const [result, setResult]     = useState({ original: '', translated: '' });
@@ -462,120 +460,13 @@ function TextoTab({ fromLang, toLang, onSaveToHistory }) {
           fromLang={fromLang}
           toLang={toLang}
           onClear={() => setResult({ original: '', translated: '' })}
-          onSave={() => onSaveToHistory({ original: result.original, translated: result.translated, fromLang, toLang })}
         />
       )}
     </div>
   );
 }
 
-// ── Historial tab ─────────────────────────────────────────────────────────────
-// Antes esta clave era fija para todo el navegador: si dos personas usaban
-// Kōdo en el mismo dispositivo (móvil compartido, tablet familiar), el
-// historial de traducción de una se mezclaba con el de la otra. Se sufija con
-// el user.id para que cada persona tenga su propio historial local.
-const HIST_KEY_BASE = 'kodo_translator_history';
-function histKey(userId) { return userId ? `${HIST_KEY_BASE}_${userId}` : HIST_KEY_BASE; }
-
-function loadHistory(userId) {
-  try { return JSON.parse(localStorage.getItem(histKey(userId)) || '[]'); } catch { return []; }
-}
-function saveHistory(userId, h) {
-  try { localStorage.setItem(histKey(userId), JSON.stringify(h.slice(0, 50))); } catch {}
-}
-
-function HistorialTab({ userId }) {
-  const { t } = useTranslation();
-  const [history, setHistory] = useState(() => loadHistory(userId));
-
-  useEffect(() => { setHistory(loadHistory(userId)); }, [userId]);
-
-  const toggle = (id) => {
-    const next = history.map(h => h.id === id ? { ...h, saved: !h.saved } : h);
-    setHistory(next); saveHistory(userId, next);
-  };
-
-  const clearAll = () => { setHistory([]); saveHistory(userId, []); };
-
-  const saved   = history.filter(h => h.saved);
-  const recent  = history.filter(h => !h.saved);
-
-  const BookmarkIcon = ({ filled }) => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill={filled ? 'hsl(var(--primary))' : 'none'} stroke={filled ? 'hsl(var(--primary))' : '#d4cfc8'} strokeWidth="2">
-      <path d="M5 4a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 20V4z"/>
-    </svg>
-  );
-
-  const HistItem = ({ item }) => {
-    const fromL = LANGUAGES.find(l => l.code === item.fromLang) || LANGUAGES[0];
-    const toL   = LANGUAGES.find(l => l.code === item.toLang)   || LANGUAGES[1];
-    return (
-      <div className="flex gap-3 items-start py-3 border-b border-border last:border-0">
-        <button onClick={() => toggle(item.id)} className="flex-shrink-0 mt-0.5">
-          <BookmarkIcon filled={item.saved} />
-        </button>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground leading-snug mb-1">{item.original}</p>
-          <p className="text-sm font-medium leading-snug" style={{ color: 'hsl(var(--primary))' }}>{item.translated}</p>
-          <p className="text-xs text-muted-foreground mt-1.5">{fromL.flag} → {toL.flag} · {item.timeLabel}</p>
-        </div>
-        <button
-          onClick={() => speakText(item.translated, toL.bcp)}
-          className="flex-shrink-0 mt-0.5 text-muted-foreground hover:text-foreground"
-        >
-          <Volume2 className="w-4 h-4" />
-        </button>
-      </div>
-    );
-  };
-
-  if (history.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-4">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/50">
-            <path d="M5 4a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 20V4z"/>
-          </svg>
-        </div>
-        <p className="text-sm font-medium text-foreground mb-1">{t('translator.hist.emptyTitle')}</p>
-        <p className="text-xs text-muted-foreground">{t('translator.hist.emptySubtitle')}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      {saved.length > 0 && (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden mb-4">
-          <div className="flex items-end justify-between px-4 pt-4 pb-2 border-b border-border">
-            <div>
-              <div style={{ height: 3, width: 48, background: 'hsl(var(--primary))', borderRadius: 2, marginBottom: 4 }} />
-              <p className="text-sm font-medium text-foreground">{t('translator.hist.saved')}</p>
-            </div>
-          </div>
-          <div className="px-4">
-            {saved.map(item => <HistItem key={item.id} item={item} />)}
-          </div>
-        </div>
-      )}
-
-      {recent.length > 0 && (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
-          <div className="flex items-end justify-between px-4 pt-4 pb-2 border-b border-border">
-            <div>
-              <div style={{ height: 3, width: 30, background: 'hsl(var(--primary))', borderRadius: 2, marginBottom: 4 }} />
-              <p className="text-sm font-medium text-foreground">{t('translator.hist.recent')}</p>
-            </div>
-            <button onClick={clearAll} className="text-xs" style={{ color: 'hsl(var(--primary))' }}>{t('translator.hist.clearAll')}</button>
-          </div>
-          <div className="px-4">
-            {recent.map(item => <HistItem key={item.id} item={item} />)}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+// José (24 sep 2026): el historial de traducciones se ha quitado (no se usaba).
 
 // ── Main content ──────────────────────────────────────────────────────────────
 function TranslatorContent({ tripId, inPage = false }) {
@@ -615,20 +506,6 @@ function TranslatorContent({ tripId, inPage = false }) {
 
   const handleSwap = () => { setFromLang(toLang); setToLang(fromLang); };
 
-  const handleSaveToHistory = useCallback(({ original, translated, fromLang: fl, toLang: tl }) => {
-    const fromL = LANGUAGES.find(l => l.code === fl) || LANGUAGES[0];
-    const toL   = LANGUAGES.find(l => l.code === tl) || LANGUAGES[1];
-    const history = loadHistory(user?.id);
-    const entry = {
-      id: Date.now().toString(),
-      original, translated,
-      fromLang: fl, toLang: tl,
-      saved: false,
-      timeLabel: t('translator.now'),
-    };
-    const next = [entry, ...history];
-    saveHistory(user?.id, next);
-  }, [user?.id]);
 
   return (
     <>
@@ -674,7 +551,6 @@ function TranslatorContent({ tripId, inPage = false }) {
           <VozTab
             fromLang={fromLang}
             toLang={toLang}
-            onSaveToHistory={handleSaveToHistory}
           />
         )}
 
@@ -682,11 +558,9 @@ function TranslatorContent({ tripId, inPage = false }) {
           <TextoTab
             fromLang={fromLang}
             toLang={toLang}
-            onSaveToHistory={handleSaveToHistory}
           />
         )}
 
-        {tab === 'historial' && <HistorialTab userId={user?.id} />}
       </div>
     </>
   );
