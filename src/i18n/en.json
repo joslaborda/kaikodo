@@ -947,7 +947,12 @@
       "upload": "Upload booking",
       "skip": "Not now"
     },
-    "assignDayBtn": "Add to a day"
+    "assignDayBtn": "Add to a day",
+    "changeStay": {
+      "button": "Change accommodation",
+      "placeholder": "Search the new hotel…",
+      "done": "Accommodation changed"
+    }
   },
   "documents": {
     "title": "Documents",
@@ -1047,7 +1052,7 @@
         "hotel": "Hotel name",
         "hotelSearch": "Search the hotel",
         "locationOptional": "Airport or station (optional)",
-        "notesShort": "Notes (booking ref, seat…)"
+        "notesShort": "Notes (optional)"
       },
       "vis": {
         "onlyMe": "Only me",
@@ -1081,7 +1086,48 @@
       "noDay": "No day",
       "noArrivalCity": "No arrival city",
       "whoSees": "Who can see it?",
-      "whoSeesHint": "You and whoever uses it can always see it."
+      "whoSeesHint": "You and whoever uses it can always see it.",
+      "byType": {
+        "flight": {
+          "name": "E.g. Flight Madrid → Tokyo",
+          "location": "Departure airport (optional)",
+          "date": "Flight day",
+          "time": "Departure time"
+        },
+        "train": {
+          "name": "E.g. Train Tokyo → Kyoto",
+          "location": "Departure station (optional)",
+          "date": "Train day",
+          "time": "Departure time"
+        },
+        "bus": {
+          "name": "E.g. Bus Kyoto → Osaka",
+          "location": "Station or stop (optional)",
+          "date": "Travel day",
+          "time": "Departure time"
+        },
+        "hotel": {
+          "name": "Hotel name",
+          "location": "Search the hotel",
+          "date": "Check-in",
+          "endDate": "Check-out"
+        },
+        "event": {
+          "name": "E.g. Ghibli Museum ticket",
+          "date": "Day",
+          "time": "Time"
+        },
+        "personal": {
+          "name": "E.g. Travel insurance",
+          "date": "Covers from",
+          "endDate": "Until"
+        },
+        "other": {
+          "name": "E.g. Visa, car rental…",
+          "date": "Day (optional)",
+          "time": "Time"
+        }
+      }
     },
     "card": {
       "view": "View",
@@ -1584,7 +1630,13 @@
       "souvPlaceholder": "What do you want to buy?",
       "whereGoes": "Where does it go?",
       "importance": "Importance",
-      "essentialLabel": "Essential"
+      "essentialLabel": "Essential",
+      "readyShort": "{{packed}} of {{total}} ready",
+      "essentialPending_one": "{{count}} essential item pending",
+      "essentialPending_other": "{{count}} essential items pending",
+      "allPacked": "All packed!",
+      "addTo": "Add to…",
+      "addShort": "Add"
     },
     "reqs": {
       "checkConsulate": "Check with your country's consulate or embassy",

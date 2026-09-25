@@ -947,7 +947,12 @@
       "upload": "Subir reserva",
       "skip": "Ahora no"
     },
-    "assignDayBtn": "Asignar día"
+    "assignDayBtn": "Asignar día",
+    "changeStay": {
+      "button": "Cambiar alojamiento",
+      "placeholder": "Busca el nuevo hotel…",
+      "done": "Alojamiento cambiado"
+    }
   },
   "documents": {
     "title": "Documentos",
@@ -1047,7 +1052,7 @@
         "hotel": "Nombre del hotel",
         "hotelSearch": "Busca el hotel",
         "locationOptional": "Aeropuerto o estación (opcional)",
-        "notesShort": "Notas (localizador, asiento…)"
+        "notesShort": "Notas (opcional)"
       },
       "vis": {
         "onlyMe": "Solo yo",
@@ -1081,7 +1086,48 @@
       "noDay": "Sin día",
       "noArrivalCity": "Sin ciudad de llegada",
       "whoSees": "¿Quién lo ve?",
-      "whoSeesHint": "Quien lo usa y tú lo veis siempre."
+      "whoSeesHint": "Quien lo usa y tú lo veis siempre.",
+      "byType": {
+        "flight": {
+          "name": "Ej. Vuelo Madrid → Tokio",
+          "location": "Aeropuerto de salida (opcional)",
+          "date": "Día del vuelo",
+          "time": "Hora de salida"
+        },
+        "train": {
+          "name": "Ej. Tren Tokio → Kioto",
+          "location": "Estación de salida (opcional)",
+          "date": "Día del tren",
+          "time": "Hora de salida"
+        },
+        "bus": {
+          "name": "Ej. Bus Kioto → Osaka",
+          "location": "Estación o parada (opcional)",
+          "date": "Día del viaje",
+          "time": "Hora de salida"
+        },
+        "hotel": {
+          "name": "Nombre del hotel",
+          "location": "Busca el hotel",
+          "date": "Entrada",
+          "endDate": "Salida"
+        },
+        "event": {
+          "name": "Ej. Entrada al Museo Ghibli",
+          "date": "Día",
+          "time": "Hora"
+        },
+        "personal": {
+          "name": "Ej. Seguro de viaje",
+          "date": "Cubre desde",
+          "endDate": "Hasta"
+        },
+        "other": {
+          "name": "Ej. Visado, reserva de coche…",
+          "date": "Día (opcional)",
+          "time": "Hora"
+        }
+      }
     },
     "card": {
       "view": "Ver",
@@ -1584,7 +1630,13 @@
       "souvPlaceholder": "¿Qué quieres comprar?",
       "whereGoes": "¿Dónde va?",
       "importance": "Importancia",
-      "essentialLabel": "Imprescindible"
+      "essentialLabel": "Imprescindible",
+      "readyShort": "{{packed}} de {{total}} listos",
+      "essentialPending_one": "{{count}} imprescindible pendiente",
+      "essentialPending_other": "{{count}} imprescindibles pendientes",
+      "allPacked": "¡Maleta hecha!",
+      "addTo": "Añadir a…",
+      "addShort": "Añadir"
     },
     "reqs": {
       "checkConsulate": "Consulta el consulado o embajada de tu país",
