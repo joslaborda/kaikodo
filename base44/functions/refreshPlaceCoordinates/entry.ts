@@ -24,12 +24,29 @@ import { createClientFromRequest } from "npm:@base44/sdk";
  * nada. El peor caso de abuso es, por tanto, la misma única ejecución diaria
  * que ya hace el workflow.
  *
+ * Refuerzo (escáner, 25 sep 2026): además, sin sesión de admin solo se
+ * acepta dentro de la VENTANA del workflow (02:55-04:00 UTC; el workflow
+ * corre a las 03:00). Fuera de esa ventana, una llamada anónima sale sin
+ * hacer nada. Resultado: un anónimo ya no puede provocar la ejecución en
+ * otro momento, solo "adelantarse" unos minutos a la misma y única
+ * ejecución diaria que el workflow iba a hacer de todos modos. Un secreto
+ * compartido seguiría siendo lo ideal, pero hoy no hay forma de pasarlo
+ * sin dejarlo en el repo público (los argumentos del workflow viven en
+ * base44/workflows/ y Base44 no documenta leer Secretos desde ahí).
+ *
  * Coste: 1 Place Details por sitio y ~mes, solo con el campo `location`.
  */
 const STALE_DAYS = 25;
 const JOB_NAME = "refreshPlaceCoordinates";
 const MIN_INTERVAL_MS = 20 * 60 * 60 * 1000;
 const MAX_PER_RUN = 300;
+// Ventana del workflow diario (03:00 UTC), en minutos desde medianoche UTC.
+const WINDOW_START_MIN = 2 * 60 + 55; // 02:55
+const WINDOW_END_MIN = 4 * 60;        // 04:00
+const inWorkflowWindow = (d = new Date()) => {
+  const m = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return m >= WINDOW_START_MIN && m < WINDOW_END_MIN;
+};
 
 const isGooglePlaceId = (id: unknown) => {
   const s = (id ?? "").toString().trim();
@@ -49,6 +66,9 @@ Deno.serve(async (req) => {
     void body;
     const isAdmin = !!user?.email && user.role === "admin";
     if (user?.email && !isAdmin) return Response.json({ error: "No autorizado" }, { status: 403 });
+    if (!isAdmin && !inWorkflowWindow()) {
+      return Response.json({ skipped: true, reason: "fuera de la ventana del workflow diario" });
+    }
     if (!isAdmin) {
       // Anónimo (el workflow diario, o cualquiera): como mucho una vez cada 20 h.
       const service = base44.asServiceRole;
