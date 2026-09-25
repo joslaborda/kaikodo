@@ -511,6 +511,10 @@ export default function DocumentForm({
   const transport = ['flight', 'train', 'bus'].includes(category);
   const dayOptions = tripDayOptions.map(d => ({ value: tripDayOptionValue(d), label: dayLabel(d.date), sublabel: d.city }));
   const nameHidden = category === 'hotel' && typeof fields.location_lat === 'number';
+  // José (24 sep 2026): textos de ejemplo y etiquetas propios de cada tipo
+  // (antes todos decían "Ej. Vuelo Madrid-Tokyo", "Aeropuerto o estación" y
+  // "localizador, asiento" -- también en un seguro o una entrada).
+  const ph = (field) => t(`documents.form.byType.${category}.${field}`, { defaultValue: '' });
 
   return (
     <div className="flex flex-col gap-5">
@@ -569,7 +573,10 @@ export default function DocumentForm({
 
       {/* 2. Tipo — pastillas con icono, como los filtros de Spots */}
       <FormSection title={t('documents.form.type')}>
-        <div className="flex gap-2 overflow-x-auto -mx-1 px-1 pb-1 scrollbar-none">
+        {/* José (24 sep 2026): amontonadas (varias filas) en vez de una fila que
+            se desliza: con 7 tipos, varios quedaban fuera y la barra de scroll
+            los tapaba. */}
+        <div className="flex flex-wrap gap-2">
           {CATEGORIES.map(cat => {
             const on = category === cat.key;
             return (
@@ -589,7 +596,7 @@ export default function DocumentForm({
           {!nameHidden && (
             <FormRow icon={Pencil}>
               <input value={fields.name} onChange={e => setField('name', e.target.value)}
-                placeholder={category === 'hotel' ? t('documents.form.ph.hotel') : t('documents.form.ph.name')}
+                placeholder={ph('name') || t('documents.form.ph.name')}
                 autoCapitalize="sentences" autoCorrect="on" spellCheck
                 className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none" />
             </FormRow>
@@ -610,7 +617,7 @@ export default function DocumentForm({
                 <div className="relative">
                   <div className="flex items-center gap-2">
                     <input value={locationQuery} onChange={e => setLocationQuery(e.target.value)}
-                      placeholder={category === 'hotel' ? t('documents.form.ph.hotelSearch') : t('documents.form.ph.locationOptional')}
+                      placeholder={ph('location') || t('documents.form.ph.locationOptional')}
                       autoComplete="off" autoCorrect="off"
                       className="flex-1 min-w-0 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none" />
                     {locationSearching && <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin shrink-0" />}
@@ -646,25 +653,25 @@ export default function DocumentForm({
                       setFields(prev => ({ ...prev, date, city_id: cityId || '' }));
                     }}
                     options={dayOptions}
-                    placeholder={category === 'hotel' ? t('documents.form.fields.checkIn') : t('documents.form.selectDay')}
+                    placeholder={ph('date') || t('documents.form.selectDay')}
                     allowEmpty emptyLabel={t('documents.form.noDay')}
                   />
                 ) : (
                   <DatePill value={fields.date} onChange={v => setField('date', v)}
                     minDate={isPersonalCategory ? undefined : minDate} maxDate={isPersonalCategory ? undefined : maxDate}
-                    placeholder={category === 'hotel' ? t('documents.form.fields.checkIn') : t('documents.form.fields.date')} clearable />
+                    placeholder={ph('date') || t('documents.form.fields.date')} clearable />
                 ))}
                 {hasField('end_date') && (
                   <>
                     <span className="text-xs text-muted-foreground">→</span>
                     <DatePill value={fields.end_date} onChange={v => setField('end_date', v)}
                       minDate={fields.date || (isPersonalCategory ? undefined : minDate)} maxDate={isPersonalCategory ? undefined : maxDate}
-                      placeholder={category === 'hotel' ? t('documents.form.fields.checkOut') : t('documents.form.fields.endDate')} clearable />
+                      placeholder={ph('endDate') || t('documents.form.fields.endDate')} clearable />
                   </>
                 )}
                 {hasField('time') && (
                   <TimePill value={fields.time} onChange={v => setField('time', v)}
-                    placeholder={transport ? t('documents.form.fields.time') : t('common.time')} />
+                    placeholder={ph('time') || t('common.time')} />
                 )}
               </div>
             </FormRow>
@@ -687,7 +694,7 @@ export default function DocumentForm({
           {hasField('notes') && (
             <FormRow icon={StickyNote} align="start">
               <textarea value={fields.notes} onChange={e => setField('notes', e.target.value)} rows={2}
-                placeholder={t('documents.form.ph.notesShort')}
+                placeholder={ph('notes') || t('documents.form.ph.notesShort')}
                 autoCapitalize="sentences" autoCorrect="on" spellCheck
                 className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none" />
             </FormRow>
