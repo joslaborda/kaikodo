@@ -38,18 +38,20 @@ const PACKING_TILES = {
 // Stepper de cantidad — comparte estilo con el resto de botones redondos
 // pequeños (essential toggle, etc). min 1: no tiene sentido un artículo con
 // 0 unidades (para "no lo llevo", ya está borrar).
-function QuantityStepper({ value, onChange }) {
+function QuantityStepper({ value, onChange, size = 'md' }) {
   const { t } = useTranslation();
+  // size 'sm': versión compacta para el añadido rápido de cada categoría.
+  const btn = size === 'sm' ? 'w-7 h-7' : 'w-9 h-9';
   return (
-    <div className="flex items-center gap-3">
+    <div className={`flex items-center ${size === 'sm' ? 'gap-1.5' : 'gap-3'}`}>
       <button type="button" onClick={() => onChange(Math.max(1, (value || 1) - 1))}
-        className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors disabled:opacity-30"
+        className={`${btn} rounded-full border border-border flex items-center justify-center text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors disabled:opacity-30`}
         disabled={(value || 1) <= 1} aria-label={t('utilities.packing.quantityDecrease')}>
         <Minus className="w-3.5 h-3.5" />
       </button>
-      <span className="text-sm font-medium text-foreground w-6 text-center">{value || 1}</span>
+      <span className={`${size === 'sm' ? 'text-xs w-4' : 'text-sm w-6'} font-medium text-foreground text-center`}>{value || 1}</span>
       <button type="button" onClick={() => onChange((value || 1) + 1)}
-        className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+        className={`${btn} rounded-full border border-border flex items-center justify-center text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors`}
         aria-label={t('utilities.packing.quantityIncrease')}>
         <Plus className="w-3.5 h-3.5" />
       </button>
@@ -490,6 +492,7 @@ function PackingTab({ tripId, country, userId, tripMembers, externalOpen, onExte
   const [adding, setAdding] = useState(null);
   const [newName, setNewName] = useState('');
   const [newEssential, setNewEssential] = useState(false);
+  const [newQty, setNewQty] = useState(1);
   const [sheetOpen, setSheetOpen] = useState(false);
   const effectiveSheetOpen = sheetOpen || externalOpen;
   const closeSheet = () => { setSheetOpen(false); onExternalClose?.(); };
@@ -556,6 +559,7 @@ function PackingTab({ tripId, country, userId, tripMembers, externalOpen, onExte
     setAdding(key);
     setNewName('');
     setNewEssential(false);
+    setNewQty(1);
     setTimeout(() => addInputRef.current?.focus(), 80);
   };
 
@@ -574,9 +578,10 @@ function PackingTab({ tripId, country, userId, tripMembers, externalOpen, onExte
     // antes de que terminara la primera mutación creaba el ítem duplicado.
     if (createMutation.isPending) return;
     if (!newName.trim()) { setAdding(null); return; }
-    await createMutation.mutateAsync({ name: newName.trim(), category: adding, packed: false, essential: newEssential });
+    await createMutation.mutateAsync({ name: newName.trim(), category: adding, packed: false, essential: newEssential, quantity: newQty });
     setNewName('');
     setNewEssential(false);
+    setNewQty(1);
     setAdding(null);
     scrollToTopAfterAdd();
   };
@@ -701,6 +706,8 @@ function PackingTab({ tripId, country, userId, tripMembers, externalOpen, onExte
                               autoCapitalize="sentences" autoCorrect="on" spellCheck
                               className="flex-1 min-w-0 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
                             />
+                            {/* José (25 sep 2026): cantidad también en el añadido rápido, como en el formulario grande. */}
+                            <QuantityStepper value={newQty} onChange={setNewQty} size="sm" />
                             <button onClick={() => setNewEssential(v => !v)} aria-pressed={newEssential} aria-label={t('utilities.packing.essentialLabel')}
                               className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${newEssential ? 'bg-orange-50 dark:bg-orange-950/30 text-primary' : 'text-muted-foreground hover:bg-secondary/40'}`}>
                               <Star className={`w-4 h-4 ${newEssential ? 'fill-current' : ''}`} />
