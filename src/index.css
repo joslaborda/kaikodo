@@ -142,3 +142,9 @@ button, a {
   .text-label  { font-size: 10px; line-height: 1.3; }
   .text-label2 { font-size: 11px; line-height: 1.3; }
 }
+
+/* José (24 sep 2026): filas que se deslizan de lado (tira de días al asignar
+   un spot) sin barra de scroll encima del contenido. La clase ya se usaba pero
+   no estaba definida. */
+.scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
