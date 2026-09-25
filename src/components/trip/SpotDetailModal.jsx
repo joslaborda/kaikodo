@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { getMapsUrl } from '@/components/spots/spotsHelpers';
 import { useTranslation } from 'react-i18next';
 import DayTimeAssign from '@/components/spots/DayTimeAssign';
+import { ChangeStay } from '@/components/spots/SpotDetailSheet';
 import { getTripDays, sameCityName } from '@/lib/tripDays';
 import { notify, resolveUserIds } from '@/lib/notifications';
 import { normalizeEmail } from '@/lib/utils';
@@ -248,7 +249,15 @@ export default function SpotDetailModal({ spot, open, onClose, onSave, onRemove,
           {/* Día y hora — mismo componente que en Spots (DayTimeAssign). Se
               guardan al momento: antes el día sí, pero la hora pedía un
               "Guardar" aparte. */}
-          {isStay && <p className="text-xs text-muted-foreground bg-secondary/50 rounded-xl px-3 py-2.5">{t('spots.stayInfo')}</p>}
+          {isStay && (
+            <div>
+              <p className="text-xs text-muted-foreground bg-secondary/50 rounded-xl px-3 py-2.5">{t('spots.stayInfo')}</p>
+              {/* Mismo "Cambiar alojamiento" que en Spots (SpotDetailSheet.jsx). */}
+              <ChangeStay spot={spot} tripId={tripId} currentUserEmail={currentUserEmail}
+                canDelete={!spot.created_by || normalizeEmail(spot.created_by) === normalizeEmail(currentUserEmail)}
+                onDone={onClose} />
+            </div>
+          )}
           {!isStay && (
             <div className={saving ? 'opacity-70 pointer-events-none' : ''}>
               <DayTimeAssign
