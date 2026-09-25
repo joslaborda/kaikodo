@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useBodyScrollLock } from '@/hooks/useBodyScrollLock';
-import { X, MapPin, Navigation } from 'lucide-react';
+import { X, MapPin, Navigation, RefreshCw, Search, Loader2, Trash2 } from 'lucide-react';
+import { searchNewPlaces, fetchPlaceDetails } from './placesAutocomplete';
+import { invalidateTripDocs } from '@/hooks/useTripDocs';
 import GooglePlaceCard, { googlePlaceIdOf } from './GooglePlaceCard';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { Button } from '@/components/ui/button';
@@ -13,8 +15,99 @@ import DayTimeAssign from '@/components/spots/DayTimeAssign';
 import { getTripDays, sameCityName } from '@/lib/tripDays';
 import { normalizeEmail } from '@/lib/utils';
 
-export default
-function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCities, userId, onNotify, currentUserEmail }) {
+// José (24 sep 2026): "Cambiar alojamiento". El sitio de un spot no se edita
+// (con ficha de Google, nombre y ubicación son los de Google), así que cambiar
+// de hotel era borrar + añadir + volver a enlazar la reserva a mano. Esto lo
+// hace de una vez: buscas el hotel nuevo, se crea como alojamiento de la misma
+// ciudad, las reservas enlazadas al anterior pasan al nuevo y el anterior se
+// borra. Se guarda solo el place id y el nombre que escribiste (términos EEA).
+export function ChangeStay({ spot, tripId, currentUserEmail, canDelete, onDone }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const text = q.trim();
+    if (text.length < 3) { setResults(r => (r.length ? [] : r)); return; }
+    const controller = new AbortController();
+    setSearching(true);
+    const timer = setTimeout(() => {
+      searchNewPlaces(`${text} ${spot.city_name || ''}`.trim(), controller.signal)
+        .then(setResults).catch(() => {})
+        .finally(() => { if (!controller.signal.aborted) setSearching(false); });
+    }, 350);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [q, spot.city_name]);
+
+  const pick = async (r) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const details = await fetchPlaceDetails(r._placeId).catch(() => null);
+      const created = await base44.entities.Spot.create({
+        trip_id: tripId || spot.trip_id,
+        city_id: spot.city_id, city_name: spot.city_name, ...(spot.country ? { country: spot.country } : {}),
+        title: q.trim() || r.title, title_is_own: true, type: 'hotel',
+        ...(details?.lat != null ? { lat: details.lat, lng: details.lng, place_refreshed_at: new Date().toISOString() } : {}),
+        osm_id: r._placeId, source: 'google_places',
+        visibility: 'trip_members', visited: false,
+        created_by: null, created_by_user_id: null, saved_by: [currentUserEmail].filter(Boolean),
+        trip_members: spot.trip_members || [],
+      });
+      // Reservas enlazadas al alojamiento anterior -> al nuevo.
+      const linked = await base44.entities.Ticket.filter({ spot_id: spot.id }).catch(() => []);
+      await Promise.all((linked || []).map(d => base44.entities.Ticket.update(d.id, { spot_id: created.id }).catch(() => null)));
+      // El anterior se borra si se puede; si no, el nuevo manda igual (es el más reciente).
+      if (canDelete) await base44.entities.Spot.delete(spot.id).catch(() => null);
+      queryClient.invalidateQueries({ queryKey: ['spots', tripId || spot.trip_id] });
+      invalidateTripDocs(queryClient, tripId || spot.trip_id);
+      toast({ title: t('spots.changeStay.done') });
+      onDone?.();
+    } catch (e) {
+      toast({ title: t('common.saveError'), description: e?.message || t('common.tryAgain'), variant: 'destructive' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)}
+        className="w-full mt-2 inline-flex items-center justify-center gap-2 py-2.5 rounded-full border border-primary text-primary text-sm font-semibold hover:bg-orange-50 transition-colors">
+        <RefreshCw className="w-4 h-4" />{t('spots.changeStay.button')}
+      </button>
+    );
+  }
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="relative">
+        <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+        <input value={q} onChange={e => setQ(e.target.value)} autoFocus
+          placeholder={t('spots.changeStay.placeholder')} autoComplete="off" autoCorrect="off" spellCheck={false}
+          className="w-full h-10 pl-9 pr-9 rounded-xl border border-border bg-card text-sm outline-none focus:border-primary" />
+        {(searching || busy) && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2" />}
+      </div>
+      {results.length > 0 && (
+        <div className="bg-card border border-border rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+          {results.map(r => (
+            <button key={r.id} type="button" disabled={busy} onClick={() => pick(r)}
+              className="w-full text-left px-3 py-2.5 border-b border-border last:border-0 hover:bg-secondary/40 disabled:opacity-50">
+              <span className="block text-sm text-foreground truncate">{r.title}</span>
+              {r.subtitle && <span className="block text-xs text-muted-foreground truncate">{r.subtitle}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      <button type="button" onClick={() => { setOpen(false); setQ(''); }} className="w-full text-xs text-muted-foreground py-1">{t('common.cancel')}</button>
+    </div>
+  );
+}
+
+export default function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCities, userId, onNotify, currentUserEmail }) {
   const { t } = useTranslation();
   const online = useOnlineStatus();
   const queryClient = useQueryClient();
@@ -146,9 +239,21 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
               </div>
             </div>
             )}
-            <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
-              <X className="w-4 h-4 text-muted-foreground" />
-            </button>
+            {/* José (24 sep 2026): "una vez guardados no puedes hacer nada, no
+                hay botón de eliminar" -- estaba al final del contenido, debajo
+                de la ficha de Google (que es larga), y no se veía. Ahora va
+                arriba, junto a cerrar. */}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {canDelete && (
+                <button aria-label={t('spots.sheet.deleteSpot')} onClick={() => setShowDeleteConfirm(true)}
+                  className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-red-500 transition-colors">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <button aria-label={t('common.close')} onClick={onClose} className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -193,13 +298,6 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
             />
           </div>
 
-          {/* Delete — solo quien lo creó, y con confirmación (antes borraba al instante) */}
-          {canDelete && (
-            <button onClick={() => setShowDeleteConfirm(true)}
-              className="w-full text-xs text-red-500 hover:text-red-700 transition-colors py-2 text-center">
-              {t('spots.sheet.deleteSpot')}
-            </button>
-          )}
         </div>
 
         {/* José (23 sep 2026): Día/Hora fijos encima de los botones (antes
@@ -207,7 +305,10 @@ function SpotDetailSheet({ spot, open, onClose, onSave, onDelete, tripId, tripCi
             La ficha de Google es larga y alejaba estos controles. */}
         <div className="flex-shrink-0 px-5 pt-3 pb-1 border-t border-border bg-card">
           {isStay ? (
-            <p className="text-xs text-muted-foreground bg-secondary/50 rounded-xl px-3 py-2.5">{t('spots.stayInfo')}</p>
+            <div className="pb-2">
+              <p className="text-xs text-muted-foreground bg-secondary/50 rounded-xl px-3 py-2.5">{t('spots.stayInfo')}</p>
+              <ChangeStay spot={spot} tripId={tripId} currentUserEmail={currentUserEmail} canDelete={canDelete} onDone={onClose} />
+            </div>
           ) : (
           <DayTimeAssign
             tripDayOptions={hasTripDays ? tripDayOptions : []}
